@@ -1,0 +1,209 @@
+🧠 Prompt for Cursor
+
+Goal:
+Guide me through the creation of a detailed Game Design Document (GDD) for an ASCII-style browser action roguelike inspired by Smash TV and Vampire Survivors, featuring procedural arenas, in-run upgrades, and long-term meta progression.
+The resulting design document will be used later as the blueprint for implementation and hosting on GitHub Pages.
+
+🎮 Project Context
+
+This game blends the arena-style chaos of Smash TV with the roguelike upgrade loops of Vampire Survivors, reimagined with an ASCII visual style for charm and readability.
+
+The player fights through procedurally generated rooms, collects temporary upgrades during each run, and unlocks persistent meta-progression across play sessions.
+The game is built for browsers and optimized for keyboard + mouse (with optional Gamepad support).
+
+🧩 Technical Stack & Implementation Notes
+
+Engine: Kaboom.js
+ (ES Modules; optional TypeScript)
+
+Lightweight, expressive 2D engine perfect for fast-paced arena shooters.
+
+Handles collisions, physics, and entities easily.
+
+Excellent fit for real-time action games with juicy feedback.
+
+Runs natively in browsers; ideal for GitHub Pages deployment.
+
+Rendering:
+
+ASCII aesthetic implemented using a bitmap font atlas or monospace sprite sheet (each glyph is a sprite).
+
+Simple tinting and scaling allow color emphasis (e.g., red enemies, gold loot).
+
+Fixed camera or scrolling view for room transitions.
+
+Input:
+
+Movement: WASD or arrow keys.
+
+Aim & fire: mouse direction or right-stick via Gamepad API.
+
+Support pause/menu with keyboard and controller.
+
+RNG & Procedural Systems:
+
+Deterministic RNG using alea or seedrandom.
+
+Procedural rooms:
+
+Generate from templates or random layouts (optional rot.js integration).
+
+Each room spawns enemies, walls, pickups, and exits via Kaboom entities.
+
+Weighted loot & item spawns:
+
+Items and upgrades defined in JSON files.
+
+Weighted random selection for drops and chest rewards.
+
+🧠 Vampire Survivors–Style Systems
+
+In-Run Progression:
+
+Player gains XP from defeated enemies.
+
+Level-ups trigger upgrade drafts (pick one of 3 random power-ups).
+
+Power-ups include:
+
+Weapon upgrades (damage, spread, fire rate)
+
+Passive buffs (movement speed, pickup radius, defense)
+
+Synergies (combining weapons unlocks new evolutions)
+
+Meta Progression:
+
+Earn persistent currency (“credits”, “cells”, etc.) per run.
+
+Unlock new weapons, characters, and permanent boosts between sessions.
+
+Store data using localStorage with optional export/import as JSON.
+
+Upgrades defined in structured data (JSON tables or JS objects).
+
+Run Variety:
+
+Randomized enemy patterns and room layouts.
+
+Scaling difficulty and escalating chaos (new enemy types, faster spawn rates).
+
+Optional boss arenas or challenge rooms.
+
+💥 Visuals & Feedback
+
+ASCII-style “particles” (e.g., * or + for sparks).
+
+Camera shake, color flashes, and sound hooks for explosions.
+
+Consistent monospace layout for visual clarity.
+
+Simple color palette emphasizing legibility and contrast.
+
+UI overlays for health, XP bar, and upgrade choices.
+
+🧰 Meta & Technical Infrastructure
+
+Persistence:
+
+Use browser localStorage for saves and meta unlocks.
+
+Optional JSON export/import for backups.
+
+Data Files:
+
+Items, upgrades, and enemies defined via external JSON data for scalability.
+
+Performance:
+
+Designed for 60fps at 800×600 or 1024×768 logical resolution.
+
+ASCII atlas and Kaboom’s batched rendering ensure efficiency.
+
+🚀 Hosting / Deployment
+
+Deploy on GitHub Pages with a static build (HTML + JS + assets).
+
+Optional bundler (Vite or ESBuild) for hot reload during development.
+
+No backend required — fully client-side save data and logic.
+
+Folder structure:
+
+/src
+  main.js
+  assets/
+  data/
+/dist
+index.html
+
+
+Game can be launched directly from the browser (no install).
+
+🧭 Process Instructions for Cursor
+
+You are a game design assistant guiding an interactive GDD creation process.
+
+You should:
+
+Ask focused design questions one at a time (concept → systems → visuals → tech).
+
+Summarize and refine my answers to clarify design intent.
+
+Build and maintain a structured markdown design document as we go.
+
+When the design feels complete, export the GDD as a cohesive Markdown file ready for implementation.
+
+At each step, ask:
+
+“Would you like to expand or refine this section, or move on?”
+
+📘 Suggested Document Structure
+# ASCII Roguelike Arena Shooter – Game Design Document
+
+## 1. Core Concept
+...
+
+## 2. Gameplay Loop
+...
+
+## 3. Combat & Controls
+...
+
+## 4. Procedural Generation
+...
+
+## 5. In-Run Upgrades (Vampire Survivors Style)
+...
+
+## 6. Meta Progression & Unlocks
+...
+
+## 7. Visual & Interface Design
+...
+
+## 8. Technical Implementation (Kaboom.js Stack)
+...
+
+## 9. Hosting & Deployment (GitHub Pages)
+...
+
+## 10. Future Features / Extensions
+...
+
+💬 Example Kickoff
+
+“Let’s begin by defining your core gameplay experience.
+How would you describe the player’s goal and the emotional tone — high-intensity chaos, methodical survival, or something in between?”
+
+🔧 Suggested Next Steps for Cursor
+
+Once the design document is complete, Cursor can:
+
+Help outline the development workflow (build → test → deploy cycle for GitHub Pages).
+
+Generate starter scaffolding (Kaboom.js project skeleton).
+
+Create JSON data templates for enemies, upgrades, and rooms.
+
+Assist with procedural generation logic and balancing tools.
