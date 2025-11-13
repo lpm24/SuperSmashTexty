@@ -1,0 +1,21 @@
+# <type>: <subject>
+#
+# <body>
+#
+# <footer>
+
+# Types:
+#   feat:     New feature
+#   fix:      Bug fix
+#   docs:     Documentation changes
+#   style:    Code style changes (formatting, etc.)
+#   refactor: Code refactoring
+#   test:     Adding or updating tests
+#   chore:    Maintenance tasks
+#   game:     Game-specific changes (mechanics, content, etc.)
+#
+# Subject should be 50 chars or less, imperative mood
+# Body should explain what and why, wrap at 72 chars
+# Footer for breaking changes or issue references
+
+

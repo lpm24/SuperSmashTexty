@@ -110,8 +110,52 @@ export function createPlayer(k, x, y) {
             const len = moveDir.len();
             const normalized = moveDir.scale(1 / len);
             const moveAmount = normalized.scale(player.speed * k.dt());
-            player.pos.x += moveAmount.x;
-            player.pos.y += moveAmount.y;
+            
+            // Check collision with obstacles before moving
+            const newX = player.pos.x + moveAmount.x;
+            const newY = player.pos.y + moveAmount.y;
+            
+            // Test collision with obstacles (walls and cover both block movement)
+            let canMoveX = true;
+            let canMoveY = true;
+            
+            const obstacles = k.get('obstacle');
+            const playerSize = 12; // Approximate player collision size
+            
+            for (const obstacle of obstacles) {
+                if (!obstacle.exists()) continue;
+                
+                // Check X movement
+                const obsLeft = obstacle.pos.x - obstacle.width / 2;
+                const obsRight = obstacle.pos.x + obstacle.width / 2;
+                const obsTop = obstacle.pos.y - obstacle.height / 2;
+                const obsBottom = obstacle.pos.y + obstacle.height / 2;
+                
+                const playerLeft = newX - playerSize;
+                const playerRight = newX + playerSize;
+                const playerTop = player.pos.y - playerSize;
+                const playerBottom = player.pos.y + playerSize;
+                
+                if (playerRight > obsLeft && playerLeft < obsRight &&
+                    playerBottom > obsTop && playerTop < obsBottom) {
+                    canMoveX = false;
+                }
+                
+                // Check Y movement
+                const playerLeftY = player.pos.x - playerSize;
+                const playerRightY = player.pos.x + playerSize;
+                const playerTopY = newY - playerSize;
+                const playerBottomY = newY + playerSize;
+                
+                if (playerRightY > obsLeft && playerLeftY < obsRight &&
+                    playerBottomY > obsTop && playerTopY < obsBottom) {
+                    canMoveY = false;
+                }
+            }
+            
+            // Apply movement if no collision
+            if (canMoveX) player.pos.x = newX;
+            if (canMoveY) player.pos.y = newY;
         }
         
         // Keep player in bounds (room boundaries)

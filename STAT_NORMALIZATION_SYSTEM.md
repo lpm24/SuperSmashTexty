@@ -271,3 +271,4 @@ When implementing, test:
 - [ ] Scale changes work (100 → 10)
 - [ ] Edge cases handled (values outside range)
 
+

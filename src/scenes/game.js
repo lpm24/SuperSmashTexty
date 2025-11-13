@@ -1,11 +1,15 @@
 // Main game scene
 import { createPlayer } from '../entities/player.js';
 import { createEnemy } from '../entities/enemy.js';
+import { createBoss } from '../entities/boss.js';
 import { createXPPickup } from '../entities/pickup.js';
 import { createDoor } from '../entities/door.js';
+import { createObstacle } from '../entities/obstacle.js';
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
+import { getWeightedRoomTemplate, getFloorColors } from '../systems/roomGeneration.js';
+import { checkAndApplySynergies } from '../systems/synergies.js';
 
 // Game state (persists across scene reloads)
 let gameState = {
@@ -36,6 +40,13 @@ export function setupGameScene(k) {
             Object.assign(player, gameState.playerStats);
             // Restore health to current HP (not max)
             player.setHP(gameState.playerStats.currentHP || player.maxHealth);
+            // Restore synergy tracking
+            if (gameState.playerStats.selectedUpgrades) {
+                player.selectedUpgrades = new Set(gameState.playerStats.selectedUpgrades);
+            }
+            if (gameState.playerStats.activeSynergies) {
+                player.activeSynergies = new Set(gameState.playerStats.activeSynergies);
+            }
         } else {
             // New game - create fresh player
             player = createPlayer(k, k.width() / 2, k.height() / 2);
@@ -45,36 +56,84 @@ export function setupGameScene(k) {
         setupCombatSystem(k, player);
         setupProgressionSystem(k, player);
         
-        // Room boundaries (visual)
+        // Re-apply synergies if loading from saved state
+        if (gameState.playerStats && gameState.playerStats.selectedUpgrades) {
+            // Wait a frame to ensure player is fully initialized
+            k.wait(0.1, () => {
+                checkAndApplySynergies(k, player);
+            });
+        }
+        
+        // Get room template and floor colors
+        const roomTemplate = getWeightedRoomTemplate(currentFloor);
+        const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
+        
+        // Room boundaries (visual) - use floor-based colors
         k.add([
             k.rect(k.width() - margin * 2, 2),
             k.pos(k.width() / 2, margin),
             k.anchor('center'),
-            k.color(100, 100, 100),
+            k.color(floorColors.wallColor),
             k.fixed()
         ]);
         k.add([
             k.rect(k.width() - margin * 2, 2),
             k.pos(k.width() / 2, k.height() - margin),
             k.anchor('center'),
-            k.color(100, 100, 100),
+            k.color(floorColors.wallColor),
             k.fixed()
         ]);
         k.add([
             k.rect(2, k.height() - margin * 2),
             k.pos(margin, k.height() / 2),
             k.anchor('center'),
-            k.color(100, 100, 100),
+            k.color(floorColors.wallColor),
             k.fixed()
         ]);
         k.add([
             k.rect(2, k.height() - margin * 2),
             k.pos(k.width() - margin, k.height() / 2),
             k.anchor('center'),
-            k.color(100, 100, 100),
+            k.color(floorColors.wallColor),
             k.fixed()
         ]);
+        
+        // Create obstacles from room template
+        // Player spawn location (safe zone)
+        const playerSpawnX = k.width() / 2;
+        const playerSpawnY = k.height() / 2;
+        const safeZoneRadius = 80; // Minimum distance from spawn
+        
+        const obstacles = [];
+        roomTemplate.obstacles.forEach(obs => {
+            // Check if obstacle would overlap with player spawn safe zone
+            const distanceToSpawn = Math.sqrt(
+                Math.pow(obs.x - playerSpawnX, 2) + 
+                Math.pow(obs.y - playerSpawnY, 2)
+            );
+            const obstacleRadius = Math.max(obs.width, obs.height) / 2;
+            
+            // Skip obstacle if it's too close to spawn
+            if (distanceToSpawn < safeZoneRadius + obstacleRadius) {
+                return; // Skip this obstacle
+            }
+            
+            const obstacleColor = obs.type === 'wall' 
+                ? floorColors.obstacleColor 
+                : floorColors.coverColor;
+            const obstacle = createObstacle(
+                k, 
+                obs.x, 
+                obs.y, 
+                obs.width, 
+                obs.height, 
+                obs.type, 
+                obs.char || '#',
+                obstacleColor
+            );
+            obstacles.push(obstacle);
+        });
         
         // HUD
         const healthBar = k.add([
@@ -128,6 +187,25 @@ export function setupGameScene(k) {
         let enemiesSpawned = 0;
         let initialSpawnDelay = 2; // Wait before first spawn
         
+        // Spawn doors - create at room start for enemy spawning
+        const spawnDoors = [];
+        const doorMargin = 30;
+        const spawnDoorPositions = [
+            { x: k.width() / 2, y: doorMargin, direction: 'north' },
+            { x: k.width() / 2, y: k.height() - doorMargin, direction: 'south' },
+            { x: doorMargin, y: k.height() / 2, direction: 'west' },
+            { x: k.width() - doorMargin, y: k.height() / 2, direction: 'east' }
+        ];
+        
+        // Create spawn doors (closed, red color to indicate enemy spawn points)
+        spawnDoorPositions.forEach(pos => {
+            const spawnDoor = createDoor(k, pos.x, pos.y, pos.direction);
+            spawnDoor.open = false;
+            spawnDoor.isSpawnDoor = true; // Mark as spawn door
+            spawnDoor.color = k.rgb(200, 50, 50); // Red color for spawn doors
+            spawnDoors.push(spawnDoor);
+        });
+        
         // Spawn enemies periodically
         let enemySpawnTimer = 0;
         const enemySpawnInterval = 3; // seconds between spawns
@@ -155,32 +233,47 @@ export function setupGameScene(k) {
                     enemySpawnTimer = 0;
                     enemiesSpawned++;
                     
-                    // Spawn enemy from random edge
-                    const side = k.rand(0, 4);
-                    let x, y;
-                    
-                    switch (Math.floor(side)) {
-                        case 0: // Top
-                            x = k.rand(margin, k.width() - margin);
-                            y = margin;
-                            break;
-                        case 1: // Right
-                            x = k.width() - margin;
-                            y = k.rand(margin, k.height() - margin);
-                            break;
-                        case 2: // Bottom
-                            x = k.rand(margin, k.width() - margin);
-                            y = k.height() - margin;
-                            break;
-                        case 3: // Left
-                            x = margin;
-                            y = k.rand(margin, k.height() - margin);
-                            break;
+                    // Spawn enemy from random spawn door
+                    if (spawnDoors.length > 0) {
+                        const randomDoor = spawnDoors[Math.floor(Math.random() * spawnDoors.length)];
+                        const spawnX = randomDoor.pos.x;
+                        const spawnY = randomDoor.pos.y;
+                        
+                        // Add slight random offset to avoid stacking
+                        const offset = 15;
+                        const offsetX = spawnX + (Math.random() - 0.5) * offset;
+                        const offsetY = spawnY + (Math.random() - 0.5) * offset;
+                        
+                        // Spawn random enemy type based on floor
+                        const enemyType = getRandomEnemyType(currentFloor);
+                        createEnemy(k, offsetX, offsetY, enemyType, currentFloor);
+                    } else {
+                        // Fallback to edge spawning if no doors (shouldn't happen)
+                        const side = k.rand(0, 4);
+                        let x, y;
+                        
+                        switch (Math.floor(side)) {
+                            case 0: // Top
+                                x = k.rand(margin, k.width() - margin);
+                                y = margin;
+                                break;
+                            case 1: // Right
+                                x = k.width() - margin;
+                                y = k.rand(margin, k.height() - margin);
+                                break;
+                            case 2: // Bottom
+                                x = k.rand(margin, k.width() - margin);
+                                y = k.height() - margin;
+                                break;
+                            case 3: // Left
+                                x = margin;
+                                y = k.rand(margin, k.height() - margin);
+                                break;
+                        }
+                        
+                        const enemyType = getRandomEnemyType(currentFloor);
+                        createEnemy(k, x, y, enemyType, currentFloor);
                     }
-                    
-                    // Spawn random enemy type based on floor
-                    const enemyType = getRandomEnemyType(currentFloor);
-                    createEnemy(k, x, y, enemyType, currentFloor);
                 }
             }
         });
@@ -231,7 +324,8 @@ export function setupGameScene(k) {
             if (!player.exists() || k.paused || doorEntered) return;
             
             k.get('door').forEach(door => {
-                if (!door.open || doorEntered) return;
+                // Only interact with exit doors (not spawn doors)
+                if (!door.open || doorEntered || door.isSpawnDoor) return;
                 
                 // Check if player is near door
                 const distance = k.vec2(
@@ -249,18 +343,26 @@ export function setupGameScene(k) {
         
         // Handle room completion
         function handleRoomCompletion() {
-            // Spawn doors on all four sides
-            const doorMargin = 30;
-            createDoor(k, k.width() / 2, doorMargin, 'north');
-            createDoor(k, k.width() / 2, k.height() - doorMargin, 'south');
-            createDoor(k, doorMargin, k.height() / 2, 'west');
-            createDoor(k, k.width() - doorMargin, k.height() / 2, 'east');
-            
-            // Mark all doors as open
-            k.get('door').forEach(door => {
-                door.open = true;
-                door.color = k.rgb(100, 255, 100); // Green when open
+            // Convert spawn doors to exit doors (or create new exit doors)
+            // Option 1: Convert existing spawn doors to exit doors
+            spawnDoors.forEach(door => {
+                if (door.exists()) {
+                    door.open = true;
+                    door.isSpawnDoor = false; // No longer a spawn door
+                    door.color = k.rgb(100, 255, 100); // Green when open (exit door)
+                    door.text = '='; // Keep door symbol
+                }
             });
+            
+            // Alternative: Create separate exit doors (commented out - using conversion instead)
+            // const exitDoors = [];
+            // spawnDoorPositions.forEach(pos => {
+            //     const exitDoor = createDoor(k, pos.x, pos.y, pos.direction);
+            //     exitDoor.open = true;
+            //     exitDoor.isSpawnDoor = false;
+            //     exitDoor.color = k.rgb(100, 255, 100);
+            //     exitDoors.push(exitDoor);
+            // });
             
             // Show completion message
             const completionMsg = k.add([
@@ -301,7 +403,11 @@ export function setupGameScene(k) {
                 critChance: player.critChance || 0,
                 critDamage: player.critDamage || 2.0,
                 spreadAngle: player.spreadAngle || 0,
-                defense: player.defense || 0
+                defense: player.defense || 0,
+                // Synergy tracking
+                selectedUpgrades: player.selectedUpgrades ? Array.from(player.selectedUpgrades) : [],
+                activeSynergies: player.activeSynergies ? Array.from(player.activeSynergies) : [],
+                piercingDamageBonus: player.piercingDamageBonus || 1.0
             };
             
             // Increment room number

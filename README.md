@@ -88,6 +88,12 @@ The game will open in your browser at `http://localhost:3000`
 - ✅ Door spawning system
 
 🎮 **Current Phase:** Phase 2 - Core Loop Development
+- ✅ Door-based enemy spawning (enemies spawn from doors)
+- ✅ Upgrade system expansion (multi-shot, piercing, crits, spread, defense)
+- ✅ Room generation/templates (6 room templates with obstacles)
+- ✅ Obstacle system (walls block everything, cover blocks movement but allows projectiles)
+- ✅ Floor-based color progression (visual distinction between floors)
+- ✅ Synergy system (8 upgrade combinations with special effects)
 
 See `GAME_DESIGN_DOCUMENT.md` for complete design specifications and implementation roadmap.
 

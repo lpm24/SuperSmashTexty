@@ -1,0 +1,42 @@
+# Local Git Configuration Aliases
+# Add these to your global .gitconfig or run:
+# git config --local include.path ../.gitconfig.local
+
+[alias]
+    # Quick status
+    st = status -sb
+    
+    # Smart commit with message prompt
+    cm = commit
+    
+    # Commit all changes with message
+    save = !git add -A && git commit -m
+    
+    # Quick commit with auto-generated message from file changes
+    quick = !git add -A && git commit -m "Update: $(git diff --cached --name-only | head -3 | tr '\n' ',' | sed 's/,$//')"
+    
+    # Show what would be committed
+    review = diff --cached
+    
+    # Push current branch
+    pushup = push -u origin HEAD
+    
+    # Pull and rebase
+    pullr = pull --rebase
+    
+    # Show uncommitted changes
+    changes = diff
+    
+    # Show recent commits
+    recent = log --oneline --graph --decorate -10
+    
+    # Check if working tree is clean
+    clean = !git diff --quiet && git diff --cached --quiet && echo "Working tree clean" || echo "Uncommitted changes"
+    
+    # Commit and push in one command
+    ship = !git add -A && git commit -m "$1" && git push
+
+[commit]
+    template = .gitmessage
+
+

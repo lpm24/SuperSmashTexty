@@ -54,3 +54,4 @@ export function getRandomEnemyType(floor = 1) {
     return weightedRandom(weights);
 }
 
+

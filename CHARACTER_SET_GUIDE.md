@@ -344,3 +344,4 @@
 3. **Create symbol reference** for developers
 4. **Document fallback characters** for each weapon
 
+

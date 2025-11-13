@@ -271,3 +271,4 @@ When implementing multi-character entities, test:
 - **Balance:** Larger hitboxes are offset by entity stats (health, damage)
 - **Flexibility:** System can evolve - start simple, enhance later
 
+

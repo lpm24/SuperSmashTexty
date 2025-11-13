@@ -1,5 +1,6 @@
 // Upgrade draft UI scene
 import { getRandomUpgrades, applyUpgrade } from '../systems/upgrades.js';
+import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
 
 export function showUpgradeDraft(k, player, onSelect) {
     // Don't show if already showing
@@ -118,6 +119,12 @@ export function showUpgradeDraft(k, player, onSelect) {
         
         // Apply upgrade
         applyUpgrade(player, selected.key);
+        
+        // Track upgrade for synergies
+        trackUpgrade(player, selected.key);
+        
+        // Check and apply synergies
+        checkAndApplySynergies(k, player);
         
         // Remove UI
         k.get('upgradeUI').forEach(obj => k.destroy(obj));

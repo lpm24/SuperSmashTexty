@@ -6,7 +6,11 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "git:status": "git status -sb",
+    "git:changes": "git diff --stat",
+    "git:review": "git diff --cached",
+    "git:recent": "git log --oneline --graph --decorate -10"
   },
   "keywords": [
     "game",

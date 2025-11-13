@@ -12,9 +12,10 @@ export function createDoor(k, x, y, direction) {
 
     door.direction = direction; // 'north', 'south', 'east', 'west'
     door.open = false;
+    door.isSpawnDoor = false; // Default to exit door
 
     // Note: Door interaction is handled in game scene via proximity check
-    // This onClick is kept for potential future use
+    // Spawn doors are red and closed, exit doors are green and open
 
     return door;
 }

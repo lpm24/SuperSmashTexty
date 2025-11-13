@@ -6,7 +6,6 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
         k.anchor('center'),
         k.color(isCrit ? 255 : 255, isCrit ? 200 : 255, isCrit ? 0 : 100), // Orange/red for crits
         k.area(),
-        k.move(direction, speed),
         'projectile'
     ]);
 
@@ -16,10 +15,17 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     projectile.isCrit = isCrit;
     projectile.lifetime = 2; // seconds
     projectile.age = 0;
+    projectile.direction = direction; // Store direction for manual movement
+    projectile.speed = speed; // Store speed for manual movement
 
-    // Remove projectile after lifetime
+    // Manual movement and lifetime management
     projectile.onUpdate(() => {
         if (k.paused) return;
+        
+        // Move projectile manually
+        const moveAmount = projectile.direction.scale(projectile.speed * k.dt());
+        projectile.pos.x += moveAmount.x;
+        projectile.pos.y += moveAmount.y;
         
         projectile.age += k.dt();
         if (projectile.age >= projectile.lifetime) {

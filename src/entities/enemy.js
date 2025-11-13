@@ -87,11 +87,10 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             const normalized = dir.unit();
             
             // Different movement patterns based on behavior
+            let moveAmount;
             if (enemy.behavior === 'rush') {
                 // Direct charge
-                const moveAmount = normalized.scale(enemy.speed * k.dt());
-                enemy.pos.x += moveAmount.x;
-                enemy.pos.y += moveAmount.y;
+                moveAmount = normalized.scale(enemy.speed * k.dt());
             } else if (enemy.behavior === 'fast') {
                 // Fast mover with slight jitter for unpredictability
                 const jitter = k.vec2(
@@ -102,15 +101,56 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                     normalized.x + jitter.x,
                     normalized.y + jitter.y
                 ).unit();
-                const moveAmount = moveDir.scale(enemy.speed * k.dt());
-                enemy.pos.x += moveAmount.x;
-                enemy.pos.y += moveAmount.y;
+                moveAmount = moveDir.scale(enemy.speed * k.dt());
             } else {
                 // Default: direct movement
-                const moveAmount = normalized.scale(enemy.speed * k.dt());
-                enemy.pos.x += moveAmount.x;
-                enemy.pos.y += moveAmount.y;
+                moveAmount = normalized.scale(enemy.speed * k.dt());
             }
+            
+            // Check collision with obstacles before moving
+            const newX = enemy.pos.x + moveAmount.x;
+            const newY = enemy.pos.y + moveAmount.y;
+            
+            let canMoveX = true;
+            let canMoveY = true;
+            
+            const obstacles = k.get('obstacle');
+            const enemySize = enemy.size || 12;
+            
+            for (const obstacle of obstacles) {
+                if (!obstacle.exists()) continue;
+                
+                const obsLeft = obstacle.pos.x - obstacle.width / 2;
+                const obsRight = obstacle.pos.x + obstacle.width / 2;
+                const obsTop = obstacle.pos.y - obstacle.height / 2;
+                const obsBottom = obstacle.pos.y + obstacle.height / 2;
+                
+                // Check X movement
+                const enemyLeftX = newX - enemySize;
+                const enemyRightX = newX + enemySize;
+                const enemyTopX = enemy.pos.y - enemySize;
+                const enemyBottomX = enemy.pos.y + enemySize;
+                
+                if (enemyRightX > obsLeft && enemyLeftX < obsRight &&
+                    enemyBottomX > obsTop && enemyTopX < obsBottom) {
+                    canMoveX = false;
+                }
+                
+                // Check Y movement
+                const enemyLeftY = enemy.pos.x - enemySize;
+                const enemyRightY = enemy.pos.x + enemySize;
+                const enemyTopY = newY - enemySize;
+                const enemyBottomY = newY + enemySize;
+                
+                if (enemyRightY > obsLeft && enemyLeftY < obsRight &&
+                    enemyBottomY > obsTop && enemyTopY < obsBottom) {
+                    canMoveY = false;
+                }
+            }
+            
+            // Apply movement if no collision
+            if (canMoveX) enemy.pos.x = newX;
+            if (canMoveY) enemy.pos.y = newY;
         }
     });
 

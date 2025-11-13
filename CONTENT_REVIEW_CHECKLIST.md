@@ -64,109 +64,119 @@
 
 ---
 
-#### 3. **Enemy Archetypes (Floor 1-2)** ✅ Third Priority
+#### 3. **Enemy Archetypes (Floor 1-2)** ✅ Third Priority - **COMPLETED**
 **Review early game enemies that teach core mechanics:**
 
 **Floor 1 Enemies:**
-- [ ] **Basic Rusher** - Teaches melee threat
-- [ ] **Basic Shooter** - Teaches ranged threat
-- [ ] **Zombie** - Teaches swarm mechanics
-- [ ] **Slime** - Teaches splitting mechanic
-- [ ] **Bat** - Teaches fast mover
+- [x] **Basic Rusher** `▶` - Teaches melee threat
+- [x] **Basic Shooter** `◈` - Teaches ranged threat
+- [x] **Zombie** `☠` - Teaches swarm mechanics
+- [x] **Slime** `●` - Teaches splitting mechanic
+- [x] **Bat** `▼` - Teaches fast mover
 
 **Floor 2 Enemies:**
-- [ ] **Charger** - Teaches telegraphed attacks
-- [ ] **Turret** - Teaches stationary threat
-- [ ] **Heavy Tank** - Teaches tank archetype
-- [ ] **Zippy** - Teaches evasion challenge
-- [ ] **Exploder** - Teaches area denial
+- [x] **Charger** `→` - Teaches telegraphed attacks
+- [x] **Turret** `┼` - Teaches stationary threat
+- [x] **Heavy Tank** `█` - Teaches tank archetype
+- [x] **Zippy** `◐` - Teaches evasion challenge
+- [x] **Exploder** `◎` - Teaches area denial
 
-**Review Criteria:**
-- Each enemy teaches something?
-- Difficulty progression smooth?
-- Enemy variety sufficient?
-- ASCII characters distinguishable?
-- Behavior patterns clear and readable?
+**Decisions Made:**
+- ✅ **Character Conflicts Resolved:**
+  - Bat: Changed from `◈` to `▼` (avoids conflict with Basic Shooter)
+  - Slime: Using `●` instead of `◉` (avoids conflict with Exploder `◎`)
+  - Charger: Using `→` (arrow) vs Rusher `▶` (triangle) - arrow = faster
+- ✅ **All Enemies Teach Core Mechanics:** Each enemy introduces new gameplay concept
+- ✅ **Difficulty Progression:** Smooth curve from Floor 1 to Floor 2
+- ✅ **Character Variety:** All enemies have distinct Unicode characters
+- ✅ **Stats Defined:** Health, speed, damage ranges specified for balance
 
-**Questions to Answer:**
-- Do Floor 1 enemies teach all core mechanics?
-- Is Floor 2 difficulty jump appropriate?
-- Are there too many/few enemy types per floor?
+**Questions Answered:**
+- ✅ Floor 1 enemies teach all core mechanics (melee, ranged, swarms, splitting, fast movement)
+- ✅ Floor 2 difficulty jump is appropriate (builds on Floor 1, introduces advanced mechanics)
+- ✅ Enemy count is good (5 per floor = good variety without overwhelming)
 
 ---
 
 ### Phase 2: Progression (Mid-Game Content)
 
-#### 4. **Unlockable Characters (Priority Set)** 
+#### 4. **Unlockable Characters (Priority Set)** ✅ Fourth Priority - **COMPLETED**
 **Review first 3-4 unlockable characters:**
 
-- [ ] **The Scout** - Speed-focused character
-- [ ] **The Tank** - Defense-focused character
-- [ ] **The Sniper** - Damage-focused character
-- [ ] **The Pyro** - Elemental-focused character
+- [x] **The Scout** - Speed-focused character
+- [x] **The Tank** - Defense-focused character
+- [x] **The Sniper** - Damage-focused character
+- [x] **The Pyro** - Elemental-focused character
 
-**Review Criteria:**
-- Each character offers unique playstyle?
-- Starting weapons match character theme?
-- Unique abilities feel impactful?
-- Unlock requirements reasonable?
-- Character differentiation clear?
+**Decisions Made:**
+- ✅ **Stats Updated:** All characters now use pixel-based values (matching Survivor system)
+- ✅ **Weapon Integration:** Characters use priority weapons (SMG, Shotgun) or need weapon implementation
+- ✅ **Character Differentiation:** Clear tradeoffs for each character
+- ⚠️ **Implementation Notes:**
+  - Scout: Dodge chance needs implementation
+  - Sniper: Crit system needs implementation (might be Phase 2)
+  - Pyro: DoT system needs implementation (might be Phase 2)
+- ✅ **Unlock Requirements:** Simplified where needed (Floor completion vs complex tracking)
 
-**Questions to Answer:**
-- Do these 4 characters cover different playstyles?
-- Are unlock requirements too easy/hard?
-- Do unique abilities create meaningful choices?
+**Questions Answered:**
+- ✅ 4 characters cover different playstyles (speed, tank, precision, area/DoT)
+- ✅ Unlock requirements reasonable (Floor 2-3 completion, or simplified alternatives)
+- ⚠️ Some unique abilities require new systems (crit, DoT) - may need Phase 2 implementation
 
 ---
 
-#### 5. **Enemy Archetypes (Floor 3-4)**
+#### 5. **Enemy Archetypes (Floor 3-4)** ✅ Fifth Priority - **COMPLETED**
 **Review mid-game enemies that add complexity:**
 
 **Floor 3 Enemies:**
-- [ ] **Mage** - Teaches special abilities
-- [ ] **Shield Bearer** - Teaches defensive enemies
-- [ ] **Golem** - Teaches high-health threats
-- [ ] **Wraith** - Teaches teleportation
-- [ ] **Spawner** - Teaches minion mechanics
-- [ ] **Buffer** - Teaches support enemies
+- [x] **Mage** `✦` - Teaches special abilities
+- [x] **Shield Bearer** `▓` - Teaches defensive enemies
+- [x] **Golem** `◼` - Teaches high-health threats
+- [x] **Wraith** `≈` - Teaches teleportation
+- [x] **Spawner** `◔` - Teaches minion mechanics
+- [x] **Buffer** `✚` - Teaches support enemies
 
 **Floor 4 Enemies:**
-- [ ] **Healer** - Teaches priority targeting
-- [ ] **Teleporter** - Teaches disruption
-- [ ] **Freezer** - Teaches debuff mechanics
-- [ ] **Leech** - Teaches lifesteal threat
+- [x] **Healer** `✛` - Teaches priority targeting
+- [x] **Teleporter** `◖` - Teaches disruption
+- [x] **Freezer** `❄` - Teaches debuff mechanics
+- [x] **Leech** `◗` - Teaches lifesteal threat
 
-**Review Criteria:**
-- New mechanics introduced gradually?
-- Enemy combinations create interesting challenges?
-- Difficulty scaling appropriate?
-- Special abilities readable and fair?
+**Decisions Made:**
+- ✅ **Character Conflicts Resolved:**
+  - Teleporter: Changed from `◐` to `◖` (avoids conflict with Zippy)
+  - Leech: Using `◗` (right half) vs Teleporter `◖` (left half) - good distinction
+  - Buffer: `✚` (heavy plus) vs Healer `✛` (open cross) - distinct
+  - Golem: Using `◼` (medium square) vs Heavy Tank `█` (full block) - distinction
+- ✅ **Stats Defined:** Health, speed, damage ranges specified for all enemies
+- ✅ **Mechanics Identified:** All new mechanics documented with implementation notes
+- ⚠️ **Implementation Requirements:** Many mechanics need new systems (homing, blocking, buffing, healing, etc.)
 
-**Questions to Answer:**
-- Do Floor 3-4 enemies add enough variety?
-- Are special abilities too complex for ASCII representation?
-- Do enemy combinations create fun challenges?
+**Questions Answered:**
+- ✅ Floor 3-4 enemies add enough variety (10 new enemies with unique mechanics)
+- ⚠️ Some special abilities are complex but readable in ASCII (homing, blocking, etc.)
+- ✅ Enemy combinations create fun challenges (support + damage dealers, spawners + minions)
 
 ---
 
-#### 6. **Bosses (Floors 1-3)**
+#### 6. **Bosses (Floors 1-3)** ✅ Sixth Priority - **COMPLETED**
 **Review early/mid-game bosses:**
 
-- [ ] **Floor 1 Boss: The Gatekeeper**
-- [ ] **Floor 2 Boss: The Swarm Queen**
-- [ ] **Floor 3 Boss: The Twin Guardians**
+- [x] **Floor 1 Boss: The Gatekeeper** `G` or `GG`
+- [x] **Floor 2 Boss: The Swarm Queen** `Q` or `QQ`
+- [x] **Floor 3 Boss: The Twin Guardians** `▶` + `◈` (two entities)
 
-**Review Criteria:**
-- Each boss has unique mechanics?
-- Boss difficulty appropriate for floor?
-- Boss fights feel epic but fair?
-- Rewards feel rewarding?
-- ASCII representation clear and readable?
+**Decisions Made:**
+- ✅ **Visual Presence:** Use double characters (`GG`, `QQ`) or larger font (28-32px) for bosses
+- ✅ **Health Scaling:** Appropriate progression (500 → 800 → 1200 total)
+- ✅ **Mechanics Defined:** Detailed mechanics for each boss with phases
+- ✅ **Character Assignments:** Each boss has distinct character(s)
+- ✅ **Rewards:** Good progression (weapon → character → upgrade unlock)
 
-**Questions to Answer:**
-- Do bosses feel like meaningful milestones?
-- Are boss mechanics readable in ASCII?
-- Do rewards justify the challenge?
+**Questions Answered:**
+- ✅ Bosses feel like meaningful milestones (test learned skills, significant achievements)
+- ✅ Boss mechanics readable in ASCII (double characters or larger font recommended)
+- ✅ Rewards justify challenge (high XP/currency + unlocks proportional to difficulty)
 
 ---
 
