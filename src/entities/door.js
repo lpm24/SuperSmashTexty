@@ -1,7 +1,13 @@
 // Door entity definition
 export function createDoor(k, x, y, direction) {
+    // Different visual representation for vertical vs horizontal doors
+    // Vertical doors (north/south): use vertical bars │││
+    // Horizontal doors (east/west): use horizontal bars ===
+    const isVertical = direction === 'north' || direction === 'south';
+    const doorChar = isVertical ? '│││' : '═══';
+    
     const door = k.add([
-        k.text('=', { size: 24 }),
+        k.text(doorChar, { size: 24 }),
         k.pos(x, y),
         k.anchor('center'),
         k.color(200, 200, 100),

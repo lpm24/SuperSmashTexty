@@ -1,18 +1,32 @@
 // Player entity definition
+import { getSelectedCharacter } from '../systems/metaProgression.js';
+import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
+import { getWeaponDefinition } from '../data/weapons.js';
+
 export function createPlayer(k, x, y) {
+    // Get selected character
+    const selectedCharKey = getSelectedCharacter();
+    const charData = CHARACTER_UNLOCKS[selectedCharKey] || CHARACTER_UNLOCKS.survivor;
+    
     const player = k.add([
-        k.text('@', { size: 24 }),
+        k.text(charData.char, { size: 24 }),
         k.pos(x, y),
         k.anchor('center'),
-        k.color(100, 150, 255),
+        k.color(...charData.color),
         k.area(),
-        k.health(100),
+        k.health(charData.stats.health),
         'player'
     ]);
 
-    // Player stats
-    player.speed = 150;
-    player.maxHealth = 100;
+    // Store character info
+    player.characterKey = selectedCharKey;
+    player.characterData = charData;
+    
+    // Player stats (from character)
+    player.speed = charData.stats.speed;
+    player.originalSpeed = charData.stats.speed; // Store original speed for debuff restoration
+    player.slowed = false; // Track if player is slowed
+    player.maxHealth = charData.stats.health;
     player.level = 1;
     player.xp = 0;
     player.xpToNext = 10;
@@ -24,22 +38,89 @@ export function createPlayer(k, x, y) {
     // Sync health component with maxHealth
     player.setHP(player.maxHealth);
     
-    // Weapon stats
-    player.fireRate = 1.5; // shots per second (updated from 0.5 for better feel)
-    player.projectileSpeed = 300;
-    player.projectileDamage = 10;
+    // Weapon system - get weapon definition
+    const weaponKey = charData.weapon || 'pistol';
+    const weaponDef = getWeaponDefinition(weaponKey);
+    player.weaponKey = weaponKey;
+    player.weaponDef = weaponDef;
+    
+    // Store base weapon stats (for upgrade recalculation)
+    player.baseFireRate = weaponDef.fireRate;
+    player.baseProjectileSpeed = weaponDef.projectileSpeed;
+    player.baseProjectileDamage = weaponDef.baseDamage;
+    
+    // Weapon stats (from weapon definition)
+    player.fireRate = weaponDef.fireRate;
+    player.projectileSpeed = weaponDef.projectileSpeed;
+    player.projectileDamage = weaponDef.baseDamage;
     player.lastFireTime = 0;
     
-    // Advanced weapon stats
-    player.projectileCount = 1; // Number of projectiles per shot (multi-shot)
-    player.piercing = 0; // Number of enemies a projectile can pass through
-    player.critChance = 0; // Critical hit chance (0-1)
-    player.critDamage = 2.0; // Critical hit damage multiplier
-    player.spreadAngle = 0; // Spread angle in degrees (0 = no spread)
+    // Advanced weapon stats (from weapon definition)
+    player.projectileCount = weaponDef.projectileCount;
+    player.piercing = weaponDef.piercing;
+    player.obstaclePiercing = weaponDef.obstaclePiercing;
+    player.critChance = weaponDef.critChance;
+    player.critDamage = weaponDef.critDamage;
+    player.spreadAngle = weaponDef.spreadAngle;
     player.defense = 0; // Damage reduction (flat reduction)
     
-    // Character abilities
-    player.xpMultiplier = 1.1; // +10% XP gain (The Survivor's unique ability)
+    // Weapon-specific properties
+    player.weaponRange = weaponDef.range;
+    player.weaponCategory = weaponDef.category;
+    
+    // Orbital weapon properties
+    if (weaponDef.orbitRadius) {
+        player.orbitRadius = weaponDef.orbitRadius;
+        player.rotationSpeed = weaponDef.rotationSpeed;
+        player.orbitalOrbs = []; // Array to store orbital entities
+        player.orbitalAngles = []; // Array to store orbital angles
+    }
+    
+    // Explosive weapon properties
+    if (weaponDef.explosionRadius) {
+        player.explosionRadius = weaponDef.explosionRadius;
+        player.explosionDamage = weaponDef.explosionDamage;
+    }
+    
+    // Chain lightning properties
+    if (weaponDef.chainRange) {
+        player.chainRange = weaponDef.chainRange;
+        player.maxJumps = weaponDef.maxJumps;
+        player.chainDamageReduction = weaponDef.chainDamageReduction;
+    }
+    
+    // Character abilities (apply based on character)
+    player.xpMultiplier = 1.0; // Base multiplier
+    player.dodgeChance = 0; // Base dodge chance
+    player.damageReduction = 0; // Base damage reduction
+    
+    // Upgrade tracking
+    player.weapons = [weaponKey]; // Array of equipped weapon keys (max 4)
+    player.passiveUpgrades = []; // Array of passive upgrade keys (max 4)
+    player.upgradeStacks = {}; // Track upgrade stack counts: { upgradeKey: count }
+    
+    // Apply character-specific abilities
+    if (charData.ability === 'xpBoost') {
+        player.xpMultiplier = 1.1; // +10% XP gain (The Survivor)
+    } else if (charData.ability === 'speedBoost') {
+        // +20% speed boost (stacks with base)
+        player.speed = player.speed * 1.2;
+        player.originalSpeed = player.speed;
+        player.dodgeChance = 0.1; // +10% dodge chance (The Scout)
+    } else if (charData.ability === 'tankStats') {
+        // +25% health (already applied in maxHealth)
+        player.maxHealth = Math.floor(player.maxHealth * 1.25);
+        player.setHP(player.maxHealth);
+        player.damageReduction = 0.15; // +15% damage reduction (The Tank)
+    } else if (charData.ability === 'critBoost') {
+        // +50% crit chance, +25% crit damage (The Sniper)
+        // Apply to weapon's base crit chance
+        player.critChance = (player.critChance || 0) * 1.5; // +50% multiplier
+        player.critDamage = (player.critDamage || 2.0) * 1.25; // +25% multiplier
+    } else if (charData.ability === 'fireDot') {
+        // +25% fire DoT (The Pyro) - requires DoT system
+        player.fireDotMultiplier = 1.25;
+    }
 
     // Movement
     let moveDir = k.vec2(0, 0);

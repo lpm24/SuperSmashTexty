@@ -1,5 +1,5 @@
 // Upgrade draft UI scene
-import { getRandomUpgrades, applyUpgrade } from '../systems/upgrades.js';
+import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
 
 export function showUpgradeDraft(k, player, onSelect) {
@@ -9,8 +9,8 @@ export function showUpgradeDraft(k, player, onSelect) {
     // Pause the game
     k.paused = true;
     
-    // Get 3 random upgrades
-    const upgrades = getRandomUpgrades(3);
+    // Get 3 random upgrades (weapon-aware)
+    const upgrades = getRandomUpgrades(3, player);
     
     // Debug: Log that we're creating the draft
     console.log('Creating upgrade draft with', upgrades.length, 'upgrades');
@@ -78,9 +78,10 @@ export function showUpgradeDraft(k, player, onSelect) {
             'upgradeUI'
         ]);
         
-        // Upgrade description
+        // Upgrade description (with stack count)
+        const description = getUpgradeDescription(upgrade, player);
         const descText = k.add([
-            k.text(upgrade.description, { size: 16 }),
+            k.text(description, { size: 16 }),
             k.pos(cardX, cardY + 10),
             k.anchor('center'),
             k.color(200, 200, 200),

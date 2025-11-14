@@ -1,8 +1,8 @@
 # ASCII Roguelike Arena Shooter – Game Design Document
 
 **Project Name:** SuperSmashTexty  
-**Version:** 1.0.0 (Design Complete, Phase 1 Complete)  
-**Last Updated:** 2025-11-13  
+**Version:** 1.0.1 (Design Complete, Phase 1 Complete)  
+**Last Updated:** 2025-01-XX  
 **Status:** Phase 1 Complete - Phase 2 In Development
 
 ---
@@ -218,6 +218,7 @@ The game design supports multiple thematic interpretations:
 - **Phases:** Bosses may have multiple phases with different attack patterns
 - **Environmental Interaction:** Some bosses interact with room layout or spawn adds
 - **Rewards:** Bosses grant significant XP, currency, and potential unique drops
+- **Armor System:** Bosses have armor that reduces incoming damage (30-35% reduction). Armor takes reduced damage and protects boss health. Visual representation shows armor degradation.
 
 ### Design Notes
 - Enemy system designed to accommodate future enemy types and archetypes
@@ -276,6 +277,7 @@ The game design supports multiple thematic interpretations:
 - **Run-Specific Upgrades:** Each run allows players to upgrade/modify their equipped weapon
 - **Weapon Variety:** Multiple base weapon types available (unlocked via meta-progression)
 - **Flexibility:** Players can experiment with different weapon + upgrade combinations each run
+- **Projectile Range:** Projectiles have maximum range (~750 pixels) to differentiate weapons and prevent infinite range exploits
 
 ### Design Notes
 - All upgrade categories should be available and expandable
@@ -412,10 +414,11 @@ Each character is unique in multiple ways:
 
 #### In-Game HUD
 - **Health Bar:** Visual representation of current/max health
-- **XP Bar:** Progress toward next level-up
-- **Level Display:** Current player level
-- **Room/Floor Counter:** Current room and floor number
+- **Level Display:** Current player level with decimal progress (e.g., "Level: 1.5" = level 1, 50% to next)
+- **XP Display:** Current XP and XP needed for next level
+- **Room/Floor Counter:** Compact display (e.g., "F1 R1" for Floor 1 Room 1)
 - **Currency Display:** Persistent currency earned this run (if applicable)
+- **Pause Overlay:** Visual indication when game is paused (dark overlay + "PAUSED" text)
 
 #### Upgrade Selection UI
 - **Upgrade Draft Screen:** Pause gameplay to show 3 upgrade options
@@ -673,9 +676,9 @@ Each character is unique in multiple ways:
    - ✅ Synergy system (basic)
 
 4. **Meta Progression**
-   - Currency system
-   - Basic save/load
-   - Simple unlock system
+   - ✅ Currency system
+   - ✅ Basic save/load
+   - ✅ Simple unlock system
 
 ### Phase 3: Content & Polish
 **Goal:** Feature-complete game

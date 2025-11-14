@@ -3,22 +3,32 @@
 // Enemy spawn weights by floor
 const ENEMY_SPAWN_WEIGHTS = {
     1: {
-        basic: 50,
-        rusher: 30,
-        tank: 15,
-        fast: 5
+        rusher: 25,    // Basic Rusher ▶
+        shooter: 20,   // Basic Shooter ◈
+        zombie: 20,    // Zombie ☠
+        slime: 15,     // Slime ●
+        bat: 20        // Bat ▼
     },
     2: {
-        basic: 30,
-        rusher: 35,
-        tank: 20,
-        fast: 15
+        charger: 20,   // Charger →
+        turret: 15,    // Turret ┼
+        heavyTank: 20, // Heavy Tank █
+        zippy: 20,     // Zippy ◐
+        exploder: 25   // Exploder ◎
     },
     3: {
-        basic: 20,
-        rusher: 30,
-        tank: 25,
-        fast: 25
+        mage: 20,        // Mage ✦
+        shieldBearer: 15, // Shield Bearer ▓
+        golem: 15,       // Golem ◼
+        wraith: 15,      // Wraith ≈
+        spawner: 15,    // Spawner ◔
+        buffer: 20      // Buffer ✚
+    },
+    4: {
+        healer: 25,     // Healer ✛
+        teleporter: 20, // Teleporter ◖
+        freezer: 25,    // Freezer ❄
+        leech: 30       // Leech ◗
     }
 };
 

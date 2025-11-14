@@ -94,6 +94,13 @@ The game will open in your browser at `http://localhost:3000`
 - ✅ Obstacle system (walls block everything, cover blocks movement but allows projectiles)
 - ✅ Floor-based color progression (visual distinction between floors)
 - ✅ Synergy system (8 upgrade combinations with special effects)
+- ✅ Meta progression system (currency, save/load, unlocks, results screen)
+- ✅ Shop UI (purchase permanent upgrades, characters, and weapons with currency)
+- ✅ Settings/Options menu (audio, controls, visual, gameplay settings with persistence)
+- ✅ Statistics & Achievements system (lifetime stats tracking, achievement unlocks, progress display)
+- ✅ UI improvements (pause overlay, compact HUD, level/XP decimal display)
+- ✅ Boss armor system with proper damage reduction
+- ✅ Projectile range limits for weapon differentiation
 
 See `GAME_DESIGN_DOCUMENT.md` for complete design specifications and implementation roadmap.
 
