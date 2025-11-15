@@ -1,9 +1,9 @@
 # ASCII Roguelike Arena Shooter – Game Design Document
 
 **Project Name:** SuperSmashTexty  
-**Version:** 1.0.1 (Design Complete, Phase 1 Complete)  
+**Version:** 1.0.2 (Design Complete, Phase 2 Complete)  
 **Last Updated:** 2025-01-XX  
-**Status:** Phase 1 Complete - Phase 2 In Development
+**Status:** Phase 2 Complete - Phase 3 In Development
 
 ---
 
@@ -475,18 +475,25 @@ Each character is unique in multiple ways:
 ├── src/
 │   ├── main.js                    # Entry point, scene setup
 │   ├── scenes/
-│   │   ├── menu.js                # Main menu scene
-│   │   ├── game.js                # Main game scene
-│   │   └── gameOver.js            # Game over scene
+│   │   ├── menu.js                # ✅ Main menu scene
+│   │   ├── game.js                # ✅ Main game scene
+│   │   ├── gameOver.js            # ✅ Game over scene
+│   │   ├── characterSelect.js    # ✅ Character selection scene
+│   │   ├── shop.js                # ✅ Meta-progression shop
+│   │   ├── settings.js            # ✅ Settings/options menu
+│   │   ├── statistics.js          # ✅ Statistics and achievements display
+│   │   └── upgradeDraft.js        # ✅ Upgrade selection UI
 │   ├── assets/
 │   │   ├── fonts/ (ASCII bitmap font atlas - future)
 │   │   ├── sprites/ (if using sprite-based ASCII - future)
 │   │   └── sounds/ (optional audio files - future)
 │   ├── data/
+│   │   ├── achievements.js ✅
+│   │   ├── unlocks.js ✅
+│   │   ├── weapons.js ✅
 │   │   ├── theme.json (theme configuration - future)
-│   │   ├── enemies.json (future)
-│   │   ├── upgrades.json (future)
-│   │   ├── weapons.json (future)
+│   │   ├── enemies.json (future - currently in code)
+│   │   ├── upgrades.json (future - currently in code)
 │   │   ├── rooms.json (templates - future)
 │   │   ├── floors.json (floor definitions - future)
 │   │   └── characters.json (future)
@@ -494,14 +501,20 @@ Each character is unique in multiple ways:
 │   │   ├── combat.js              # ✅ Autofire, collisions, immunity frames
 │   │   ├── progression.js         # ✅ XP, leveling
 │   │   ├── upgrades.js            # ✅ Upgrade system
-│   │   ├── generation.js          # Future: room generation
-│   │   └── save.js                 # Future: save/load
+│   │   ├── roomGeneration.js      # ✅ Room generation system
+│   │   ├── metaProgression.js      # ✅ Save/load and meta-progression
+│   │   ├── achievementChecker.js  # ✅ Achievement tracking
+│   │   ├── settings.js             # ✅ Settings persistence
+│   │   └── synergies.js            # ✅ Upgrade synergy system
 │   └── entities/
 │       ├── player.js              # ✅ Player entity with immunity frames
 │       ├── enemy.js               # ✅ Enemy entity
+│       ├── boss.js                # ✅ Boss entity
+│       ├── miniboss.js            # ✅ Miniboss entity
 │       ├── projectile.js          # ✅ Projectile entity
 │       ├── pickup.js              # ✅ XP pickups
-│       └── door.js                # ✅ Door entity
+│       ├── door.js                # ✅ Door entity
+│       └── obstacle.js            # ✅ Obstacle entity (walls/cover)
 └── dist/ (build output for GitHub Pages)
 ```
 
@@ -660,51 +673,65 @@ Each character is unique in multiple ways:
 ### Phase 2: Core Loop
 **Goal:** Complete gameplay loop
 
-1. **Room & Floor System**
+1. **Room & Floor System** ✅
    - ✅ Multiple rooms per floor
    - ✅ Floor progression
    - ✅ Room generation (basic templates)
+   - ✅ Obstacle system (walls and cover)
+   - ✅ Door-based room transitions
 
-2. **Enemy System**
+2. **Enemy System** ✅
    - ✅ Multiple enemy types
    - ✅ Door-based spawning
    - ✅ Enemy scaling
+   - ✅ Boss and miniboss entities
 
-3. **Upgrade System**
+3. **Upgrade System** ✅
    - ✅ Multiple upgrade categories
    - ✅ Upgrade effects implementation
-   - ✅ Synergy system (basic)
+   - ✅ Synergy system (8 combinations)
+   - ✅ Weapon variety and differentiation
 
-4. **Meta Progression**
-   - ✅ Currency system
-   - ✅ Basic save/load
-   - ✅ Simple unlock system
+4. **Meta Progression** ✅
+   - ✅ Currency system (Credits)
+   - ✅ Complete save/load system
+   - ✅ Unlock system (characters, weapons, upgrades)
+   - ✅ Shop UI for purchases
+   - ✅ Statistics tracking
+   - ✅ Achievement system
 
 ### Phase 3: Content & Polish
 **Goal:** Feature-complete game
 
-1. **Content Expansion**
-   - Multiple characters
-   - More enemy types
-   - Boss implementation
-   - More upgrades and synergies
+1. **Content Expansion** 🔄
+   - ✅ Character selection system
+   - ✅ Multiple weapon types
+   - ✅ Boss and miniboss implementation
+   - 🔄 More enemy types and variants
+   - 🔄 Additional upgrades and synergies
+   - 🔄 More character variety
 
-2. **Procedural Generation**
-   - Advanced room generation
-   - Better enemy spawn patterns
-   - Room variety
+2. **Procedural Generation** 🔄
+   - ✅ Room generation system
+   - ✅ Room templates and variety
+   - 🔄 Advanced generation patterns
+   - 🔄 Better enemy spawn patterns
+   - 🔄 More room variety
 
-3. **UI/UX**
-   - Complete menu systems
-   - Upgrade selection UI
-   - Results screen
-   - Meta-progression shop
+3. **UI/UX** ✅
+   - ✅ Complete menu systems (main, character select, shop, settings, statistics)
+   - ✅ Upgrade selection UI
+   - ✅ Results screen
+   - ✅ Meta-progression shop
+   - ✅ Settings/options menu
+   - ✅ Achievement display
 
-4. **Polish**
-   - Visual effects
-   - Camera shake
-   - Particle effects
-   - Balance tuning
+4. **Polish** 🔄
+   - 🔄 Visual effects enhancement
+   - 🔄 Camera shake improvements
+   - 🔄 Particle effects expansion
+   - 🔄 Balance tuning
+   - 🔄 Performance optimization
 
 ### Phase 4: Deployment
 **Goal:** Live game on GitHub Pages

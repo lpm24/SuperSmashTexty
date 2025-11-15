@@ -67,9 +67,9 @@ export function showUpgradeDraft(k, player, onSelect) {
             'upgradeCard'
         ]);
         
-        // Upgrade name
+        // Upgrade name (with width constraint to prevent overflow)
         const nameText = k.add([
-            k.text(upgrade.name, { size: 20 }),
+            k.text(upgrade.name, { size: 20, width: cardWidth - 20 }),
             k.pos(cardX, cardY - 40),
             k.anchor('center'),
             k.color(255, 255, 255),
@@ -78,10 +78,10 @@ export function showUpgradeDraft(k, player, onSelect) {
             'upgradeUI'
         ]);
         
-        // Upgrade description (with stack count)
+        // Upgrade description (with stack count, width constraint to prevent overflow)
         const description = getUpgradeDescription(upgrade, player);
         const descText = k.add([
-            k.text(description, { size: 16 }),
+            k.text(description, { size: 16, width: cardWidth - 20 }),
             k.pos(cardX, cardY + 10),
             k.anchor('center'),
             k.color(200, 200, 200),

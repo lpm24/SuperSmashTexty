@@ -393,9 +393,10 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             const shieldPercent = enemy.shieldHealth / enemy.maxShieldHealth;
             
             if (shieldPercent > 0.66) {
-                // Full shield (66-100%): Double braces for thickness
-                leftShield = '{{';
-                rightShield = '}}';
+                // Full shield (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
+                // Using ⟦ ⟧ instead of {{ }} to avoid KAPLAY styled text tag parsing
+                leftShield = '⟦';
+                rightShield = '⟧';
             } else if (shieldPercent > 0.33) {
                 // Medium shield (33-66%): Single braces
                 leftShield = '{';
@@ -413,9 +414,10 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             const armorPercent = enemy.armorHealth / enemy.maxArmorHealth;
             
             if (armorPercent > 0.66) {
-                // Full armor (66-100%): Double brackets for thickness
-                leftArmor = '[[';
-                rightArmor = ']]';
+                // Full armor (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
+                // Using ⟦ ⟧ instead of [[ ]] to avoid potential parsing issues
+                leftArmor = '⟦';
+                rightArmor = '⟧';
             } else if (armorPercent > 0.33) {
                 // Medium armor (33-66%): Single brackets
                 leftArmor = '[';
@@ -805,7 +807,7 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                     false // isCrit
                 );
                 projectile.isEnemyProjectile = true;
-                projectile.color = k.rgb(...enemy.color);
+                projectile.color = k.rgb(...enemy.originalColor);
                 enemy.attackTimer = 0;
             }
             return; // Turrets don't move
@@ -842,7 +844,7 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                     false
                 );
                 projectile.isEnemyProjectile = true;
-                projectile.color = k.rgb(...enemy.color);
+                projectile.color = k.rgb(...enemy.originalColor);
                 enemy.attackTimer = 0;
             }
             
@@ -1203,6 +1205,15 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                 enemy.pos.y += finalMove.y;
             }
         }
+        
+        // Keep enemy in bounds (room boundaries) - same as player
+        const roomWidth = k.width();
+        const roomHeight = k.height();
+        const margin = 20;
+        const enemySize = enemy.size || 12;
+        
+        enemy.pos.x = k.clamp(enemy.pos.x, margin + enemySize, roomWidth - margin - enemySize);
+        enemy.pos.y = k.clamp(enemy.pos.y, margin + enemySize, roomHeight - margin - enemySize);
     });
 
     // Mark as not dead initially

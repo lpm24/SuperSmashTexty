@@ -120,6 +120,7 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
     boss.xpValue = config.xpValue;
     boss.type = type;
     boss.floor = floor;
+    boss.textSize = config.size; // Store text size for later use
     
     // Store boss-specific stats
     if (baseConfig.meleeDamage) boss.meleeDamage = baseConfig.meleeDamage;
@@ -163,14 +164,15 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
         let rightArmor = '';
         
         // Shields take priority (outermost layer)
-        // Size scales with health: Full = {{ }}, Medium = { }, Low = ⦃ ⦄
+        // Size scales with health: Full = ⟦ ⟧, Medium = { }, Low = ⦃ ⦄
+        // Using ⟦ ⟧ instead of {{ }} to avoid KAPLAY styled text tag parsing
         if (boss.shieldHealth > 0) {
             const shieldPercent = boss.shieldHealth / boss.maxShieldHealth;
             
             if (shieldPercent > 0.66) {
-                // Full shield (66-100%): Double braces for thickness
-                leftShield = '{{';
-                rightShield = '}}';
+                // Full shield (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
+                leftShield = '⟦';
+                rightShield = '⟧';
             } else if (shieldPercent > 0.33) {
                 // Medium shield (33-66%): Single braces
                 leftShield = '{';
@@ -183,14 +185,15 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
         }
         
         // Armor (middle layer, can appear with shields: {[GG]})
-        // Size scales with health: Full = [[ ]], Medium = [ ], Low = ⦅ ⦆
+        // Size scales with health: Full = ⟦ ⟧, Medium = [ ], Low = ⦅ ⦆
+        // Using ⟦ ⟧ instead of [[ ]] to avoid potential parsing issues
         if (boss.armorHealth > 0) {
             const armorPercent = boss.armorHealth / boss.maxArmorHealth;
             
             if (armorPercent > 0.66) {
-                // Full armor (66-100%): Double brackets for thickness
-                leftArmor = '[[';
-                rightArmor = ']]';
+                // Full armor (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
+                leftArmor = '⟦';
+                rightArmor = '⟧';
             } else if (armorPercent > 0.33) {
                 // Medium armor (33-66%): Single brackets
                 leftArmor = '[';
@@ -205,8 +208,11 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
         // Visual format: {[GG]} (shields outside, armor inside)
         const visual = `${leftShield}${leftArmor}${boss.coreChar}${rightArmor}${rightShield}`;
         
-        // Update text component (KAPLAY allows direct text assignment)
-        boss.text = visual;
+        // Update text component - recreate to avoid HTML tag parsing issues with "GG"
+        // Kaplay's text parser may interpret certain character sequences as styled text tags
+        const currentSize = boss.textSize || 28;
+        boss.remove('text');
+        boss.add(k.text(visual, { size: currentSize }));
         
         // Update color - use shield color if shields exist, otherwise boss color
         if (boss.shieldHealth > 0) {
@@ -897,6 +903,15 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
                 if (canMoveY) boss.pos.y = newY;
             }
         }
+        
+        // Keep boss in bounds (room boundaries) - same as player and enemies
+        const roomWidth = k.width();
+        const roomHeight = k.height();
+        const margin = 20;
+        const bossSize = boss.size || 14;
+        
+        boss.pos.x = k.clamp(boss.pos.x, margin + bossSize, roomWidth - margin - bossSize);
+        boss.pos.y = k.clamp(boss.pos.y, margin + bossSize, roomHeight - margin - bossSize);
     });
 
     // Mark as not dead initially

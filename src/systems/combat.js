@@ -276,6 +276,49 @@ export function setupCombatSystem(k, player) {
         });
     });
     
+    // Collision: Projectile hits Miniboss
+    k.onCollide('projectile', 'miniboss', (projectile, miniboss) => {
+        if (k.paused) return;
+        
+        // Only player projectiles can hit minibosses
+        if (projectile.isEnemyProjectile || projectile.isBossProjectile) {
+            return;
+        }
+        
+        // Check if this projectile has already hit this miniboss (for piercing)
+        if (projectile.piercedEnemies && projectile.piercedEnemies.has(miniboss)) {
+            return; // Already hit this miniboss
+        }
+        
+        // Calculate final damage (with crit)
+        let finalDamage = projectile.damage;
+        if (projectile.isCrit) {
+            finalDamage = Math.floor(finalDamage * 1.5); // 50% crit bonus
+        }
+        
+        // Use takeDamage to handle armor/shields
+        miniboss.takeDamage(finalDamage);
+        
+        // Track this miniboss for piercing
+        if (projectile.piercedEnemies) {
+            projectile.piercedEnemies.add(miniboss);
+        }
+        
+        // Destroy projectile if it can't pierce anymore
+        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+            k.destroy(projectile);
+        }
+        
+        // Visual feedback (different color for crits)
+        miniboss.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
+        k.wait(0.1, () => {
+            if (miniboss.exists()) {
+                // Restore miniboss color (will be updated by updateVisual if armor/shield changed)
+                miniboss.updateVisual();
+            }
+        });
+    });
+    
     // Collision: Projectile hits Boss (with armor system - regular projectiles)
     k.onCollide('projectile', 'boss', (projectile, boss) => {
         if (k.paused) return;
@@ -377,6 +420,43 @@ export function setupCombatSystem(k, player) {
         }
         
         // Initial hit flash (will be overridden by immunity flash)
+        player.color = k.rgb(255, 100, 100);
+    });
+    
+    // Collision: Miniboss hits Player
+    k.onCollide('miniboss', 'player', (miniboss, player) => {
+        if (k.paused) return;
+        
+        // Check if player is invulnerable (immunity frames)
+        if (player.invulnerable) return;
+        
+        // Minibosses deal more damage than regular enemies but less than bosses
+        // Melee miniboss deals melee damage, others use base damage
+        let baseDamage = 15; // Default for most minibosses
+        if (miniboss.type === 'brute' || miniboss.type === 'berserker' || miniboss.type === 'guardian') {
+            if (miniboss.meleeDamage) {
+                baseDamage = miniboss.meleeDamage;
+            }
+        }
+        const finalDamage = Math.max(1, baseDamage - (player.defense || 0));
+        player.hurt(finalDamage);
+        player.invulnerable = true;
+        player.invulnerableTime = player.invulnerableDuration;
+        
+        // Knockback miniboss away from player (player doesn't move)
+        const knockbackDir = k.vec2(
+            miniboss.pos.x - player.pos.x,
+            miniboss.pos.y - player.pos.y
+        );
+        const knockbackDist = knockbackDir.len();
+        if (knockbackDist > 0) {
+            const normalized = knockbackDir.unit();
+            const knockbackAmount = 25; // Knockback distance
+            miniboss.pos.x += normalized.x * knockbackAmount;
+            miniboss.pos.y += normalized.y * knockbackAmount;
+        }
+        
+        // Visual feedback
         player.color = k.rgb(255, 100, 100);
     });
     

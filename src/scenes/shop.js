@@ -174,9 +174,9 @@ export function setupShopScene(k) {
                     k.z(1001)
                 ]);
                 
-                // Item description
+                // Item description (with width constraint to prevent overflow)
                 const descText = k.add([
-                    k.text(unlock.description, { size: 14 }),
+                    k.text(unlock.description, { size: 14, width: 300 }),
                     k.pos(itemX + 10, itemY + 35),
                     k.anchor('topleft'),
                     k.color(200, 200, 200),
@@ -348,7 +348,7 @@ export function setupShopScene(k) {
         ]);
         
         const backText = k.add([
-            k.text('ESC: Back', { size: 16 }),
+            k.text('Back', { size: 16 }),
             k.pos(80, k.height() - 22),
             k.anchor('center'),
             k.color(200, 200, 200),

@@ -28,9 +28,9 @@ export function setupStatisticsScene(k) {
             k.z(1000)
         ]);
         
-        // Tab buttons
+        // Tab buttons (centered like Settings menu)
         const tabY = 90;
-        const tabSpacing = 150;
+        const tabSpacing = 120; // Same spacing as Settings menu
         const tabWidth = 150;
         const tabHeight = 30;
         
@@ -39,9 +39,13 @@ export function setupStatisticsScene(k) {
             { key: 'achievements', label: 'Achievements' }
         ];
         
+        // Calculate centered positions for tabs (same as Settings menu)
+        const totalTabWidth = (tabs.length - 1) * tabSpacing;
+        const firstTabX = k.width() / 2 - totalTabWidth / 2;
+        
         const tabButtons = [];
         tabs.forEach((tab, index) => {
-            const tabX = k.width() / 2 - (tabs.length * tabSpacing) / 2 + index * tabSpacing;
+            const tabX = firstTabX + index * tabSpacing;
             const isActive = currentTab === tab.key;
             
             const tabBg = k.add([
@@ -66,6 +70,7 @@ export function setupStatisticsScene(k) {
             
             tabBg.onClick(() => {
                 currentTab = tab.key;
+                scrollOffset = 0; // Reset scroll when switching tabs
                 refreshContent();
             });
             
@@ -74,7 +79,14 @@ export function setupStatisticsScene(k) {
         
         // Content area
         const contentY = 140;
+        const progressAreaHeight = 40; // Space for progress text
+        const backButtonArea = 60; // Space for back button
+        const bottomButtonArea = progressAreaHeight + backButtonArea; // Total reserved space
+        const viewportTop = contentY;
+        const viewportBottom = k.height() - bottomButtonArea; // Scrollable area stops before progress text
         let contentItems = [];
+        let scrollOffset = 0; // For achievements scrolling
+        const scrollSpeed = 50; // Pixels per scroll step
         
         // Refresh content display
         function refreshContent() {
@@ -143,22 +155,41 @@ export function setupStatisticsScene(k) {
                 });
                 
             } else if (currentTab === 'achievements') {
-                // Display achievements by category
+                // Display achievements by category with scrolling
                 const categories = getAchievementCategories();
-                let currentY = contentY + 20;
+                let currentY = contentY + 20 - scrollOffset;
+                
+                // Calculate total content height to determine if scrolling is needed
+                let totalContentHeight = 0;
+                categories.forEach(category => {
+                    totalContentHeight += 35; // Category header
+                    const categoryAchievements = getAchievementsByCategory(category);
+                    totalContentHeight += categoryAchievements.length * 50; // Achievement cards
+                    totalContentHeight += 20; // Spacing after category
+                });
+                
+                // Clamp scroll offset
+                const availableHeight = viewportBottom - viewportTop;
+                const maxScroll = Math.max(0, totalContentHeight - availableHeight);
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                currentY = contentY + 20 - scrollOffset;
                 
                 categories.forEach(category => {
-                    // Category header
+                    // Category header (only render if visible)
                     const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-                    const headerText = k.add([
-                        k.text(categoryName, { size: 20 }),
-                        k.pos(k.width() / 2, currentY),
-                        k.anchor('center'),
-                        k.color(255, 200, 100),
-                        k.fixed(),
-                        k.z(1000)
-                    ]);
-                    contentItems.push(headerText);
+                    const headerY = currentY;
+                    
+                    if (headerY >= viewportTop - 35 && headerY <= viewportBottom) {
+                        const headerText = k.add([
+                            k.text(categoryName, { size: 20 }),
+                            k.pos(k.width() / 2, headerY),
+                            k.anchor('center'),
+                            k.color(255, 200, 100),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(headerText);
+                    }
                     currentY += 35;
                     
                     // Achievements in this category
@@ -167,69 +198,75 @@ export function setupStatisticsScene(k) {
                         const isUnlocked = unlockedAchievements.includes(achievement.id);
                         const y = currentY + index * 50;
                         
-                        // Achievement card
-                        const cardBg = k.add([
-                            k.rect(700, 45),
-                            k.pos(k.width() / 2, y),
-                            k.anchor('center'),
-                            k.color(isUnlocked ? 40 : 30, isUnlocked ? 40 : 30, isUnlocked ? 50 : 30),
-                            k.outline(2, k.rgb(isUnlocked ? 100 : 50, isUnlocked ? 100 : 50, isUnlocked ? 150 : 50)),
-                            k.fixed(),
-                            k.z(1000)
-                        ]);
+                        // Only render if visible (within viewport, accounting for card height)
+                        const cardTop = y - 22.5; // Half of card height (45/2)
+                        const cardBottom = y + 22.5;
                         
-                        // Icon
-                        const iconText = k.add([
-                            k.text(achievement.icon, { size: 24 }),
-                            k.pos(50, y),
-                            k.anchor('left'),
-                            k.color(isUnlocked ? 255 : 100, isUnlocked ? 255 : 100, isUnlocked ? 255 : 100),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-                        
-                        // Name
-                        const nameText = k.add([
-                            k.text(achievement.name, { size: 18 }),
-                            k.pos(100, y - 10),
-                            k.anchor('left'),
-                            k.color(isUnlocked ? 255 : 150, isUnlocked ? 255 : 150, isUnlocked ? 255 : 150),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-                        
-                        // Description
-                        const descText = k.add([
-                            k.text(achievement.description, { size: 14 }),
-                            k.pos(100, y + 10),
-                            k.anchor('left'),
-                            k.color(isUnlocked ? 200 : 100, isUnlocked ? 200 : 100, isUnlocked ? 200 : 100),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-                        
-                        // Status
-                        const statusText = k.add([
-                            k.text(isUnlocked ? 'UNLOCKED' : 'LOCKED', { size: 14 }),
-                            k.pos(650, y),
-                            k.anchor('right'),
-                            k.color(isUnlocked ? 100 : 150, isUnlocked ? 255 : 150, isUnlocked ? 100 : 150),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-                        
-                        contentItems.push(cardBg, iconText, nameText, descText, statusText);
+                        if (cardBottom >= viewportTop && cardTop <= viewportBottom) {
+                            // Achievement card
+                            const cardBg = k.add([
+                                k.rect(700, 45),
+                                k.pos(k.width() / 2, y),
+                                k.anchor('center'),
+                                k.color(isUnlocked ? 40 : 30, isUnlocked ? 40 : 30, isUnlocked ? 50 : 30),
+                                k.outline(2, k.rgb(isUnlocked ? 100 : 50, isUnlocked ? 100 : 50, isUnlocked ? 150 : 50)),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            
+                            // Icon
+                            const iconText = k.add([
+                                k.text(achievement.icon, { size: 24 }),
+                                k.pos(50, y),
+                                k.anchor('left'),
+                                k.color(isUnlocked ? 255 : 100, isUnlocked ? 255 : 100, isUnlocked ? 255 : 100),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            
+                            // Name
+                            const nameText = k.add([
+                                k.text(achievement.name, { size: 18 }),
+                                k.pos(100, y - 10),
+                                k.anchor('left'),
+                                k.color(isUnlocked ? 255 : 150, isUnlocked ? 255 : 150, isUnlocked ? 255 : 150),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            
+                            // Description
+                            const descText = k.add([
+                                k.text(achievement.description, { size: 14 }),
+                                k.pos(100, y + 10),
+                                k.anchor('left'),
+                                k.color(isUnlocked ? 200 : 100, isUnlocked ? 200 : 100, isUnlocked ? 200 : 100),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            
+                            // Status
+                            const statusText = k.add([
+                                k.text(isUnlocked ? 'UNLOCKED' : 'LOCKED', { size: 14 }),
+                                k.pos(650, y),
+                                k.anchor('right'),
+                                k.color(isUnlocked ? 100 : 150, isUnlocked ? 255 : 150, isUnlocked ? 100 : 150),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            
+                            contentItems.push(cardBg, iconText, nameText, descText, statusText);
+                        }
                     });
                     
                     currentY += categoryAchievements.length * 50 + 20;
                 });
                 
-                // Achievement progress
+                // Achievement progress (always visible at bottom, above back button, outside scrollable area)
                 const totalAchievements = Object.keys(ACHIEVEMENTS).length;
                 const unlockedCount = unlockedAchievements.length;
                 const progressText = k.add([
-                    k.text(`Progress: ${unlockedCount}/${totalAchievements} (${Math.round(unlockedCount / totalAchievements * 100)}%)`, { size: 18 }),
-                    k.pos(k.width() / 2, k.height() - 80),
+                    k.text(`Progress: ${unlockedCount}/${totalAchievements} (${Math.round(unlockedCount / totalAchievements * 100)}%)`, { size: 16 }),
+                    k.pos(k.width() / 2, k.height() - backButtonArea - progressAreaHeight / 2),
                     k.anchor('center'),
                     k.color(200, 200, 255),
                     k.fixed(),
@@ -242,11 +279,101 @@ export function setupStatisticsScene(k) {
         // Initial refresh
         refreshContent();
         
-        // Back button
+        // Scrolling for achievements tab using DOM wheel event
+        const wheelHandler = (e) => {
+            if (currentTab === 'achievements') {
+                e.preventDefault();
+                e.stopPropagation();
+                const oldOffset = scrollOffset;
+                scrollOffset += e.deltaY * 0.3; // Scale deltaY for smoother scrolling
+                
+                // Clamp scroll offset immediately
+                const categories = getAchievementCategories();
+                let totalContentHeight = 0;
+                categories.forEach(category => {
+                    totalContentHeight += 35;
+                    const categoryAchievements = getAchievementsByCategory(category);
+                    totalContentHeight += categoryAchievements.length * 50;
+                    totalContentHeight += 20;
+                });
+                const availableHeight = viewportBottom - viewportTop;
+                const maxScroll = Math.max(0, totalContentHeight - availableHeight);
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                
+                // Only refresh if scroll actually changed
+                if (scrollOffset !== oldOffset) {
+                    refreshContent();
+                }
+            }
+        };
+        
+        // Add wheel event listener to the game container
+        const gameContainer = document.querySelector('#game-container');
+        if (gameContainer) {
+            gameContainer.addEventListener('wheel', wheelHandler, { passive: false });
+        }
+        
+        // Cleanup on scene end
+        k.onDestroy(() => {
+            if (gameContainer) {
+                gameContainer.removeEventListener('wheel', wheelHandler);
+            }
+        });
+        
+        // Keyboard scrolling
+        k.onKeyPress('arrowdown', () => {
+            if (currentTab === 'achievements') {
+                const oldOffset = scrollOffset;
+                scrollOffset += scrollSpeed;
+                
+                // Clamp scroll offset
+                const categories = getAchievementCategories();
+                let totalContentHeight = 0;
+                categories.forEach(category => {
+                    totalContentHeight += 35;
+                    const categoryAchievements = getAchievementsByCategory(category);
+                    totalContentHeight += categoryAchievements.length * 50;
+                    totalContentHeight += 20;
+                });
+                const availableHeight = viewportBottom - viewportTop;
+                const maxScroll = Math.max(0, totalContentHeight - availableHeight);
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                
+                if (scrollOffset !== oldOffset) {
+                    refreshContent();
+                }
+            }
+        });
+        
+        k.onKeyPress('arrowup', () => {
+            if (currentTab === 'achievements') {
+                const oldOffset = scrollOffset;
+                scrollOffset -= scrollSpeed;
+                
+                // Clamp scroll offset
+                const categories = getAchievementCategories();
+                let totalContentHeight = 0;
+                categories.forEach(category => {
+                    totalContentHeight += 35;
+                    const categoryAchievements = getAchievementsByCategory(category);
+                    totalContentHeight += categoryAchievements.length * 50;
+                    totalContentHeight += 20;
+                });
+                const availableHeight = viewportBottom - viewportTop;
+                const maxScroll = Math.max(0, totalContentHeight - availableHeight);
+                scrollOffset = Math.max(0, Math.min(scrollOffset, maxScroll));
+                
+                if (scrollOffset !== oldOffset) {
+                    refreshContent();
+                }
+            }
+        });
+        
+        // Back button (centered like Settings menu)
         const backButton = k.add([
             k.rect(120, 35),
-            k.pos(20, k.height() - 40),
-            k.anchor('topleft'),
+            k.pos(k.width() / 2, k.height() - 40),
+            k.anchor('center'),
             k.color(80, 80, 100),
             k.outline(2, k.rgb(150, 150, 150)),
             k.area(),
@@ -255,8 +382,8 @@ export function setupStatisticsScene(k) {
         ]);
         
         const backText = k.add([
-            k.text('ESC: Back', { size: 16 }),
-            k.pos(80, k.height() - 22),
+            k.text('Back', { size: 16 }),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(200, 200, 200),
             k.fixed(),

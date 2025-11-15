@@ -3,6 +3,7 @@ import { createPlayer } from '../entities/player.js';
 import { checkFloorUnlocks } from '../systems/metaProgression.js';
 import { createEnemy } from '../entities/enemy.js';
 import { createBoss, createTwinGuardians } from '../entities/boss.js';
+import { createMiniboss } from '../entities/miniboss.js';
 import { createXPPickup } from '../entities/pickup.js';
 import { createDoor } from '../entities/door.js';
 import { createObstacle } from '../entities/obstacle.js';
@@ -408,8 +409,9 @@ export function setupGameScene(k) {
             // Update enemies counter (only show in regular rooms, not boss rooms)
             if (!isBossRoom && !roomCompleted) {
                 const currentEnemies = k.get('enemy').length;
-                const totalEnemies = enemiesToSpawn;
-                const remainingEnemies = currentEnemies + Math.max(0, totalEnemies - enemiesSpawned);
+                const totalEnemies = enemiesToSpawn + (isMinibossRoom ? 1 : 0); // Include miniboss if present
+                const currentMinibosses = k.get('miniboss').length;
+                const remainingEnemies = currentEnemies + currentMinibosses + Math.max(0, totalEnemies - enemiesSpawned - (isMinibossRoom && minibossSpawned ? 1 : 0));
                 enemiesCounter.text = `Enemies: ${remainingEnemies}/${totalEnemies}`;
                 enemiesCounter.hidden = false;
             } else {
@@ -659,8 +661,36 @@ export function setupGameScene(k) {
         let enemiesSpawned = 0;
         let initialSpawnDelay = 2; // Wait before first spawn
         let bossSpawned = false;
+        let minibossSpawned = false;
+        let isMinibossRoom = false; // Track if this room has a miniboss
         let entranceDoorExclusionTime = 4; // Seconds to exclude entrance door from enemy spawning (3-5 seconds)
         let roomStartTime = 0; // Track when room started
+        
+        // Determine if this room should have a miniboss (random chance, not in boss rooms)
+        // 15% chance for miniboss room, increases with floor
+        if (!isBossRoom && currentRoom !== 1) { // Don't spawn miniboss in first room or boss room
+            const minibossChance = 0.15 + (currentFloor - 1) * 0.05; // 15% base, +5% per floor
+            isMinibossRoom = Math.random() < minibossChance;
+        }
+        
+        // If miniboss room, reduce normal enemy count
+        if (isMinibossRoom) {
+            enemiesToSpawn = Math.floor(enemiesToSpawn * 0.5); // Half normal enemies
+        }
+        
+        // Get random miniboss type for floor
+        function getRandomMinibossType(floor) {
+            const minibossTypes = ['brute', 'sentinel', 'berserker', 'guardian', 'warlock'];
+            // Weight certain types by floor
+            if (floor >= 3) {
+                // Higher floors get more variety
+                return minibossTypes[Math.floor(Math.random() * minibossTypes.length)];
+            } else {
+                // Lower floors get simpler types
+                const simpleTypes = ['brute', 'berserker', 'guardian'];
+                return simpleTypes[Math.floor(Math.random() * simpleTypes.length)];
+            }
+        }
         
         // Determine boss type based on floor
         function getBossTypeForFloor(floor) {
@@ -798,10 +828,51 @@ export function setupGameScene(k) {
                 return; // Skip regular enemy spawning in boss rooms
             }
             
+            // Miniboss room logic
+            if (isMinibossRoom && !minibossSpawned) {
+                // Spawn miniboss after a short delay
+                if (k.time() - roomStartTime >= 1.0) {
+                    minibossSpawned = true;
+                    const minibossType = getRandomMinibossType(currentFloor);
+                    
+                    // Spawn miniboss at a random door (avoid entrance door)
+                    const availableDoors = spawnDoors.filter(d => d.direction !== gameState.entryDirection);
+                    const doorsToUse = availableDoors.length > 0 ? availableDoors : spawnDoors;
+                    const randomDoor = doorsToUse[Math.floor(Math.random() * doorsToUse.length)];
+                    
+                    const minibossX = randomDoor.pos.x;
+                    const minibossY = randomDoor.pos.y;
+                    createMiniboss(k, minibossX, minibossY, minibossType, currentFloor);
+                    
+                    // Show miniboss announcement
+                    const minibossNames = {
+                        'brute': 'MINIBOSS: BRUTE',
+                        'sentinel': 'MINIBOSS: SENTINEL',
+                        'berserker': 'MINIBOSS: BERSERKER',
+                        'guardian': 'MINIBOSS: GUARDIAN',
+                        'warlock': 'MINIBOSS: WARLOCK'
+                    };
+                    const announcement = k.add([
+                        k.text(minibossNames[minibossType] || 'MINIBOSS', { size: 24 }),
+                        k.pos(k.width() / 2, k.height() / 2 - 100),
+                        k.anchor('center'),
+                        k.color(255, 200, 100),
+                        k.fixed()
+                    ]);
+                    k.wait(1.5, () => {
+                        if (announcement.exists()) k.destroy(announcement);
+                    });
+                }
+            }
+            
             // Regular room logic
-            // Check if all enemies are defeated
+            // Check if all enemies and minibosses are defeated
             const currentEnemies = k.get('enemy').length;
-            if (enemiesSpawned >= enemiesToSpawn && currentEnemies === 0 && !roomCompleted) {
+            const currentMinibosses = k.get('miniboss').length;
+            const allEnemiesSpawned = enemiesSpawned >= enemiesToSpawn;
+            const allDefeated = allEnemiesSpawned && currentEnemies === 0 && currentMinibosses === 0;
+            
+            if (allDefeated && !roomCompleted) {
                 roomCompleted = true;
                 handleRoomCompletion();
             }
@@ -898,6 +969,35 @@ export function setupGameScene(k) {
                     
                     // Spawn XP pickup at enemy position
                     createXPPickup(k, posX, posY, xpValue);
+                }
+            });
+            
+            // Update miniboss death handling
+            k.get('miniboss').forEach(miniboss => {
+                if (miniboss.hp() <= 0 && !miniboss.isDead) {
+                    miniboss.isDead = true;
+                    const xpValue = miniboss.xpValue;
+                    const posX = miniboss.pos.x;
+                    const posY = miniboss.pos.y;
+                    k.destroy(miniboss);
+                    
+                    // Track miniboss kill (counts as enemy too)
+                    runStats.enemiesKilled++;
+                    
+                    // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
+                    createXPPickup(k, posX, posY, xpValue);
+                    
+                    // Miniboss death effects (visual feedback)
+                    const deathText = k.add([
+                        k.text('MINIBOSS DEFEATED!', { size: 20 }),
+                        k.pos(posX, posY - 30),
+                        k.anchor('center'),
+                        k.color(255, 200, 100),
+                        k.fixed()
+                    ]);
+                    k.wait(1.0, () => {
+                        if (deathText.exists()) k.destroy(deathText);
+                    });
                 }
             });
             
