@@ -12,6 +12,7 @@ dist-ssr/
 
 # Editor directories and files
 .vscode/
+.vs/
 .idea/
 *.swp
 *.swo

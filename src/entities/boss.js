@@ -164,8 +164,8 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
         let rightArmor = '';
         
         // Shields take priority (outermost layer)
-        // Size scales with health: Full = ⟦ ⟧, Medium = { }, Low = ⦃ ⦄
-        // Using ⟦ ⟧ instead of {{ }} to avoid KAPLAY styled text tag parsing
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦃ ⦄, Low = ⦅ ⦆
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (boss.shieldHealth > 0) {
             const shieldPercent = boss.shieldHealth / boss.maxShieldHealth;
             
@@ -174,19 +174,19 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
                 leftShield = '⟦';
                 rightShield = '⟧';
             } else if (shieldPercent > 0.33) {
-                // Medium shield (33-66%): Single braces
-                leftShield = '{';
-                rightShield = '}';
-            } else {
-                // Low shield (0-33%): Thin braces ⦃ ⦄
+                // Medium shield (33-66%): Left/right white parenthesis ⦃ ⦄
                 leftShield = '⦃';
                 rightShield = '⦄';
+            } else {
+                // Low shield (0-33%): Left/right angle brackets ⦅ ⦆
+                leftShield = '⦅';
+                rightShield = '⦆';
             }
         }
         
         // Armor (middle layer, can appear with shields: {[GG]})
-        // Size scales with health: Full = ⟦ ⟧, Medium = [ ], Low = ⦅ ⦆
-        // Using ⟦ ⟧ instead of [[ ]] to avoid potential parsing issues
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦅ ⦆, Low = ⦉ ⦊
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (boss.armorHealth > 0) {
             const armorPercent = boss.armorHealth / boss.maxArmorHealth;
             
@@ -195,24 +195,21 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
                 leftArmor = '⟦';
                 rightArmor = '⟧';
             } else if (armorPercent > 0.33) {
-                // Medium armor (33-66%): Single brackets
-                leftArmor = '[';
-                rightArmor = ']';
-            } else {
-                // Low armor (0-33%): Thin brackets ⦅ ⦆
+                // Medium armor (33-66%): Left/right angle brackets ⦅ ⦆
                 leftArmor = '⦅';
                 rightArmor = '⦆';
+            } else {
+                // Low armor (0-33%): Left/right double angle brackets ⦉ ⦊
+                leftArmor = '⦉';
+                rightArmor = '⦊';
             }
         }
         
         // Visual format: {[GG]} (shields outside, armor inside)
         const visual = `${leftShield}${leftArmor}${boss.coreChar}${rightArmor}${rightShield}`;
         
-        // Update text component - recreate to avoid HTML tag parsing issues with "GG"
-        // Kaplay's text parser may interpret certain character sequences as styled text tags
-        const currentSize = boss.textSize || 28;
-        boss.remove('text');
-        boss.add(k.text(visual, { size: currentSize }));
+        // Update text directly (same approach as enemy and miniboss)
+        boss.text = visual;
         
         // Update color - use shield color if shields exist, otherwise boss color
         if (boss.shieldHealth > 0) {

@@ -2,9 +2,15 @@
 import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
 
+// Track if upgrade draft is currently showing
+let upgradeDraftActive = false;
+
 export function showUpgradeDraft(k, player, onSelect) {
     // Don't show if already showing
-    if (k.paused) return;
+    if (upgradeDraftActive) return;
+    
+    // Mark upgrade draft as active
+    upgradeDraftActive = true;
     
     // Pause the game
     k.paused = true;
@@ -109,14 +115,22 @@ export function showUpgradeDraft(k, player, onSelect) {
         
         // Make card clickable - card background handles all clicks
         cardBg.onClick(() => {
-            if (!k.paused) return;
+            if (!upgradeDraftActive) return;
             selectUpgrade(index);
         });
     });
     
     // Selection function
     function selectUpgrade(index) {
+        if (!upgradeDraftActive) return; // Prevent double-selection
+        
         const selected = upgrades[index];
+        
+        // Mark upgrade draft as inactive first to prevent re-entry
+        upgradeDraftActive = false;
+        
+        // Note: Key handlers don't need to be removed - they check upgradeDraftActive flag
+        // and will return early if the draft is not active
         
         // Apply upgrade
         applyUpgrade(player, selected.key);
@@ -144,17 +158,17 @@ export function showUpgradeDraft(k, player, onSelect) {
     
     // Keyboard selection (1, 2, 3)
     const keyHandler1 = () => {
-        if (k.paused && upgrades.length >= 1) {
+        if (upgradeDraftActive && upgrades.length >= 1) {
             selectUpgrade(0);
         }
     };
     const keyHandler2 = () => {
-        if (k.paused && upgrades.length >= 2) {
+        if (upgradeDraftActive && upgrades.length >= 2) {
             selectUpgrade(1);
         }
     };
     const keyHandler3 = () => {
-        if (k.paused && upgrades.length >= 3) {
+        if (upgradeDraftActive && upgrades.length >= 3) {
             selectUpgrade(2);
         }
     };
@@ -162,5 +176,10 @@ export function showUpgradeDraft(k, player, onSelect) {
     k.onKeyPress('1', keyHandler1);
     k.onKeyPress('2', keyHandler2);
     k.onKeyPress('3', keyHandler3);
+}
+
+// Export function to check if upgrade draft is active (for pause menu)
+export function isUpgradeDraftActive() {
+    return upgradeDraftActive;
 }
 

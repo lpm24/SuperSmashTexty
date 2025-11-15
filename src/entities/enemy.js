@@ -388,44 +388,44 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
         let rightArmor = '';
         
         // Shields take priority (outermost layer)
-        // Size scales with health: Full = {{ }}, Medium = { }, Low = ⦃ ⦄
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦃ ⦄, Low = ⦅ ⦆
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (enemy.shieldHealth > 0) {
             const shieldPercent = enemy.shieldHealth / enemy.maxShieldHealth;
             
             if (shieldPercent > 0.66) {
                 // Full shield (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
-                // Using ⟦ ⟧ instead of {{ }} to avoid KAPLAY styled text tag parsing
                 leftShield = '⟦';
                 rightShield = '⟧';
             } else if (shieldPercent > 0.33) {
-                // Medium shield (33-66%): Single braces
-                leftShield = '{';
-                rightShield = '}';
-            } else {
-                // Low shield (0-33%): Thin braces ⦃ ⦄
+                // Medium shield (33-66%): Left/right white parenthesis ⦃ ⦄
                 leftShield = '⦃';
                 rightShield = '⦄';
+            } else {
+                // Low shield (0-33%): Left/right angle brackets ⦅ ⦆
+                leftShield = '⦅';
+                rightShield = '⦆';
             }
         }
         
         // Armor (middle layer, can appear with shields: {[E]})
-        // Size scales with health: Full = [[ ]], Medium = [ ], Low = ⦅ ⦆
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦅ ⦆, Low = ⦉ ⦊
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (enemy.armorHealth > 0) {
             const armorPercent = enemy.armorHealth / enemy.maxArmorHealth;
             
             if (armorPercent > 0.66) {
                 // Full armor (66-100%): Double brackets ⟦ ⟧ (mathematical double brackets)
-                // Using ⟦ ⟧ instead of [[ ]] to avoid potential parsing issues
                 leftArmor = '⟦';
                 rightArmor = '⟧';
             } else if (armorPercent > 0.33) {
-                // Medium armor (33-66%): Single brackets
-                leftArmor = '[';
-                rightArmor = ']';
-            } else {
-                // Low armor (0-33%): Thin brackets ⦅ ⦆
+                // Medium armor (33-66%): Left/right angle brackets ⦅ ⦆
                 leftArmor = '⦅';
                 rightArmor = '⦆';
+            } else {
+                // Low armor (0-33%): Left/right double angle brackets ⦉ ⦊
+                leftArmor = '⦉';
+                rightArmor = '⦊';
             }
         }
         

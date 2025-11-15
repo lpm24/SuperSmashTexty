@@ -180,8 +180,8 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
         let rightArmor = '';
         
         // Shields take priority (outermost layer)
-        // Size scales with health: Full = ⟦ ⟧, Medium = { }, Low = ⦃ ⦄
-        // Using ⟦ ⟧ instead of {{ }} to avoid KAPLAY styled text tag parsing
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦃ ⦄, Low = ⦅ ⦆
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (miniboss.shieldHealth > 0) {
             const shieldPercent = miniboss.shieldHealth / miniboss.maxShieldHealth;
             
@@ -190,19 +190,19 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
                 leftShield = '⟦';
                 rightShield = '⟧';
             } else if (shieldPercent > 0.33) {
-                // Medium shield (33-66%): Single braces
-                leftShield = '{';
-                rightShield = '}';
-            } else {
-                // Low shield (0-33%): Thin braces ⦃ ⦄
+                // Medium shield (33-66%): Left/right white parenthesis ⦃ ⦄
                 leftShield = '⦃';
                 rightShield = '⦄';
+            } else {
+                // Low shield (0-33%): Left/right angle brackets ⦅ ⦆
+                leftShield = '⦅';
+                rightShield = '⦆';
             }
         }
         
         // Armor (middle layer, can appear with shields: {[B]})
-        // Size scales with health: Full = ⟦ ⟧, Medium = [ ], Low = ⦅ ⦆
-        // Using ⟦ ⟧ instead of [[ ]] to avoid potential parsing issues
+        // Size scales with health: Full = ⟦ ⟧, Medium = ⦅ ⦆, Low = ⦉ ⦊
+        // Using Unicode characters to avoid KAPLAY styled text tag parsing
         if (miniboss.armorHealth > 0) {
             const armorPercent = miniboss.armorHealth / miniboss.maxArmorHealth;
             
@@ -211,13 +211,13 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
                 leftArmor = '⟦';
                 rightArmor = '⟧';
             } else if (armorPercent > 0.33) {
-                // Medium armor (33-66%): Single brackets
-                leftArmor = '[';
-                rightArmor = ']';
-            } else {
-                // Low armor (0-33%): Thin brackets ⦅ ⦆
+                // Medium armor (33-66%): Left/right angle brackets ⦅ ⦆
                 leftArmor = '⦅';
                 rightArmor = '⦆';
+            } else {
+                // Low armor (0-33%): Left/right double angle brackets ⦉ ⦊
+                leftArmor = '⦉';
+                rightArmor = '⦊';
             }
         }
         

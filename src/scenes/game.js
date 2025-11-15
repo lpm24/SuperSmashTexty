@@ -14,6 +14,7 @@ import { getWeightedRoomTemplate, getFloorColors } from '../systems/roomGenerati
 import { checkAndApplySynergies } from '../systems/synergies.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
+import { isUpgradeDraftActive } from './upgradeDraft.js';
 
 // Game state (persists across scene reloads)
 let gameState = {
@@ -1349,6 +1350,11 @@ export function setupGameScene(k) {
         
         // Pause
         k.onKeyPress('escape', () => {
+            // Don't allow pause menu if upgrade draft is showing
+            if (isUpgradeDraftActive()) {
+                return; // Prevent escape key from interfering with upgrade selection
+            }
+            
             k.paused = !k.paused;
             pauseOverlay.hidden = !k.paused;
             pauseText.hidden = !k.paused;
