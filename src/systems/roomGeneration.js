@@ -1,11 +1,23 @@
-// Room generation system - handles room templates and procedural generation
+/**
+ * Room Generation System
+ *
+ * Handles procedural room generation and layout:
+ * - Room templates with obstacle layouts
+ * - Weighted random template selection by floor
+ * - Two obstacle types: walls (block all) and cover (block movement only)
+ * - Floor-based color theming
+ * - Safe spawn zone enforcement
+ * - Progressive complexity (more obstacles on higher floors)
+ */
 
-// Room template definitions
-// Each template defines:
-// - obstacles: Array of {x, y, width, height, type, color}
-//   - type: 'wall' (impassable, blocks projectiles) or 'cover' (impassable, projectiles pass over)
-// - spawnDoors: Array of {x, y, direction} - can override default positions
-// - name: Template name for identification
+/**
+ * Room template definitions
+ * Each template defines:
+ * - obstacles: Array of {x, y, width, height, type, char}
+ *   - type: 'wall' (blocks everything) or 'cover' (blocks movement, projectiles pass)
+ * - spawnDoors: Optional door position overrides
+ * - name: Template identifier
+ */
 
 export const ROOM_TEMPLATES = {
     empty: {

@@ -1,9 +1,9 @@
 # ASCII Roguelike Arena Shooter – Game Design Document
 
-**Project Name:** SuperSmashTexty  
-**Version:** 1.0.2 (Design Complete, Phase 2 Complete)  
-**Last Updated:** 2025-01-XX  
-**Status:** Phase 2 Complete - Phase 3 In Development
+**Project Name:** SuperSmashTexty
+**Version:** 1.1.0 (Architecture Refactor Complete)
+**Last Updated:** 2025-01-14
+**Status:** Phase 3 In Development - Post-Architecture Refactor
 
 ---
 
@@ -472,50 +472,55 @@ Each character is unique in multiple ways:
 ```
 /
 ├── index.html
+├── vite.config.js                 # Vite build configuration
 ├── src/
-│   ├── main.js                    # Entry point, scene setup
+│   ├── main.js                    # Entry point, KAPLAY initialization
+│   ├── config/
+│   │   └── constants.js           # ✅ Centralized game configuration (tuning, balancing)
+│   ├── core/                      # ✅ Multiplayer-ready architecture
+│   │   ├── GameState.js           # ✅ Centralized, serializable game state
+│   │   ├── InputManager.js        # ✅ Deterministic input handling with frame history
+│   │   └── NetworkManager.js      # ✅ Network abstraction layer (local mode by default)
+│   ├── data/                      # ✅ Data-driven content (pure data, no logic)
+│   │   ├── enemies.js             # ✅ 21 enemy type definitions
+│   │   ├── bosses.js              # ✅ 4 boss definitions with mechanics
+│   │   ├── minibosses.js          # ✅ 5 miniboss definitions
+│   │   ├── weapons.js             # ✅ Weapon definitions
+│   │   ├── unlocks.js             # ✅ Character and achievement unlocks
+│   │   └── achievements.js        # ✅ Achievement definitions
 │   ├── scenes/
 │   │   ├── menu.js                # ✅ Main menu scene
-│   │   ├── game.js                # ✅ Main game scene
+│   │   ├── game.js                # ✅ Main game scene (orchestrates all systems)
 │   │   ├── gameOver.js            # ✅ Game over scene
-│   │   ├── characterSelect.js    # ✅ Character selection scene
+│   │   ├── characterSelect.js     # ✅ Character selection scene
 │   │   ├── shop.js                # ✅ Meta-progression shop
 │   │   ├── settings.js            # ✅ Settings/options menu
 │   │   ├── statistics.js          # ✅ Statistics and achievements display
 │   │   └── upgradeDraft.js        # ✅ Upgrade selection UI
 │   ├── assets/
-│   │   ├── fonts/ (ASCII bitmap font atlas - future)
-│   │   ├── sprites/ (if using sprite-based ASCII - future)
-│   │   └── sounds/ (optional audio files - future)
-│   ├── data/
-│   │   ├── achievements.js ✅
-│   │   ├── unlocks.js ✅
-│   │   ├── weapons.js ✅
-│   │   ├── theme.json (theme configuration - future)
-│   │   ├── enemies.json (future - currently in code)
-│   │   ├── upgrades.json (future - currently in code)
-│   │   ├── rooms.json (templates - future)
-│   │   ├── floors.json (floor definitions - future)
-│   │   └── characters.json (future)
+│   │   ├── fonts/                 # ASCII bitmap font atlas (future)
+│   │   ├── sprites/               # Sprite-based ASCII (future)
+│   │   └── sounds/                # Audio files (future)
 │   ├── systems/
-│   │   ├── combat.js              # ✅ Autofire, collisions, immunity frames
-│   │   ├── progression.js         # ✅ XP, leveling
-│   │   ├── upgrades.js            # ✅ Upgrade system
-│   │   ├── roomGeneration.js      # ✅ Room generation system
-│   │   ├── metaProgression.js      # ✅ Save/load and meta-progression
-│   │   ├── achievementChecker.js  # ✅ Achievement tracking
-│   │   ├── settings.js             # ✅ Settings persistence
-│   │   └── synergies.js            # ✅ Upgrade synergy system
+│   │   ├── combat.js              # ✅ Autofire, collisions, damage calculations
+│   │   ├── progression.js         # ✅ XP, leveling, upgrade draft
+│   │   ├── upgrades.js            # ✅ Upgrade system and effects
+│   │   ├── synergies.js           # ✅ Upgrade synergy system (8 combinations)
+│   │   ├── roomGeneration.js      # ✅ Procedural room generation with templates
+│   │   ├── enemySpawn.js          # ✅ Weighted enemy selection by floor
+│   │   ├── metaProgression.js     # ✅ Save/load and persistent progression
+│   │   ├── achievementChecker.js  # ✅ Achievement tracking and unlock logic
+│   │   └── settings.js            # ✅ Settings persistence and management
 │   └── entities/
-│       ├── player.js              # ✅ Player entity with immunity frames
-│       ├── enemy.js               # ✅ Enemy entity
-│       ├── boss.js                # ✅ Boss entity
+│       ├── player.js              # ✅ Player entity with character stats and abilities
+│       ├── enemy.js               # ✅ Enemy entity (21 types)
+│       ├── boss.js                # ✅ Boss entity with multi-layer defense system
 │       ├── miniboss.js            # ✅ Miniboss entity
-│       ├── projectile.js          # ✅ Projectile entity
+│       ├── projectile.js          # ✅ Projectile entity with piercing and range
 │       ├── pickup.js              # ✅ XP pickups
 │       ├── door.js                # ✅ Door entity
 │       └── obstacle.js            # ✅ Obstacle entity (walls/cover)
-└── dist/ (build output for GitHub Pages)
+└── dist/                          # Production build output (gitignored)
 ```
 
 ### Rendering System
@@ -545,20 +550,59 @@ Each character is unique in multiple ways:
   - Defined in JSON data files for easy balancing
 
 ### Data Management
-- **JSON Data Files:** All game content defined in external JSON
-  - Enemies, upgrades, weapons, rooms, characters
-  - **Theme Configuration:** Theme-specific data (floor names, narrative text, visual elements)
-  - Easy to modify and balance without code changes
+
+#### Data-Driven Content System
+- **JavaScript Data Modules:** All game content defined in `src/data/` as JavaScript modules
+  - **enemies.js:** 21 enemy type definitions with stats and behaviors
+  - **bosses.js:** 4 boss definitions with unique mechanics (armor, shields, regeneration)
+  - **minibosses.js:** 5 miniboss definitions
+  - **weapons.js:** Weapon type definitions
+  - **unlocks.js:** Character and meta-progression unlocks
+  - **achievements.js:** Achievement definitions and unlock criteria
+  - **Content is pure data** - no logic, only configuration objects
+  - Easy to modify and balance by editing data files
   - Scalable for future content additions
-- **Theme System:**
-  - **Theme Configuration File:** `theme.json` defines active theme and theme-specific content
-  - **Theme-Agnostic Code:** Core systems work with any theme through data-driven approach
-  - **Theme Switching:** Themes can be swapped by changing configuration and data files
-  - **Multiple Themes:** Support for both Sci-Fi and Clock Face themes (or others)
-- **Save System:**
-  - localStorage for persistent data
-  - JSON export/import for backups
-  - Versioned data structure for future compatibility
+
+#### Constants System
+- **Centralized Configuration:** `src/config/constants.js` contains all tunable game values
+  - **13 Configuration Sections:** GAME_CONFIG, PLAYER_CONFIG, COMBAT_CONFIG, ENEMY_CONFIG, etc.
+  - **Easy Balancing:** All magic numbers centralized for easy game tuning
+  - **Helper Functions:** Utility functions for common calculations
+  - **Single Source of Truth:** All systems reference constants for consistent behavior
+
+#### Core Architecture (Multiplayer-Ready)
+- **GameState (src/core/GameState.js):**
+  - Centralized state management for all game data
+  - Fully serializable (JSON-ready) for network synchronization
+  - Singleton pattern for global access
+  - Stores player state, enemy data, room info, progression, etc.
+  - Designed for deterministic gameplay (same state = same result)
+
+- **InputManager (src/core/InputManager.js):**
+  - Deterministic input handling with frame history
+  - Collects inputs without directly modifying state
+  - Input buffer system for rollback/replay support
+  - Abstracts input sources (keyboard, gamepad, network)
+  - Frame-by-frame input recording for multiplayer sync
+
+- **NetworkManager (src/core/NetworkManager.js):**
+  - Network abstraction layer for future multiplayer
+  - Currently in "local mode" (single-player)
+  - Interface ready for WebRTC/WebSocket implementation
+  - State synchronization methods prepared
+  - Game remains single-player by default, multiplayer is opt-in future feature
+
+#### Theme System
+- **Theme Configuration:** Theme-specific data (floor names, narrative text, visual elements)
+- **Theme-Agnostic Code:** Core systems work with any theme through data-driven approach
+- **Theme Switching:** Themes can be swapped by changing configuration and data files
+- **Multiple Themes:** Support for both Sci-Fi and Clock Face themes (or others)
+
+#### Save System
+- **localStorage:** Browser-based persistent data storage
+- **JSON Export/Import:** Manual backup/restore functionality
+- **Versioned Data Structure:** Save system handles future data structure changes
+- **Meta-Progression:** Persistent currency, unlocks, achievements, and statistics
 
 ### Performance Targets
 - **Resolution:** 800×600 or 1024×768 logical resolution
@@ -614,11 +658,25 @@ Each character is unique in multiple ways:
 ## 10. Future Features / Extensions
 
 ### Potential Additions
-- **Additional Enemy Types:** More enemy archetypes and unique mechanics
+
+#### Multiplayer (Architecture Ready!)
+- **Synchronous Co-op:** Windows/browser synchronous multiplayer
+- **Architecture Complete:** GameState, InputManager, and NetworkManager in place
+- **Network Layer:** Implement WebRTC or WebSocket for state synchronization
+- **Deterministic Gameplay:** Input recording and state serialization ready for network sync
+- **Single-Player First:** Game remains fully functional offline; multiplayer is opt-in
+- **Implementation Timeline:** Major feature requiring weeks of work (future priority)
+
+#### Content Expansion
+- **Additional Enemy Types:** More enemy archetypes and unique mechanics beyond current 21
 - **More Upgrade Categories:** New upgrade types beyond initial categories
+- **More Synergies:** Expand beyond current 8 upgrade combinations
 - **Character-Specific Mechanics:** Unique abilities or playstyles per character
+- **More Room Templates:** Expand beyond current 6 room templates
+- **Balance Tuning:** Continuous refinement of enemy stats, spawn rates, and difficulty scaling
+
+#### Gameplay Features
 - **Challenge Modes:** Time trials, endless mode, daily challenges
-- **Achievement System:** Milestones and achievements for player goals
 - **Sound Design:** Music and sound effects (optional, can be added later)
 - **Advanced Room Generation:** More complex procedural generation with rot.js
 - **Multi-Weapon System:** Ability to equip multiple weapons simultaneously
@@ -627,15 +685,18 @@ Each character is unique in multiple ways:
 
 ### Design Philosophy
 - **Modular Systems:** All systems designed to accommodate future additions
-- **Data-Driven:** Content additions primarily require JSON updates, not code changes
+- **Data-Driven:** Content additions primarily require data file updates, not logic changes
+- **Multiplayer-Ready:** Architecture prepared for synchronous co-op, but single-player always works
 - **Iterative Development:** Focus on playable prototype first, then expand
 - **Player Feedback:** Future features informed by playtesting and player feedback
 
 ### Technical Extensibility
-- **JSON Data Structure:** Easily add new enemies, upgrades, weapons via data files
+- **Data-Driven Content:** Easily add new enemies, upgrades, weapons via `src/data/` modules
+- **Constants System:** All tunable values centralized in `src/config/constants.js`
 - **Component System:** KAPLAY's component system allows easy feature additions
 - **Save Data Versioning:** Save system designed to handle future data structure changes
 - **Performance Headroom:** Optimizations leave room for additional features
+- **Network-Ready:** State management and input handling ready for multiplayer implementation
 
 ---
 
@@ -700,7 +761,36 @@ Each character is unique in multiple ways:
    - ✅ Statistics tracking
    - ✅ Achievement system
 
-### Phase 3: Content & Polish
+### Phase 2.5: Architecture Refactor ✅
+**Goal:** Prepare architecture for future multiplayer (COMPLETED January 2025)
+
+1. **Constants System** ✅
+   - ✅ Centralized game configuration (`src/config/constants.js`)
+   - ✅ 13 configuration sections for easy tuning
+   - ✅ All magic numbers consolidated
+   - ✅ Helper functions for common calculations
+
+2. **Data-Driven Content** ✅
+   - ✅ Extracted enemies to `src/data/enemies.js` (21 types)
+   - ✅ Extracted bosses to `src/data/bosses.js` (4 bosses)
+   - ✅ Extracted minibosses to `src/data/minibosses.js` (5 types)
+   - ✅ Extracted weapons to `src/data/weapons.js`
+   - ✅ Content as pure data, separated from logic
+
+3. **Core Architecture** ✅
+   - ✅ GameState: Centralized, serializable state management
+   - ✅ InputManager: Deterministic input with frame history
+   - ✅ NetworkManager: Network abstraction layer (local mode)
+   - ✅ Multiplayer-ready architecture while maintaining single-player
+
+4. **Documentation & Cleanup** ✅
+   - ✅ Comprehensive file headers for all modules
+   - ✅ Inline comments for complex logic
+   - ✅ Organized imports (Entity, System, Data, Config, Core)
+   - ✅ Zero dead code or unused imports
+   - ✅ Updated all documentation files
+
+### Phase 3: Content & Polish 🔄
 **Goal:** Feature-complete game
 
 1. **Content Expansion** 🔄
@@ -766,9 +856,12 @@ Each character is unique in multiple ways:
 ### Development Philosophy
 - **Iterative:** Build playable versions early and often
 - **Test-Driven:** Playtest frequently to validate design decisions
-- **Data-Driven:** Use JSON for easy balancing and content additions
+- **Data-Driven:** Content in data modules, logic in systems, configuration in constants
 - **Modular:** Build systems that can be extended independently
-- **Theme-Agnostic:** Core systems should work with any theme; themes are data/config, not code
+- **Theme-Agnostic:** Core systems work with any theme; themes are data/config, not code
+- **Architecture-First:** Invest in solid architecture early for long-term maintainability
+- **Multiplayer-Ready:** Build with multiplayer in mind, but single-player always works
+- **Clean Codebase:** Comprehensive documentation, zero dead code, organized structure
 
 ---
 

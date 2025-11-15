@@ -57,19 +57,36 @@ The game will open in your browser at `http://localhost:3000`
 ├── src/
 │   ├── main.js         # Entry point, KAPLAY initialization
 │   ├── assets/         # Game assets (fonts, sprites, sounds)
-│   ├── data/           # Data files (achievements, unlocks, weapons)
+│   ├── config/         # Game configuration and constants
+│   │   └── constants.js    # Centralized game config (tuning, balancing)
+│   ├── core/           # Core architecture (multiplayer-ready)
+│   │   ├── GameState.js    # Centralized, serializable game state
+│   │   ├── InputManager.js # Deterministic input handling
+│   │   └── NetworkManager.js # Network abstraction layer
+│   ├── data/           # Data-driven content (enemies, bosses, weapons, unlocks)
+│   │   ├── enemies.js      # 21 enemy type definitions
+│   │   ├── bosses.js       # Boss definitions with mechanics
+│   │   ├── minibosses.js   # Miniboss definitions
+│   │   ├── weapons.js      # Weapon definitions
+│   │   └── unlocks.js      # Character and achievement unlocks
 │   ├── scenes/         # Game scenes (menu, game, shop, settings, etc.)
-│   ├── systems/        # Game systems (combat, upgrades, meta-progression, etc.)
-│   └── entities/       # Entity definitions (player, enemies, bosses, etc.)
+│   ├── systems/        # Game systems (combat, progression, spawning, etc.)
+│   └── entities/       # Entity factories (player, enemies, bosses, etc.)
 └── dist/               # Production build output (gitignored)
 ```
 
 ## 🛠️ Technical Stack
 
-- **Engine:** KAPLAY (ES Modules)
+- **Engine:** KAPLAY v3001.0.19 (ES Modules)
+- **Build Tool:** Vite v5.0.0 with hot module replacement
 - **Rendering:** ASCII bitmap font atlas / monospace sprite sheet
+- **Architecture:**
+  - **Data-Driven:** Content separated from logic (21 enemies, 4 bosses, 5 minibosses)
+  - **State Management:** Centralized, serializable GameState for multiplayer support
+  - **Input System:** Deterministic input handling with frame history
+  - **Network-Ready:** Abstraction layer for future multiplayer (local mode by default)
 - **Deployment:** GitHub Pages (static build)
-- **Storage:** Browser localStorage for saves
+- **Storage:** Browser localStorage for saves and settings
 
 ## 📋 Development Status
 
@@ -117,6 +134,22 @@ The game will open in your browser at `http://localhost:3000`
 - 🔄 Balance tuning and gameplay refinement
 
 See `GAME_DESIGN_DOCUMENT.md` for complete design specifications and implementation roadmap.
+
+## 🏗️ Architecture & Code Quality
+
+**Recent Major Refactor (2025-01):**
+- ✅ **Constants System**: Centralized game configuration for easy tuning
+- ✅ **Data-Driven Content**: Enemies, bosses, and weapons as pure data
+- ✅ **Multiplayer-Ready Architecture**: State, Input, and Network managers
+- ✅ **Comprehensive Documentation**: File headers and inline comments throughout
+- ✅ **Clean Codebase**: Zero dead code, organized imports, clear structure
+- ✅ **Future-Proof**: Ready for Windows/browser synchronous co-op multiplayer
+
+The codebase follows best practices with:
+- Separation of concerns (entities, systems, data, core)
+- Single source of truth (centralized GameState)
+- Deterministic systems (reproducible gameplay)
+- Fully serializable state (JSON-ready for network sync)
 
 ## 📄 Documentation
 

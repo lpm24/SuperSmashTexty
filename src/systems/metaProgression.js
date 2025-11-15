@@ -1,7 +1,8 @@
 // Meta progression system - handles currency, saves, and unlocks
 
 const STORAGE_KEY = 'superSmashTexty_save';
-const CURRENCY_NAME = 'Credits'; // Can be changed later
+const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
+const CURRENCY_ICON = '◎'; // Icon used for display
 
 // Default save data structure
 const DEFAULT_SAVE = {
@@ -283,9 +284,14 @@ export function calculateCurrencyEarned(runStats) {
     return Math.floor(currency);
 }
 
-// Get currency name
+// Get currency name (returns icon for display)
 export function getCurrencyName() {
-    return CURRENCY_NAME;
+    return CURRENCY_ICON;
+}
+
+// Get currency icon (same as getCurrencyName for backward compatibility)
+export function getCurrencyIcon() {
+    return CURRENCY_ICON;
 }
 
 // Reset save (for testing/debugging)

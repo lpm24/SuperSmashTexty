@@ -1,27 +1,67 @@
-// Main game scene
+/**
+ * Main Game Scene
+ *
+ * Handles the core gameplay loop including:
+ * - Room generation and progression
+ * - Enemy spawning and combat
+ * - Boss encounters
+ * - Player state management
+ * - HUD and UI rendering
+ *
+ * Architecture:
+ * - NEW: Integrates with centralized GameState for multiplayer support
+ * - LEGACY: Maintains backward compatibility with existing systems
+ */
+
+// Entity imports
 import { createPlayer } from '../entities/player.js';
-import { checkFloorUnlocks } from '../systems/metaProgression.js';
 import { createEnemy } from '../entities/enemy.js';
 import { createBoss, createTwinGuardians } from '../entities/boss.js';
 import { createMiniboss } from '../entities/miniboss.js';
 import { createXPPickup } from '../entities/pickup.js';
 import { createDoor } from '../entities/door.js';
 import { createObstacle } from '../entities/obstacle.js';
+import { createProjectile } from '../entities/projectile.js';
+
+// System imports
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
 import { getWeightedRoomTemplate, getFloorColors } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies } from '../systems/synergies.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive } from './upgradeDraft.js';
+import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
+import { playXPPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
+import { generateFloorMap } from '../systems/floorMap.js';
+import { createMinimap } from '../systems/minimap.js';
+
+// Config imports
+import { PICKUP_CONFIG } from '../config/constants.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS,
+    UI_TERMS,
+    formatHealth,
+    formatXP,
+    formatFloorRoom
+} from '../config/uiConfig.js';
+
+// NEW ARCHITECTURE: Core systems for multiplayer support
+import { stateManager } from '../core/GameState.js';
+import { inputManager } from '../core/InputManager.js';
+import { networkManager } from '../core/NetworkManager.js';
 
 // Game state (persists across scene reloads)
 let gameState = {
     currentFloor: 1,
     currentRoom: 1,
     playerStats: null, // Store player stats between rooms
-    entryDirection: null // Direction player entered from (opposite of exit direction)
+    entryDirection: null, // Direction player entered from (opposite of exit direction)
+    floorMap: null, // NEW: Floor map grid system
+    minimap: null // NEW: Minimap UI instance
 };
 
 // Run statistics (reset on new game)
@@ -56,12 +96,47 @@ function applyPermanentUpgrades(k, player) {
 
 export function setupGameScene(k) {
     k.scene('game', (args) => {
+        // ==========================================
+        // NEW ARCHITECTURE INITIALIZATION
+        // ==========================================
+
+        // Initialize new systems on first run or reset
+        if (args?.resetState) {
+            // Initialize network manager (local mode by default)
+            const playerId = networkManager.init('local');
+
+            // Initialize input manager
+            inputManager.init(k);
+
+            // Initialize game state
+            const state = stateManager.init('singleplayer');
+
+            // Add local player to state
+            // TODO: Get selected character from menu
+            const characterKey = 'survivor'; // Default for now
+            state.addPlayer(playerId, characterKey);
+
+            console.log('[Game] New architecture initialized:', {
+                playerId,
+                sessionId: state.sessionId,
+                gameMode: state.gameMode
+            });
+        }
+
+        // Get current game state (for both new and continuing games)
+        const state = stateManager.getState();
+
+        // ==========================================
+        // LEGACY STATE (keeping for now)
+        // ==========================================
+
         // Reset game state on new game (when coming from menu)
         if (args?.resetState) {
             gameState.currentFloor = 1;
             gameState.currentRoom = 1;
             gameState.playerStats = null;
             gameState.entryDirection = null;
+            gameState.floorMap = null; // Clear old floor map
             // Reset run statistics
             runStats = {
                 floorsReached: 1,
@@ -70,10 +145,29 @@ export function setupGameScene(k) {
                 bossesKilled: 0
             };
         }
-        
+
         // Use persistent game state
         let currentFloor = gameState.currentFloor;
         let currentRoom = gameState.currentRoom;
+
+        // Generate floor map if starting new floor or no map exists
+        if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
+            console.log(`[Game] Generating new floor map for floor ${currentFloor}`);
+            gameState.floorMap = generateFloorMap(currentFloor);
+
+            // Destroy old minimap if it exists
+            if (gameState.minimap) {
+                gameState.minimap.destroy();
+            }
+
+            // Create new minimap
+            gameState.minimap = createMinimap(k, gameState.floorMap);
+        } else {
+            // Update minimap if it exists
+            if (gameState.minimap) {
+                gameState.minimap.update();
+            }
+        }
         
         // Update run stats for floors reached
         if (currentFloor > runStats.floorsReached) {
@@ -133,6 +227,58 @@ export function setupGameScene(k) {
             applyPermanentUpgrades(k, player);
         }
         
+        // ==========================================
+        // NEW ARCHITECTURE: Sync player entity with PlayerState
+        // ==========================================
+
+        // Get the local player state
+        const localPlayerId = state.localPlayerId;
+        const playerState = state.getPlayer(localPlayerId);
+
+        // Sync player entity properties to PlayerState
+        if (playerState) {
+            // Position
+            playerState.x = player.pos.x;
+            playerState.y = player.pos.y;
+
+            // Stats
+            playerState.health = player.hp();
+            playerState.maxHealth = player.maxHealth;
+            playerState.speed = player.speed;
+
+            // Progression
+            playerState.level = player.level;
+            playerState.xp = player.xp;
+            playerState.xpToNext = player.xpToNext;
+            playerState.xpMultiplier = player.xpMultiplier || 1.0;
+
+            // Weapon & Combat
+            playerState.weaponKey = 'pistol'; // TODO: sync actual weapon
+            playerState.fireRate = player.fireRate;
+            playerState.projectileSpeed = player.projectileSpeed;
+            playerState.projectileDamage = player.projectileDamage;
+            playerState.projectileCount = player.projectileCount || 1;
+            playerState.piercing = player.piercing || 0;
+            playerState.obstaclePiercing = player.obstaclePiercing || 0;
+            playerState.critChance = player.critChance || 0.05;
+            playerState.critDamage = player.critDamage || 2.0;
+            playerState.spreadAngle = player.spreadAngle || 0;
+            playerState.weaponRange = player.weaponRange || 600;
+
+            // Passive stats
+            playerState.pickupRadius = player.pickupRadius;
+            playerState.defense = player.defense || 0;
+            playerState.damageReduction = player.damageReduction || 0;
+            playerState.dodgeChance = player.dodgeChance || 0;
+
+            console.log('[Game] Player entity synced to PlayerState:', {
+                playerId: localPlayerId,
+                position: { x: playerState.x, y: playerState.y },
+                health: `${playerState.health}/${playerState.maxHealth}`,
+                level: playerState.level
+            });
+        }
+
         // Setup systems
         setupCombatSystem(k, player);
         setupProgressionSystem(k, player);
@@ -145,8 +291,11 @@ export function setupGameScene(k) {
             });
         }
         
-        // Get room template and floor colors
-        const roomTemplate = getWeightedRoomTemplate(currentFloor);
+        // Get room template from floor map (or fallback to weighted generation)
+        const currentRoomNode = gameState.floorMap.getCurrentRoom();
+        const roomTemplate = currentRoomNode && currentRoomNode.template
+            ? currentRoomNode.template
+            : getWeightedRoomTemplate(currentFloor);
         const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
         
@@ -253,133 +402,138 @@ export function setupGameScene(k) {
         
         // HUD
         const healthBar = k.add([
-            k.text('HP: 100/100', { size: 16 }),
+            k.text(formatHealth(100, 100), { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 20),
-            k.color(255, 255, 255),
-            k.fixed()
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         const levelText = k.add([
-            k.text('Level: 1', { size: 16 }),
+            k.text(`${UI_TERMS.LEVEL}: 1`, { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 40),
-            k.color(255, 255, 255),
-            k.fixed()
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         const floorText = k.add([
-            k.text('F1 R1', { size: 16 }),
+            k.text(formatFloorRoom(1, 1, true), { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 60),
-            k.color(200, 200, 255),
-            k.fixed()
+            k.color(...UI_COLORS.INFO),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         const xpText = k.add([
-            k.text('XP: 0/10', { size: 16 }),
+            k.text(formatXP(0, 10), { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 80),
-            k.color(255, 255, 255),
-            k.fixed()
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         const enemiesCounter = k.add([
-            k.text('Enemies: 0/0', { size: 16 }),
+            k.text('Enemies: 0/0', { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 100),
-            k.color(255, 200, 100),
-            k.fixed()
+            k.color(...UI_COLORS.WARNING),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         // Boss HUD elements (only shown when boss exists)
         const bossNameText = k.add([
-            k.text('', { size: 18 }),
+            k.text('', { size: UI_TEXT_SIZES.LABEL }),
             k.pos(k.width() / 2, 20),
             k.anchor('center'),
-            k.color(255, 100, 100),
+            k.color(...UI_COLORS.BOSS_NAME),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.OVERLAY)
         ]);
-        
+
         const bossHealthBarBg = k.add([
             k.rect(300, 20),
             k.pos(k.width() / 2, 45),
             k.anchor('center'),
-            k.color(50, 50, 50),
-            k.outline(2, k.rgb(100, 100, 100)),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(2, k.rgb(...UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.OVERLAY)
         ]);
-        
+
         const bossHealthBar = k.add([
             k.rect(296, 16),
             k.pos(k.width() / 2, 45),
             k.anchor('center'),
-            k.color(255, 50, 50),
+            k.color(...UI_COLORS.HEALTH_LOW),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
-        
+
         const bossArmorBarBg = k.add([
             k.rect(300, 12),
             k.pos(k.width() / 2, 65),
             k.anchor('center'),
-            k.color(50, 50, 50),
-            k.outline(2, k.rgb(100, 100, 100)),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(2, k.rgb(...UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.OVERLAY)
         ]);
-        
+
         const bossArmorBar = k.add([
             k.rect(296, 8),
             k.pos(k.width() / 2, 65),
             k.anchor('center'),
-            k.color(200, 200, 200),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
-        
+
         const bossHealthText = k.add([
-            k.text('', { size: 14 }),
+            k.text('', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, 45),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1002)
+            k.z(UI_Z_LAYERS.OVERLAY + 2)
         ]);
-        
+
         const bossArmorText = k.add([
-            k.text('', { size: 12 }),
+            k.text('', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, 65),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1002)
+            k.z(UI_Z_LAYERS.OVERLAY + 2)
         ]);
-        
+
         // Shield bar (above armor bar)
         const bossShieldBarBg = k.add([
             k.rect(300, 12),
             k.pos(k.width() / 2, 85),
             k.anchor('center'),
-            k.color(50, 50, 50),
-            k.outline(2, k.rgb(100, 100, 100)),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(2, k.rgb(...UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.OVERLAY)
         ]);
-        
+
         const bossShieldBar = k.add([
             k.rect(296, 8),
             k.pos(k.width() / 2, 85),
             k.anchor('center'),
-            k.color(100, 200, 255), // Light blue for shields
+            k.color(...UI_COLORS.XP_BAR),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
-        
+
         const bossShieldText = k.add([
-            k.text('', { size: 12 }),
+            k.text('', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, 85),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1002)
+            k.z(UI_Z_LAYERS.OVERLAY + 2)
         ]);
         
         // Initially hide boss HUD
@@ -394,18 +548,24 @@ export function setupGameScene(k) {
         bossShieldBar.hidden = true;
         bossShieldText.hidden = true;
         
+        // Update particle system
+        k.onUpdate(() => {
+            if (k.paused) return;
+            updateParticles(k);
+        });
+
         // Update HUD
         k.onUpdate(() => {
             const currentHP = player.exists() ? player.hp() : 0;
-            healthBar.text = `HP: ${Math.max(0, Math.floor(currentHP))}/${player.maxHealth}`;
-            
+            healthBar.text = formatHealth(Math.max(0, Math.floor(currentHP)), player.maxHealth);
+
             // Level/XP as decimal: Level X.YZ where YZ is hundredths of XP progress (e.g., 1.55 = 55% to next)
             const xpPercent = player.xpToNext > 0 ? Math.floor((player.xp / player.xpToNext) * 100) : 0;
             const xpPercentStr = xpPercent.toString().padStart(2, '0'); // Pad to 2 digits (e.g., "05" for 5%)
-            levelText.text = `Level: ${player.level}.${xpPercentStr}`;
-            
-            xpText.text = `XP: ${player.xp}/${player.xpToNext}`;
-            floorText.text = `F${currentFloor} R${currentRoom}`;
+            levelText.text = `${UI_TERMS.LEVEL}: ${player.level}.${xpPercentStr}`;
+
+            xpText.text = formatXP(player.xp, player.xpToNext);
+            floorText.text = formatFloorRoom(currentFloor, currentRoom, true);
             
             // Update enemies counter (only show in regular rooms, not boss rooms)
             if (!isBossRoom && !roomCompleted) {
@@ -654,10 +814,100 @@ export function setupGameScene(k) {
                 bossShieldText.hidden = true;
             }
         });
-        
+
+        // ==========================================
+        // NEW ARCHITECTURE: Continuous sync of player entity to PlayerState
+        // ==========================================
+        k.onUpdate(() => {
+            if (!player.exists() || k.paused) return;
+
+            const playerState = state.getPlayer(localPlayerId);
+            if (!playerState) return;
+
+            // Update position
+            playerState.x = player.pos.x;
+            playerState.y = player.pos.y;
+            playerState.velocityX = 0; // TODO: track actual velocity
+            playerState.velocityY = 0;
+
+            // Update health
+            playerState.health = player.hp();
+            playerState.maxHealth = player.maxHealth;
+
+            // Update progression (in case of level up or XP gain)
+            playerState.level = player.level;
+            playerState.xp = player.xp;
+            playerState.xpToNext = player.xpToNext;
+
+            // Update combat stats (in case of upgrades)
+            playerState.projectileDamage = player.projectileDamage;
+            playerState.fireRate = player.fireRate;
+            playerState.projectileSpeed = player.projectileSpeed;
+            playerState.projectileCount = player.projectileCount || 1;
+            playerState.piercing = player.piercing || 0;
+            playerState.critChance = player.critChance || 0.05;
+            playerState.critDamage = player.critDamage || 2.0;
+
+            // Update passive stats
+            playerState.pickupRadius = player.pickupRadius;
+            playerState.defense = player.defense || 0;
+
+            // Update state flags
+            playerState.isDead = !player.exists() || player.hp() <= 0;
+            playerState.invulnerable = player.invulnerable || false;
+
+            // Update state time
+            state.updateTime(k.dt());
+        });
+
+        // ==========================================
+        // NEW ARCHITECTURE: Sync room/floor state
+        // ==========================================
+        // Sync legacy gameState to new state system
+        state.currentFloor = currentFloor;
+        state.currentRoom = currentRoom;
+        state.roomCleared = false;
+
+        console.log('[Game] Room state synced:', {
+            floor: state.currentFloor,
+            room: state.currentRoom,
+            isBossRoom: currentRoom === 3
+        });
+
+        // ==========================================
+        // NEW ARCHITECTURE: InputManager integration
+        // ==========================================
+        // Start collecting inputs for the local player each frame
+        // (Running in parallel with legacy input for now)
+        k.onUpdate(() => {
+            if (k.paused) return;
+
+            // Get input manager
+            const inputMgr = inputManager.getManager();
+
+            // Collect inputs for this frame
+            const inputs = inputMgr.getInputsForFrame([localPlayerId]);
+
+            // Get input for local player
+            const playerInput = inputs.get(localPlayerId);
+
+            // Log occasionally to verify it's working
+            if (Math.random() < 0.01) { // Log ~1% of frames
+                console.log('[InputManager] Frame:', inputMgr.frameNumber, 'Input:', {
+                    move: `(${playerInput.moveX}, ${playerInput.moveY})`,
+                    aim: `(${playerInput.aimX}, ${playerInput.aimY})`,
+                    firing: playerInput.firing
+                });
+            }
+        });
+
+        // ==========================================
+        // LEGACY STATE (keeping for now)
+        // ==========================================
+
         // Room state
         let roomCompleted = false;
-        const isBossRoom = currentRoom === 3; // Room 3 of each floor is a boss room
+        const isBossRoom = currentRoomNode ? currentRoomNode.isBossRoom : (currentRoom === 3); // Use floor map if available
         let enemiesToSpawn = isBossRoom ? 0 : (8 + (currentFloor - 1) * 2); // No regular enemies in boss rooms
         let enemiesSpawned = 0;
         let initialSpawnDelay = 2; // Wait before first spawn
@@ -707,19 +957,41 @@ export function setupGameScene(k) {
         // Spawn doors - create at room start for enemy spawning
         const spawnDoors = [];
         // doorMargin already declared above for player spawn calculation
-        const spawnDoorPositions = [
-            { x: k.width() / 2, y: doorMargin, direction: 'north' },
-            { x: k.width() / 2, y: k.height() - doorMargin, direction: 'south' },
-            { x: doorMargin, y: k.height() / 2, direction: 'west' },
-            { x: k.width() - doorMargin, y: k.height() / 2, direction: 'east' }
+
+        // Map grid directions to door directions (grid uses up/down/right, doors use north/south/east/west)
+        const gridToDoorDirection = {
+            'up': 'north',
+            'down': 'south',
+            'right': 'east'
+        };
+
+        // Get all door positions (we'll determine which are open/blocked based on floor map)
+        const allDoorPositions = [
+            { x: k.width() / 2, y: doorMargin, direction: 'north', gridDir: 'up' },
+            { x: k.width() / 2, y: k.height() - doorMargin, direction: 'south', gridDir: 'down' },
+            { x: doorMargin, y: k.height() / 2, direction: 'west', gridDir: null }, // West is always blocked (no backtracking)
+            { x: k.width() - doorMargin, y: k.height() / 2, direction: 'east', gridDir: 'right' }
         ];
-        
-        // Create spawn doors (closed, red color to indicate enemy spawn points)
-        spawnDoorPositions.forEach(pos => {
+
+        // Get available exits from floor map (only shows unvisited connected rooms)
+        const availableExits = gameState.floorMap ? gameState.floorMap.getAvailableExits() : [];
+        const availableGridDirs = new Set(availableExits.map(exit => exit.direction));
+
+        // Create all doors and determine which are blocked
+        allDoorPositions.forEach(pos => {
             const spawnDoor = createDoor(k, pos.x, pos.y, pos.direction);
             spawnDoor.open = false;
             spawnDoor.isSpawnDoor = true; // Mark as spawn door
-            spawnDoor.color = k.rgb(200, 50, 50); // Red color for spawn doors
+            spawnDoor.gridDirection = pos.gridDir; // Store grid direction for later reference
+
+            // Block doors that don't lead to available rooms
+            // West door is always blocked (no backtracking)
+            // Other doors are blocked if not in available exits
+            if (pos.gridDir === null || !availableGridDirs.has(pos.gridDir)) {
+                spawnDoor.blocked = true;
+            }
+
+            spawnDoor.updateVisual(); // Update appearance based on state
             spawnDoors.push(spawnDoor);
         });
         
@@ -748,30 +1020,38 @@ export function setupGameScene(k) {
                     
                     // Special handling for Twin Guardians - spawn from opposite doors
                     if (bossType === 'twinGuardian') {
-                        // Get two opposite doors
+                        // Strategy: Spawn guardians from opposite sides for dramatic entrance
+                        // Exclude the door player entered from to avoid spawning on top of player
                         const availableDoors = spawnDoors.filter(d => d.direction !== gameState.entryDirection);
                         let door1, door2;
-                        
+
                         if (availableDoors.length >= 2) {
-                            // Pick two random opposite doors
+                            // Step 1: Randomize available doors
                             const shuffled = [...availableDoors].sort(() => Math.random() - 0.5);
                             door1 = shuffled[0];
-                            // Find opposite door
+
+                            // Step 2: Find the door directly opposite to door1 for maximum dramatic effect
                             const oppositeMap = {
                                 'north': 'south',
                                 'south': 'north',
                                 'east': 'west',
                                 'west': 'east'
                             };
+
+                            // Try to find exact opposite door, fallback to second random door if not found
                             door2 = availableDoors.find(d => d.direction === oppositeMap[door1.direction]) || shuffled[1];
                         } else {
-                            // Fallback: use any two doors
+                            // Fallback: Not enough doors available (shouldn't happen normally)
+                            // Just use any two available doors
                             door1 = spawnDoors[0];
                             door2 = spawnDoors[spawnDoors.length > 1 ? 1 : 0];
                         }
                         
                         createTwinGuardians(k, door1, door2, currentFloor);
-                        
+
+                        // Play boss spawn sound
+                        playBossSpawn();
+
                         // Show boss announcement
                         const announcement = k.add([
                             k.text('THE TWIN GUARDIANS', { size: 32 }),
@@ -802,7 +1082,10 @@ export function setupGameScene(k) {
                         const bossX = bossSpawnDoor ? bossSpawnDoor.pos.x : k.width() / 2;
                         const bossY = bossSpawnDoor ? bossSpawnDoor.pos.y : k.height() / 2;
                         createBoss(k, bossX, bossY, bossType, currentFloor);
-                        
+
+                        // Play boss spawn sound
+                        playBossSpawn();
+
                         // Show boss announcement
                         const bossName = bossType === 'gatekeeper' ? 'THE GATEKEEPER' :
                                        bossType === 'swarmQueen' ? 'THE SWARM QUEEN' :
@@ -892,17 +1175,21 @@ export function setupGameScene(k) {
                     enemiesSpawned++;
                     
                     // Spawn enemy from random spawn door
-                    // Temporarily exclude the entrance door (where player entered from) for first few seconds
+                    // Strategy: Give player breathing room at start by not spawning at entrance
                     if (spawnDoors.length > 0) {
                         const timeSinceRoomStart = k.time() - roomStartTime;
-                        const excludeEntranceDoor = gameState.entryDirection && 
+
+                        // Exclude entrance door for first few seconds to avoid overwhelming player
+                        // This gives them time to assess the room and prepare
+                        const excludeEntranceDoor = gameState.entryDirection &&
                                                    timeSinceRoomStart < entranceDoorExclusionTime;
-                        
+
+                        // Filter out entrance door if we're in the exclusion period
                         const availableDoors = excludeEntranceDoor
                             ? spawnDoors.filter(door => door.direction !== gameState.entryDirection)
                             : spawnDoors;
-                        
-                        // If all doors are excluded (shouldn't happen), fall back to all doors
+
+                        // Safety check: If all doors are excluded (shouldn't happen), use all doors
                         const doorsToUse = availableDoors.length > 0 ? availableDoors : spawnDoors;
                         const randomDoor = doorsToUse[Math.floor(Math.random() * doorsToUse.length)];
                         const spawnX = randomDoor.pos.x;
@@ -957,17 +1244,84 @@ export function setupGameScene(k) {
                     const xpValue = enemy.xpValue;
                     const posX = enemy.pos.x;
                     const posY = enemy.pos.y;
-                    
+
                     // Clean up health bars before destroying enemy
                     if (enemy.cleanupHealthBars) {
                         enemy.cleanupHealthBars();
                     }
-                    
+
+                    // Handle explosion (damage nearby entities)
+                    if (enemy.explodes && enemy.explosionRadius) {
+                        const explosionRadius = enemy.explosionRadius;
+                        const explosionDamage = enemy.explosionDamage || 15;
+
+                        // Damage player if in range
+                        if (player.exists()) {
+                            const distToPlayer = Math.sqrt(
+                                Math.pow(player.pos.x - posX, 2) +
+                                Math.pow(player.pos.y - posY, 2)
+                            );
+                            if (distToPlayer <= explosionRadius) {
+                                player.takeDamage(explosionDamage);
+                            }
+                        }
+
+                        // Damage other enemies in range
+                        k.get('enemy').forEach(other => {
+                            if (other === enemy || !other.exists()) return;
+                            const distToOther = Math.sqrt(
+                                Math.pow(other.pos.x - posX, 2) +
+                                Math.pow(other.pos.y - posY, 2)
+                            );
+                            if (distToOther <= explosionRadius) {
+                                other.hurt(explosionDamage);
+                            }
+                        });
+
+                        // Spawn larger explosion particle for exploding enemies
+                        spawnDeathExplosion(k, posX, posY, {
+                            color: [255, 150, 50],
+                            scale: 1.5
+                        });
+                    } else {
+                        // Normal death explosion particle effect
+                        spawnDeathExplosion(k, posX, posY, { color: [255, 100, 100] });
+                    }
+
+                    // Handle shrapnel (projectiles in all directions)
+                    if (enemy.shrapnel && enemy.shrapnelCount) {
+                        const shrapnelCount = enemy.shrapnelCount;
+                        const angleStep = (Math.PI * 2) / shrapnelCount;
+                        const shrapnelSpeed = 250;
+                        const shrapnelDamage = Math.floor((enemy.explosionDamage || 15) * 0.6);
+
+                        for (let i = 0; i < shrapnelCount; i++) {
+                            const angle = angleStep * i;
+                            const direction = k.vec2(Math.cos(angle), Math.sin(angle));
+                            const projectile = createProjectile(
+                                k,
+                                posX,
+                                posY,
+                                direction,
+                                shrapnelSpeed,
+                                shrapnelDamage,
+                                0, // piercing
+                                0, // obstaclePiercing
+                                false // isCrit
+                            );
+                            projectile.isEnemyProjectile = true;
+                            projectile.color = k.rgb(...enemy.originalColor);
+                        }
+                    }
+
                     k.destroy(enemy);
-                    
+
+                    // Play enemy death sound
+                    playEnemyDeath();
+
                     // Track enemy kill
                     runStats.enemiesKilled++;
-                    
+
                     // Spawn XP pickup at enemy position
                     createXPPickup(k, posX, posY, xpValue);
                 }
@@ -980,11 +1334,18 @@ export function setupGameScene(k) {
                     const xpValue = miniboss.xpValue;
                     const posX = miniboss.pos.x;
                     const posY = miniboss.pos.y;
+
+                    // Spawn death explosion particle effect for miniboss
+                    spawnDeathExplosion(k, posX, posY, { color: [255, 150, 100], isMiniboss: true });
+
                     k.destroy(miniboss);
-                    
+
+                    // Play enemy death sound (louder for miniboss)
+                    playEnemyDeath();
+
                     // Track miniboss kill (counts as enemy too)
                     runStats.enemiesKilled++;
-                    
+
                     // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
                     createXPPickup(k, posX, posY, xpValue);
                     
@@ -1009,12 +1370,19 @@ export function setupGameScene(k) {
                     const xpValue = boss.xpValue;
                     const posX = boss.pos.x;
                     const posY = boss.pos.y;
+
+                    // Spawn death explosion particle effect for boss
+                    spawnDeathExplosion(k, posX, posY, { color: [255, 200, 100], isBoss: true });
+
                     k.destroy(boss);
-                    
+
+                    // Play boss death sound
+                    playBossDeath();
+
                     // Track boss kill (counts as enemy too)
                     runStats.enemiesKilled++;
                     runStats.bossesKilled++;
-                    
+
                     // Spawn XP pickup at boss position (bosses give more XP)
                     createXPPickup(k, posX, posY, xpValue);
                     
@@ -1033,22 +1401,29 @@ export function setupGameScene(k) {
             });
         });
         
-        // Handle XP pickup collection
+        // Handle XP pickup magnetization and collection
         k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
-            
+
             k.get('xpPickup').forEach(pickup => {
                 if (pickup.collected) return;
-                
+
                 // Calculate distance to player
                 const distance = k.vec2(
                     player.pos.x - pickup.pos.x,
                     player.pos.y - pickup.pos.y
                 ).len();
-                
-                // Auto-collect if within pickup radius
-                if (distance <= player.pickupRadius) {
+
+                // Start magnetizing if within pickup radius (once started, never stops)
+                if (!pickup.magnetizing && distance <= player.pickupRadius) {
+                    pickup.magnetizing = true;
+                    pickup.targetPlayer = player;
+                }
+
+                // Auto-collect if very close (collection radius is smaller than pickup radius)
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
                     pickup.collected = true;
+                    playXPPickup();
                     player.addXP(pickup.value);
                     k.destroy(pickup);
                 }
@@ -1061,8 +1436,8 @@ export function setupGameScene(k) {
             if (!player.exists() || k.paused || doorEntered) return;
             
             k.get('door').forEach(door => {
-                // Only interact with exit doors (not spawn doors)
-                if (!door.open || doorEntered || door.isSpawnDoor) return;
+                // Only interact with exit doors (not spawn doors, not blocked doors)
+                if (!door.open || doorEntered || door.isSpawnDoor || door.blocked) return;
                 
                 // Check if player is near door
                 const distance = k.vec2(
@@ -1073,6 +1448,7 @@ export function setupGameScene(k) {
                 // Auto-enter if very close (within 40 pixels)
                 if (distance <= 40) {
                     doorEntered = true;
+                    playDoorOpen();
                     handleDoorEntry(door.direction);
                 }
             });
@@ -1080,29 +1456,42 @@ export function setupGameScene(k) {
         
         // Handle room completion
         function handleRoomCompletion() {
+            // ==========================================
+            // NEW ARCHITECTURE: Update state on room completion
+            // ==========================================
+            state.roomCleared = true;
+            state.clearRoom();
+
+            console.log('[Game] Room cleared:', {
+                floor: state.currentFloor,
+                room: state.currentRoom,
+                cleared: state.roomCleared
+            });
+
+            // ==========================================
+            // LEGACY STATE
+            // ==========================================
             // Track room cleared
             runStats.roomsCleared++;
-            
-            // Convert spawn doors to exit doors (or create new exit doors)
-            // Option 1: Convert existing spawn doors to exit doors
+
+            // Mark room as cleared in floor map
+            if (gameState.floorMap && currentRoomNode) {
+                gameState.floorMap.markRoomCleared(currentRoomNode.position.x, currentRoomNode.position.y);
+            }
+
+            // Convert spawn doors to exit doors (but keep blocked doors blocked)
             spawnDoors.forEach(door => {
-                if (door.exists()) {
+                if (door.exists() && !door.blocked) {
                     door.open = true;
                     door.isSpawnDoor = false; // No longer a spawn door
-                    door.color = k.rgb(100, 255, 100); // Green when open (exit door)
-                    door.text = '='; // Keep door symbol
+                    door.updateVisual(); // Refresh door appearance
                 }
             });
-            
-            // Alternative: Create separate exit doors (commented out - using conversion instead)
-            // const exitDoors = [];
-            // spawnDoorPositions.forEach(pos => {
-            //     const exitDoor = createDoor(k, pos.x, pos.y, pos.direction);
-            //     exitDoor.open = true;
-            //     exitDoor.isSpawnDoor = false;
-            //     exitDoor.color = k.rgb(100, 255, 100);
-            //     exitDoors.push(exitDoor);
-            // });
+
+            // Update minimap to reflect room clear
+            if (gameState.minimap) {
+                gameState.minimap.update();
+            }
             
             // Show completion message (different for boss rooms)
             const completionText = isBossRoom 
@@ -1153,7 +1542,7 @@ export function setupGameScene(k) {
                 activeSynergies: player.activeSynergies ? Array.from(player.activeSynergies) : [],
                 piercingDamageBonus: player.piercingDamageBonus || 1.0
             };
-            
+
             // Calculate entry direction for next room (opposite of exit direction)
             // If player exits north, they enter from south in next room
             const entryDirectionMap = {
@@ -1163,39 +1552,132 @@ export function setupGameScene(k) {
                 'east': 'west'
             };
             gameState.entryDirection = entryDirectionMap[direction] || null;
-            
-            // Increment room number
-            currentRoom++;
-            
-            // Every 3 rooms, advance to next floor
-            if (currentRoom > 3) {
-                currentFloor++;
-                
-                // Check for character unlocks based on floor completion
-                checkFloorUnlocks(currentFloor - 1).then(unlocked => {
-                    if (unlocked) {
-                        // Show unlock notification (could be enhanced later)
-                        const unlockText = k.add([
-                            k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
-                            k.pos(k.width() / 2, k.height() / 2 - 50),
-                            k.anchor('center'),
-                            k.color(100, 255, 100),
-                            k.z(300)
-                        ]);
-                        k.wait(3, () => {
-                            if (unlockText.exists()) k.destroy(unlockText);
-                        });
+
+            // ==========================================
+            // FLOOR MAP NAVIGATION
+            // ==========================================
+            if (gameState.floorMap) {
+                // Map door direction to grid direction
+                const doorToGridDirection = {
+                    'north': 'up',
+                    'south': 'down',
+                    'east': 'right'
+                };
+                const gridDirection = doorToGridDirection[direction];
+
+                if (gridDirection) {
+                    // Try to move in the floor map
+                    const moved = gameState.floorMap.moveToRoom(gridDirection);
+                    if (!moved) {
+                        console.error('[Game] Failed to move in floor map - should not happen!');
+                        // Fallback to old room increment
+                        currentRoom++;
+                    } else {
+                        // Successfully moved - check if we entered the boss room
+                        const newRoom = gameState.floorMap.getCurrentRoom();
+                        if (newRoom.isBossRoom) {
+                            // Boss room reached! This completes the floor
+                            console.log('[Game] Boss room reached - floor complete after this room');
+                        }
+                        // Update current room count for legacy systems
+                        currentRoom = gameState.floorMap.getVisitedCount();
                     }
-                });
-                currentRoom = 1;
-                // Reset entry direction when starting new floor (player enters from center on floor start)
-                gameState.entryDirection = null;
+                } else {
+                    console.warn('[Game] Invalid door direction:', direction);
+                    currentRoom++;
+                }
+
+                // Check if we need to advance to next floor (boss defeated)
+                // In the new system, we advance floors after defeating boss
+                if (currentRoomNode && currentRoomNode.isBossRoom && currentRoomNode.cleared) {
+                    currentFloor++;
+
+                    // Check for character unlocks based on floor completion
+                    checkFloorUnlocks(currentFloor - 1).then(unlocked => {
+                        if (unlocked) {
+                            // Show unlock notification (could be enhanced later)
+                            const unlockText = k.add([
+                                k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
+                                k.pos(k.width() / 2, k.height() / 2 - 50),
+                                k.anchor('center'),
+                                k.color(100, 255, 100),
+                                k.z(300)
+                            ]);
+                            k.wait(3, () => {
+                                if (unlockText.exists()) k.destroy(unlockText);
+                            });
+                        }
+                    });
+
+                    // Reset floor map for new floor
+                    gameState.floorMap = null;
+                    gameState.entryDirection = null; // Start from center on new floor
+
+                    // Update new state system for floor transition
+                    state.nextFloor();
+
+                    console.log('[Game] Advanced to next floor:', state.currentFloor);
+                } else {
+                    // Just advancing to next room
+                    state.nextRoom();
+
+                    console.log('[Game] Advanced to next room:', {
+                        floor: state.currentFloor,
+                        room: state.currentRoom
+                    });
+                }
+            } else {
+                // ==========================================
+                // LEGACY ROOM PROGRESSION (fallback if no floor map)
+                // ==========================================
+                currentRoom++;
+
+                // Every 3 rooms, advance to next floor
+                if (currentRoom > 3) {
+                    currentFloor++;
+
+                    // Check for character unlocks based on floor completion
+                    checkFloorUnlocks(currentFloor - 1).then(unlocked => {
+                        if (unlocked) {
+                            // Show unlock notification (could be enhanced later)
+                            const unlockText = k.add([
+                                k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
+                                k.pos(k.width() / 2, k.height() / 2 - 50),
+                                k.anchor('center'),
+                                k.color(100, 255, 100),
+                                k.z(300)
+                            ]);
+                            k.wait(3, () => {
+                                if (unlockText.exists()) k.destroy(unlockText);
+                            });
+                        }
+                    });
+                    currentRoom = 1;
+                    // Reset entry direction when starting new floor (player enters from center on floor start)
+                    gameState.entryDirection = null;
+
+                    // Update new state system for floor transition
+                    state.nextFloor();
+
+                    console.log('[Game] Advanced to next floor:', state.currentFloor);
+                } else {
+                    // Just advancing to next room
+                    state.nextRoom();
+
+                    console.log('[Game] Advanced to next room:', {
+                        floor: state.currentFloor,
+                        room: state.currentRoom
+                    });
+                }
             }
-            
+
+            // ==========================================
+            // LEGACY STATE (keeping for now)
+            // ==========================================
             // Update persistent state
             gameState.currentFloor = currentFloor;
             gameState.currentRoom = currentRoom;
-            
+
             // Restart game scene with new room/floor
             k.go('game');
         }
@@ -1250,14 +1732,14 @@ export function setupGameScene(k) {
         
         // Pause menu buttons
         const buttonY = k.height() / 2;
-        const buttonSpacing = 50;
+        const buttonSpacing = 60;
         const buttonWidth = 200;
         const buttonHeight = 40;
-        
+
         // Resume button
         const resumeButton = k.add([
             k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2, buttonY),
+            k.pos(k.width() / 2, buttonY - buttonSpacing / 2),
             k.anchor('center'),
             k.color(50, 150, 50),
             k.outline(2, k.rgb(100, 200, 100)),
@@ -1266,44 +1748,21 @@ export function setupGameScene(k) {
             k.z(2001),
             'pauseButton'
         ]);
-        
+
         const resumeText = k.add([
             k.text('Resume (ESC)', { size: 18 }),
-            k.pos(k.width() / 2, buttonY),
+            k.pos(k.width() / 2, buttonY - buttonSpacing / 2),
             k.anchor('center'),
             k.color(255, 255, 255),
             k.fixed(),
             k.z(2002),
             'pauseButton'
         ]);
-        
-        // Settings button
-        const settingsButton = k.add([
-            k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2, buttonY + buttonSpacing),
-            k.anchor('center'),
-            k.color(50, 50, 150),
-            k.outline(2, k.rgb(100, 100, 200)),
-            k.area(),
-            k.fixed(),
-            k.z(2001),
-            'pauseButton'
-        ]);
-        
-        const settingsText = k.add([
-            k.text('Settings', { size: 18 }),
-            k.pos(k.width() / 2, buttonY + buttonSpacing),
-            k.anchor('center'),
-            k.color(255, 255, 255),
-            k.fixed(),
-            k.z(2002),
-            'pauseButton'
-        ]);
-        
+
         // Quit to Menu button
         const quitButton = k.add([
             k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2, buttonY + buttonSpacing * 2),
+            k.pos(k.width() / 2, buttonY + buttonSpacing / 2),
             k.anchor('center'),
             k.color(150, 50, 50),
             k.outline(2, k.rgb(200, 100, 100)),
@@ -1312,10 +1771,10 @@ export function setupGameScene(k) {
             k.z(2001),
             'pauseButton'
         ]);
-        
+
         const quitText = k.add([
             k.text('Quit to Menu', { size: 18 }),
-            k.pos(k.width() / 2, buttonY + buttonSpacing * 2),
+            k.pos(k.width() / 2, buttonY + buttonSpacing / 2),
             k.anchor('center'),
             k.color(255, 255, 255),
             k.fixed(),
@@ -1335,11 +1794,7 @@ export function setupGameScene(k) {
             pauseText.hidden = true;
             k.get('pauseButton').forEach(btn => btn.hidden = true);
         });
-        
-        settingsButton.onClick(() => {
-            k.go('settings', { fromGame: true });
-        });
-        
+
         quitButton.onClick(() => {
             // Reset game state
             gameState.currentFloor = 1;
@@ -1348,14 +1803,29 @@ export function setupGameScene(k) {
             k.go('menu');
         });
         
+        // Toggle minimap with 'M' key
+        k.onKeyPress('m', () => {
+            if (gameState.minimap && !k.paused) {
+                gameState.minimap.toggle();
+            }
+        });
+
         // Pause
         k.onKeyPress('escape', () => {
             // Don't allow pause menu if upgrade draft is showing
             if (isUpgradeDraftActive()) {
                 return; // Prevent escape key from interfering with upgrade selection
             }
-            
+
             k.paused = !k.paused;
+
+            // Play pause or unpause sound
+            if (k.paused) {
+                playPause();
+            } else {
+                playUnpause();
+            }
+
             pauseOverlay.hidden = !k.paused;
             pauseText.hidden = !k.paused;
             k.get('pauseButton').forEach(btn => btn.hidden = !k.paused);

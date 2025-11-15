@@ -1,272 +1,25 @@
-// Enemy entity definition
+/**
+ * Enemy Entity
+ *
+ * Creates and manages enemy entities with 21 different types:
+ * - Basic, Rusher, Sniper, Tank, Healer, etc.
+ * - Behavior patterns: rush, shoot, explode, teleport, heal
+ * - Health bars for visual feedback
+ * - Floor-based stat scaling
+ * - Death handling and cleanup
+ */
+
+// Entity imports
 import { createProjectile } from './projectile.js';
 
-export function createEnemy(k, x, y, type = 'basic', floor = 1) {
-    const enemyTypes = {
-        // Floor 1 enemies
-        rusher: {
-            char: '▶', // Right-pointing triangle
-            color: [255, 150, 100],
-            baseHealth: 25, // 20-30 range
-            baseSpeed: 90, // 80-100 range
-            size: 18,
-            baseXPValue: 6,
-            behavior: 'rush',
-            damage: 9 // 8-10 range
-        },
-        shooter: {
-            char: '◈', // White diamond containing black small diamond
-            color: [100, 200, 255],
-            baseHealth: 30, // 25-35 range
-            baseSpeed: 70, // 60-80 range
-            size: 18,
-            baseXPValue: 7,
-            behavior: 'shoot',
-            fireRate: 0.8, // Shots per second
-            projectileSpeed: 200,
-            projectileDamage: 7 // 6-8 range
-        },
-        zombie: {
-            char: '☠', // Skull and crossbones
-            color: [150, 150, 150],
-            baseHealth: 45, // 40-50 range
-            baseSpeed: 50, // 40-60 range
-            size: 20,
-            baseXPValue: 8,
-            behavior: 'rush',
-            damage: 11 // 10-12 range
-        },
-        slime: {
-            char: '●', // Black circle
-            color: [100, 255, 100],
-            baseHealth: 12, // 10-15 range
-            baseSpeed: 40, // 30-50 range
-            size: 16,
-            baseXPValue: 4,
-            behavior: 'rush',
-            damage: 5,
-            splits: true // Splits on death
-        },
-        bat: {
-            char: '▼', // Black down triangle
-            color: [200, 150, 255],
-            baseHealth: 10, // 8-12 range
-            baseSpeed: 135, // 120-150 range
-            size: 14,
-            baseXPValue: 5,
-            behavior: 'erratic',
-            damage: 6 // 5-7 range
-        },
-        // Floor 2 enemies
-        charger: {
-            char: '→', // Right arrow
-            color: [255, 200, 100],
-            baseHealth: 20, // 15-25 range
-            baseSpeed: 175, // 150-200 range (charge speed)
-            size: 18,
-            baseXPValue: 8,
-            behavior: 'charge',
-            damage: 17, // 15-20 range
-            chargeCooldown: 3 // Seconds between charges
-        },
-        turret: {
-            char: '┼', // Box drawing cross
-            color: [200, 200, 200],
-            baseHealth: 60, // 50-70 range
-            baseSpeed: 0, // Stationary
-            size: 20,
-            baseXPValue: 10,
-            behavior: 'turret',
-            fireRate: 1.2, // Shots per second
-            projectileSpeed: 250,
-            projectileDamage: 13 // 12-15 range
-        },
-        heavyTank: {
-            char: '█', // Full block
-            color: [150, 150, 255],
-            baseHealth: 125, // 100-150 range
-            baseSpeed: 40, // 30-50 range
-            size: 24,
-            baseXPValue: 15,
-            behavior: 'rush',
-            damage: 22 // 20-25 range
-        },
-        zippy: {
-            char: '◐', // Circle with left half black
-            color: [255, 255, 150],
-            baseHealth: 7, // 5-10 range
-            baseSpeed: 200, // 180-220 range
-            size: 14,
-            baseXPValue: 6,
-            behavior: 'erratic',
-            damage: 5 // 4-6 range
-        },
-        exploder: {
-            char: '◎', // Bullseye
-            color: [255, 100, 50],
-            baseHealth: 25, // 20-30 range
-            baseSpeed: 80, // 70-90 range
-            size: 18,
-            baseXPValue: 8,
-            behavior: 'rush',
-            damage: 8,
-            explodes: true, // Explodes on death
-            explosionDamage: 17, // 15-20 range
-            explosionRadius: 60 // Pixels
-        },
-        // Floor 3 enemies
-        mage: {
-            char: '✦', // Four-pointed star
-            color: [200, 100, 255],
-            baseHealth: 70, // 60-80 range
-            baseSpeed: 50, // 40-60 range
-            size: 20,
-            baseXPValue: 12,
-            behavior: 'shoot',
-            fireRate: 0.6, // Slower but more powerful
-            projectileSpeed: 180,
-            projectileDamage: 12 // 10-15 range
-        },
-        shieldBearer: {
-            char: '▓', // Dark shade
-            color: [150, 150, 200],
-            baseHealth: 90, // 80-100 range
-            baseSpeed: 40, // 30-50 range
-            size: 22,
-            baseXPValue: 14,
-            behavior: 'shield',
-            damage: 15,
-            blocksProjectiles: true // Blocks from front (simplified for now)
-        },
-        golem: {
-            char: '◼', // Black medium square
-            color: [100, 100, 100],
-            baseHealth: 250, // 200-300 range
-            baseSpeed: 30, // 20-40 range
-            size: 26,
-            baseXPValue: 20,
-            behavior: 'rush',
-            damage: 30 // 25-35 range
-        },
-        wraith: {
-            char: '≈', // Almost equal (wave)
-            color: [150, 150, 255],
-            baseHealth: 20, // 15-25 range
-            baseSpeed: 225, // 200-250 range
-            size: 16,
-            baseXPValue: 10,
-            behavior: 'teleport',
-            damage: 13, // 12-15 range
-            teleportCooldown: 4, // Seconds between teleports
-            teleportRange: 150 // Teleport distance
-        },
-        spawner: {
-            char: '◔', // Circle with upper right quadrant black
-            color: [255, 150, 100],
-            baseHealth: 80, // 70-90 range
-            baseSpeed: 40, // 30-50 range
-            size: 20,
-            baseXPValue: 15,
-            behavior: 'spawner',
-            damage: 8,
-            spawnInterval: 6, // Spawn every 6 seconds
-            spawnType: 'rusher' // Spawns basic rushers
-        },
-        buffer: {
-            char: '✚', // Heavy plus
-            color: [255, 200, 100],
-            baseHealth: 35, // 30-40 range
-            baseSpeed: 50, // 40-60 range
-            size: 18,
-            baseXPValue: 10,
-            behavior: 'buffer',
-            damage: 6,
-            buffRadius: 100, // Buffs enemies within this radius
-            buffAmount: 0.2 // +20% speed and damage
-        },
-        // Floor 4 enemies
-        healer: {
-            char: '✛', // Open center cross
-            color: [100, 255, 150],
-            baseHealth: 70, // 60-80 range
-            baseSpeed: 40, // 30-50 range
-            size: 20,
-            baseXPValue: 12,
-            behavior: 'healer',
-            damage: 8,
-            healRadius: 120, // Heals enemies within this radius
-            healAmount: 12, // 10-15 range
-            healInterval: 4 // Heal every 4 seconds
-        },
-        teleporter: {
-            char: '◖', // Left half black circle
-            color: [200, 150, 255],
-            baseHealth: 25, // 20-30 range
-            baseSpeed: 90, // 80-100 range
-            size: 18,
-            baseXPValue: 9,
-            behavior: 'teleportPlayer',
-            damage: 8,
-            teleportRange: 200, // Teleport player this distance
-            teleportCooldown: 5 // Seconds between teleports
-        },
-        freezer: {
-            char: '❄', // Snowflake
-            color: [150, 200, 255],
-            baseHealth: 60, // 50-70 range
-            baseSpeed: 50, // 40-60 range
-            size: 20,
-            baseXPValue: 11,
-            behavior: 'freeze',
-            damage: 10,
-            slowRadius: 80, // Slows player within this radius
-            slowAmount: 0.4 // -40% speed
-        },
-        leech: {
-            char: '◗', // Right half black circle
-            color: [255, 100, 150],
-            baseHealth: 30, // 25-35 range
-            baseSpeed: 80, // 70-90 range
-            size: 18,
-            baseXPValue: 9,
-            behavior: 'rush',
-            damage: 8,
-            lifesteal: 7 // 5-10 range, heals this much on hit
-        },
-        // Legacy types (for backwards compatibility)
-        basic: {
-            char: 'E',
-            color: [255, 100, 100],
-            baseHealth: 30,
-            baseSpeed: 50,
-            size: 20,
-            baseXPValue: 5,
-            behavior: 'rush',
-            damage: 8
-        },
-        tank: {
-            char: '█', // Full block (same as heavyTank)
-            color: [150, 150, 255],
-            baseHealth: 80,
-            baseSpeed: 30,
-            size: 24,
-            baseXPValue: 12,
-            behavior: 'rush',
-            damage: 20
-        },
-        fast: {
-            char: 'F',
-            color: [255, 255, 100],
-            baseHealth: 20,
-            baseSpeed: 90,
-            size: 16,
-            baseXPValue: 7,
-            behavior: 'rush',
-            damage: 6
-        }
-    };
+// Data imports
+import { getEnemyDefinition } from '../data/enemies.js';
 
-    const baseConfig = enemyTypes[type] || enemyTypes.basic;
+// System imports
+import { getSmartMoveDirection, getPerimeterMoveDirection } from '../systems/pathfinding.js';
+
+export function createEnemy(k, x, y, type = 'basic', floor = 1) {
+    const baseConfig = getEnemyDefinition(type);
     
     // Scale stats based on floor
     const floorMultiplier = 1 + (floor - 1) * 0.3; // 30% increase per floor
@@ -305,6 +58,7 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
     enemy.type = type;
     enemy.behavior = config.behavior;
     enemy.floor = floor;
+    enemy.pathfindingMode = baseConfig.pathfindingMode || 'none'; // Pathfinding mode: 'none', 'smart', 'perimeter'
     
     // Store enemy-specific properties
     if (baseConfig.damage) enemy.damage = baseConfig.damage;
@@ -317,6 +71,10 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
         enemy.explodes = true;
         enemy.explosionDamage = baseConfig.explosionDamage;
         enemy.explosionRadius = baseConfig.explosionRadius;
+        if (baseConfig.shrapnel) {
+            enemy.shrapnel = true;
+            enemy.shrapnelCount = baseConfig.shrapnelCount || 8;
+        }
     }
     
     // Floor-based armor/shield scaling
@@ -1198,12 +956,29 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
         // Default behavior: rush (direct charge)
         if (enemy.behavior === 'rush') {
             if (distance > 0) {
-                const normalized = dir.unit();
-                const desiredMove = normalized.scale(enemy.speed * k.dt());
-                const finalMove = applyObstacleAvoidance(desiredMove);
-                enemy.pos.x += finalMove.x;
-                enemy.pos.y += finalMove.y;
+                let moveDir;
+
+                // Use smart pathfinding if enabled
+                if (enemy.pathfindingMode === 'smart') {
+                    moveDir = getSmartMoveDirection(k, enemy, player.pos.x, player.pos.y);
+                } else {
+                    // Fallback to direct movement with obstacle avoidance
+                    const normalized = dir.unit();
+                    const desiredMove = normalized.scale(enemy.speed * k.dt());
+                    const finalMove = applyObstacleAvoidance(desiredMove);
+                    moveDir = finalMove.unit();
+                }
+
+                enemy.pos.x += moveDir.x * enemy.speed * k.dt();
+                enemy.pos.y += moveDir.y * enemy.speed * k.dt();
             }
+        }
+
+        // Perimeter behavior: walks around edge of map
+        if (enemy.behavior === 'perimeter') {
+            const moveDir = getPerimeterMoveDirection(k, enemy);
+            enemy.pos.x += moveDir.x * enemy.speed * k.dt();
+            enemy.pos.y += moveDir.y * enemy.speed * k.dt();
         }
         
         // Keep enemy in bounds (room boundaries) - same as player

@@ -1,11 +1,18 @@
 // Statistics and Achievements scene
-import { getSaveStats, getUnlockedAchievements } from '../systems/metaProgression.js';
+import { getSaveStats, getUnlockedAchievements, getCurrencyName } from '../systems/metaProgression.js';
 import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory } from '../data/achievements.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS,
+    formatButtonText
+} from '../config/uiConfig.js';
 
 export function setupStatisticsScene(k) {
     k.scene('statistics', () => {
         const stats = getSaveStats();
         const unlockedAchievements = getUnlockedAchievements();
+        const currencyName = getCurrencyName();
         let currentTab = 'stats'; // stats or achievements
         
         // Background
@@ -13,19 +20,19 @@ export function setupStatisticsScene(k) {
             k.rect(k.width(), k.height()),
             k.pos(0, 0),
             k.anchor('topleft'),
-            k.color(20, 20, 30),
+            k.color(...UI_COLORS.BG_DARK),
             k.fixed(),
-            k.z(0)
+            k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
-        
+
         // Title
         k.add([
-            k.text('STATISTICS & ACHIEVEMENTS', { size: 32 }),
+            k.text(formatButtonText('Statistics & Achievements'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         // Tab buttons (centered like Settings menu)
@@ -52,20 +59,20 @@ export function setupStatisticsScene(k) {
                 k.rect(tabWidth, tabHeight),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 100 : 50, isActive ? 100 : 50, isActive ? 150 : 80),
-                k.outline(2, k.rgb(150, 150, 150)),
+                k.color(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM)),
+                k.outline(2, k.rgb(...UI_COLORS.BORDER)),
                 k.area(),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
-            
+
             const tabLabel = k.add([
-                k.text(tab.label, { size: 16 }),
+                k.text(tab.label, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
+                k.color(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY)),
                 k.fixed(),
-                k.z(1001)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             
             tabBg.onClick(() => {
@@ -125,7 +132,7 @@ export function setupStatisticsScene(k) {
                     { label: 'Total Bosses Killed', value: stats.totalBossesKilled || 0 },
                     { label: 'Total Rooms Cleared', value: stats.totalRoomsCleared || 0 },
                     { label: 'Total Floors Reached', value: stats.totalFloorsReached || 0 },
-                    { label: 'Total Currency Earned', value: stats.totalCurrencyEarned || 0 }
+                    { label: `Total ${currencyName} Earned`, value: stats.totalCurrencyEarned || 0 }
                 ];
                 
                 statLabels.forEach((stat, index) => {

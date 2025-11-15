@@ -1,6 +1,15 @@
 // Character selection scene
 import { getCurrency, getCurrencyName, isUnlocked, setSelectedCharacter, getSelectedCharacter } from '../systems/metaProgression.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
+import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS,
+    UI_TERMS,
+    formatButtonText,
+    formatStatLabel
+} from '../config/uiConfig.js';
 
 export function setupCharacterSelectScene(k) {
     k.scene('characterSelect', () => {
@@ -10,19 +19,21 @@ export function setupCharacterSelectScene(k) {
         
         // Currency display (top right)
         k.add([
-            k.text(`${currencyName}: ${currency}`, { size: 18 }),
+            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
             k.pos(k.width() - 20, 20),
             k.anchor('topright'),
-            k.color(100, 255, 100),
-            k.fixed()
+            k.color(...UI_COLORS.GOLD),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         // Title
         k.add([
-            k.text('Select Character', { size: 36 }),
+            k.text('Select Character', { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 60),
             k.anchor('center'),
-            k.color(255, 255, 255)
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         // Character selection layout: Left side = selection grid, Right side = details
@@ -92,42 +103,42 @@ export function setupCharacterSelectScene(k) {
                         k.rect(cardWidth, cardHeight),
                         k.pos(cardX, cardY),
                         k.anchor('topleft'),
-                        k.color(isSelected ? 50 : 30, isSelected ? 50 : 30, isSelected ? 60 : 40),
-                        k.outline(2, isSelected ? k.rgb(100, 150, 255) : (isUnlockedChar ? k.rgb(100, 100, 100) : k.rgb(50, 50, 50))),
+                        k.color(...(isSelected ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK)),
+                        k.outline(2, isSelected ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
                         k.area(),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
                     
                     // Character visual
                     const charVisual = k.add([
-                        k.text(char.char, { size: 36 }),
+                        k.text(char.char, { size: UI_TEXT_SIZES.TITLE }),
                         k.pos(cardX + cardWidth / 2, cardY + 30),
                         k.anchor('center'),
-                        k.color(...(isUnlockedChar ? char.color : [50, 50, 50])),
+                        k.color(...(isUnlockedChar ? char.color : UI_COLORS.BG_DISABLED)),
                         k.fixed(),
-                        k.z(1001)
+                        k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
-                    
+
                     // Character name
                     const nameText = k.add([
-                        k.text(char.name, { size: 14 }),
+                        k.text(char.name, { size: UI_TEXT_SIZES.SMALL }),
                         k.pos(cardX + cardWidth / 2, cardY + 70),
                         k.anchor('center'),
-                        k.color(isUnlockedChar ? 255 : 100, isUnlockedChar ? 255 : 100, isUnlockedChar ? 255 : 100),
+                        k.color(...(isUnlockedChar ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
                         k.fixed(),
-                        k.z(1001)
+                        k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
                     
                     // Locked overlay
                     if (!isUnlockedChar) {
                         const lockText = k.add([
-                            k.text('🔒', { size: 20 }),
+                            k.text('🔒', { size: UI_TEXT_SIZES.BUTTON }),
                             k.pos(cardX + cardWidth / 2, cardY + cardHeight / 2),
                             k.anchor('center'),
-                            k.color(150, 50, 50),
+                            k.color(...UI_COLORS.DANGER),
                             k.fixed(),
-                            k.z(1002)
+                            k.z(UI_Z_LAYERS.OVERLAY)
                         ]);
                         characterCards.push(lockText);
                     }
@@ -136,6 +147,7 @@ export function setupCharacterSelectScene(k) {
                     if (isUnlockedChar) {
                         cardBg.onClick(() => {
                             if (selectedCharacterKey !== key) {
+                                playMenuSelect();
                                 selectedCharacterKey = key;
                                 setSelectedCharacter(key);
                                 refreshDisplay();
@@ -158,78 +170,78 @@ export function setupCharacterSelectScene(k) {
                 k.text(selectedChar.char, { size: 72 }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY + 40),
                 k.anchor('center'),
-                k.color(...(isUnlockedChar ? selectedChar.color : [50, 50, 50])),
+                k.color(...(isUnlockedChar ? selectedChar.color : UI_COLORS.BG_DISABLED)),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             detailItems.push(detailVisual);
             detailY += 100;
-            
+
             // Character name
             const detailName = k.add([
-                k.text(selectedChar.name, { size: 24 }),
+                k.text(selectedChar.name, { size: UI_TEXT_SIZES.HEADER }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                 k.anchor('center'),
-                k.color(255, 255, 255),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(detailName);
             detailY += 40;
-            
+
             // Description
             const detailDesc = k.add([
-                k.text(selectedChar.description, { size: 14, width: rightPanelWidth - 40 }),
+                k.text(selectedChar.description, { size: UI_TEXT_SIZES.SMALL, width: rightPanelWidth - 40 }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                 k.anchor('center'),
-                k.color(200, 200, 200),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(detailDesc);
             detailY += 60;
             
             // Stats
             const statsLabel = k.add([
-                k.text('Stats:', { size: 18 }),
+                k.text('Stats:', { size: UI_TEXT_SIZES.LABEL }),
                 k.pos(rightPanelX + 20, detailY),
                 k.anchor('left'),
-                k.color(255, 255, 100),
+                k.color(...UI_COLORS.WARNING),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(statsLabel);
             detailY += 30;
-            
+
             const statsText = k.add([
-                k.text(`Health: ${selectedChar.stats.health}`, { size: 16 }),
+                k.text(`${UI_TERMS.HEALTH}: ${selectedChar.stats.health}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
-                k.color(255, 255, 255),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(statsText);
             detailY += 25;
-            
+
             const speedText = k.add([
-                k.text(`Speed: ${selectedChar.stats.speed}`, { size: 16 }),
+                k.text(`${UI_TERMS.SPEED}: ${selectedChar.stats.speed}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
-                k.color(255, 255, 255),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(speedText);
             detailY += 25;
-            
+
             const damageText = k.add([
-                k.text(`Damage: ${selectedChar.stats.damage}`, { size: 16 }),
+                k.text(`${UI_TERMS.DAMAGE}: ${selectedChar.stats.damage}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
-                k.color(255, 255, 255),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(damageText);
             detailY += 40;
@@ -237,25 +249,25 @@ export function setupCharacterSelectScene(k) {
             // Selected indicator
             if (selectedCharacterKey === selectedChar) {
                 const selectedIndicator = k.add([
-                    k.text('✓ SELECTED', { size: 18 }),
+                    k.text('✓ SELECTED', { size: UI_TEXT_SIZES.LABEL }),
                     k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                     k.anchor('center'),
-                    k.color(100, 255, 100),
+                    k.color(...UI_COLORS.SUCCESS),
                     k.fixed(),
-                    k.z(1000)
+                    k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
                 detailItems.push(selectedIndicator);
             }
-            
+
             // Locked info
             if (!isUnlockedChar && selectedChar.unlockRequirement) {
                 const unlockText = k.add([
-                    k.text(`Unlock: Complete Floor ${selectedChar.unlockRequirement.value}`, { size: 14 }),
+                    k.text(`Unlock: Complete ${UI_TERMS.FLOOR} ${selectedChar.unlockRequirement.value}`, { size: UI_TEXT_SIZES.SMALL }),
                     k.pos(rightPanelX + rightPanelWidth / 2, detailY + 30),
                     k.anchor('center'),
-                    k.color(200, 150, 100),
+                    k.color(...UI_COLORS.GOLD),
                     k.fixed(),
-                    k.z(1000)
+                    k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
                 detailItems.push(unlockText);
             }
@@ -316,42 +328,45 @@ export function setupCharacterSelectScene(k) {
             k.rect(120, 35),
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
-            k.color(80, 80, 100),
-            k.outline(2, k.rgb(150, 150, 150)),
+            k.color(...UI_COLORS.NEUTRAL),
+            k.outline(2, k.rgb(...UI_COLORS.NEUTRAL)),
             k.area(),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
-        
+
         const backText = k.add([
-            k.text('Back', { size: 16 }),
+            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
-            k.color(200, 200, 200),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         backButton.onClick(() => {
+            playMenuNav();
             k.go('menu');
         });
-        
+
         // Instructions
         k.add([
-            k.text('Click a character to select | Press SPACE to start', { size: 16 }),
+            k.text('Click a character to select | Press SPACE to start', { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 80),
             k.anchor('center'),
-            k.color(150, 150, 150),
+            k.color(...UI_COLORS.TEXT_TERTIARY),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         // Controls
         k.onKeyPress('escape', () => {
+            playMenuNav();
             k.go('menu');
         });
-        
+
         k.onKeyPress('space', () => {
+            playMenuSelect();
             k.go('game', { resetState: true });
         });
     });

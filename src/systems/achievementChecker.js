@@ -2,6 +2,7 @@
 
 import { getSaveStats, unlockAchievement, isAchievementUnlocked } from './metaProgression.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
+import { playAchievement } from './sounds.js';
 
 // Check all achievements based on current stats
 export function checkAchievements(k) {
@@ -91,6 +92,9 @@ export function checkAchievements(k) {
 
 // Show achievement unlock notification
 function showAchievementNotification(k, achievement) {
+    // Play achievement sound
+    playAchievement();
+
     const notification = k.add([
         k.text(`Achievement Unlocked!`, { size: 20 }),
         k.pos(k.width() / 2, k.height() / 2 - 40),

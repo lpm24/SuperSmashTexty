@@ -1,7 +1,28 @@
-// Player entity definition
+/**
+ * Player Entity
+ *
+ * Creates and manages the player character including:
+ * - Character selection and stats
+ * - Health and death handling
+ * - Progression (level, XP)
+ * - Upgrades and abilities
+ * - Invulnerability frames
+ * - Character-specific abilities (dodge, XP boost, etc.)
+ */
+
+// System imports
 import { getSelectedCharacter } from '../systems/metaProgression.js';
+
+// Data imports
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { getWeaponDefinition } from '../data/weapons.js';
+
+// Configuration imports
+import {
+    PLAYER_CONFIG,
+    PROGRESSION_CONFIG,
+    CHARACTER_ABILITIES
+} from '../config/constants.js';
 
 export function createPlayer(k, x, y) {
     // Get selected character
@@ -27,13 +48,13 @@ export function createPlayer(k, x, y) {
     player.originalSpeed = charData.stats.speed; // Store original speed for debuff restoration
     player.slowed = false; // Track if player is slowed
     player.maxHealth = charData.stats.health;
-    player.level = 1;
-    player.xp = 0;
-    player.xpToNext = 10;
-    player.pickupRadius = 30; // Base pickup radius in pixels
+    player.level = PROGRESSION_CONFIG.STARTING_LEVEL;
+    player.xp = PROGRESSION_CONFIG.STARTING_XP;
+    player.xpToNext = PROGRESSION_CONFIG.BASE_XP_TO_NEXT_LEVEL;
+    player.pickupRadius = PLAYER_CONFIG.BASE_PICKUP_RADIUS;
     player.invulnerable = false; // Immunity frames flag
     player.invulnerableTime = 0; // Time remaining in immunity
-    player.invulnerableDuration = 1.0; // 1 second of immunity after hit
+    player.invulnerableDuration = PLAYER_CONFIG.INVULNERABILITY_DURATION;
     
     // Sync health component with maxHealth
     player.setHP(player.maxHealth);
@@ -101,25 +122,20 @@ export function createPlayer(k, x, y) {
     
     // Apply character-specific abilities
     if (charData.ability === 'xpBoost') {
-        player.xpMultiplier = 1.1; // +10% XP gain (The Survivor)
+        player.xpMultiplier = CHARACTER_ABILITIES.SURVIVOR_XP_BOOST;
     } else if (charData.ability === 'speedBoost') {
-        // +20% speed boost (stacks with base)
-        player.speed = player.speed * 1.2;
+        player.speed = player.speed * CHARACTER_ABILITIES.SCOUT_SPEED_BOOST;
         player.originalSpeed = player.speed;
-        player.dodgeChance = 0.1; // +10% dodge chance (The Scout)
+        player.dodgeChance = CHARACTER_ABILITIES.SCOUT_DODGE_CHANCE;
     } else if (charData.ability === 'tankStats') {
-        // +25% health (already applied in maxHealth)
-        player.maxHealth = Math.floor(player.maxHealth * 1.25);
+        player.maxHealth = Math.floor(player.maxHealth * CHARACTER_ABILITIES.TANK_HEALTH_BOOST);
         player.setHP(player.maxHealth);
-        player.damageReduction = 0.15; // +15% damage reduction (The Tank)
+        player.damageReduction = CHARACTER_ABILITIES.TANK_DAMAGE_REDUCTION;
     } else if (charData.ability === 'critBoost') {
-        // +50% crit chance, +25% crit damage (The Sniper)
-        // Apply to weapon's base crit chance
-        player.critChance = (player.critChance || 0) * 1.5; // +50% multiplier
-        player.critDamage = (player.critDamage || 2.0) * 1.25; // +25% multiplier
+        player.critChance = (player.critChance || 0) * CHARACTER_ABILITIES.SNIPER_CRIT_CHANCE_MULTIPLIER;
+        player.critDamage = (player.critDamage || 2.0) * CHARACTER_ABILITIES.SNIPER_CRIT_DAMAGE_MULTIPLIER;
     } else if (charData.ability === 'fireDot') {
-        // +25% fire DoT (The Pyro) - requires DoT system
-        player.fireDotMultiplier = 1.25;
+        player.fireDotMultiplier = CHARACTER_ABILITIES.PYRO_FIRE_DOT_MULTIPLIER;
     }
 
     // Movement
@@ -174,15 +190,15 @@ export function createPlayer(k, x, y) {
             player.invulnerableTime -= k.dt();
             if (player.invulnerableTime <= 0) {
                 player.invulnerable = false;
-                player.color = k.rgb(100, 150, 255); // Reset to normal color
+                player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR);
             } else {
-                // Flash effect during immunity (every 0.1 seconds)
-                const flashRate = 10; // flashes per second
+                // Flash effect during immunity
+                const flashRate = PLAYER_CONFIG.IMMUNITY_FLASH_RATE;
                 const shouldShow = Math.floor(player.invulnerableTime * flashRate) % 2 === 0;
                 if (shouldShow) {
-                    player.color = k.rgb(100, 150, 255);
+                    player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR);
                 } else {
-                    player.color = k.rgb(100, 150, 255, 0.3); // Semi-transparent
+                    player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR, PLAYER_CONFIG.IMMUNITY_ALPHA);
                 }
             }
         }
@@ -199,9 +215,9 @@ export function createPlayer(k, x, y) {
             // Test collision with obstacles (walls and cover both block movement)
             let canMoveX = true;
             let canMoveY = true;
-            
+
             const obstacles = k.get('obstacle');
-            const playerSize = 12; // Approximate player collision size
+            const playerSize = PLAYER_CONFIG.COLLISION_SIZE;
             
             for (const obstacle of obstacles) {
                 if (!obstacle.exists()) continue;
@@ -242,8 +258,8 @@ export function createPlayer(k, x, y) {
         // Keep player in bounds (room boundaries)
         const roomWidth = k.width();
         const roomHeight = k.height();
-        const margin = 20;
-        
+        const margin = PLAYER_CONFIG.ROOM_MARGIN;
+
         player.pos.x = k.clamp(player.pos.x, margin, roomWidth - margin);
         player.pos.y = k.clamp(player.pos.y, margin, roomHeight - margin);
     });

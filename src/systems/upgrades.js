@@ -213,7 +213,7 @@ export const UPGRADES = {
         description: '+30° spread angle',
         category: 'weapon',
         upgradeCategory: 'spread',
-        validWeapons: ['pistol', 'smg', 'shotgun'],
+        validWeapons: ['shotgun'], // Only shotgun has 'spread' in upgradeCategories
         maxStacks: 5,
         getDescription: (stacks) => `+30° spread angle${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.spreadShot})` : ''}`,
         apply: (player) => {
@@ -241,7 +241,7 @@ export const UPGRADES = {
         description: '+25% weapon range',
         category: 'weapon',
         upgradeCategory: 'range',
-        validWeapons: ['sniper', 'flamethrower'],
+        validWeapons: ['sniper', 'flamethrower', 'explosive'], // All weapons with 'range' in upgradeCategories
         maxStacks: 5,
         getDescription: (stacks) => `+25% weapon range${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.range})` : ''}`,
         apply: (player) => {

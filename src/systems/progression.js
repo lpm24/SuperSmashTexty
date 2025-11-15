@@ -1,5 +1,22 @@
-// Progression system - handles XP, leveling, and upgrades
+/**
+ * Progression System
+ *
+ * Handles player progression mechanics:
+ * - XP gain and multipliers
+ * - Level up calculations and scaling
+ * - Upgrade draft triggering on level up
+ * - Visual feedback for level ups
+ * - XP scaling per level
+ */
+
+// Scene imports
 import { showUpgradeDraft } from '../scenes/upgradeDraft.js';
+
+// Configuration imports
+import { PROGRESSION_CONFIG } from '../config/constants.js';
+
+// Sound system imports
+import { playLevelUp } from './sounds.js';
 
 export function setupProgressionSystem(k, player) {
     let levelUpInProgress = false;
@@ -20,7 +37,7 @@ export function setupProgressionSystem(k, player) {
             player.xp -= player.xpToNext;
             player.level++;
             const newLevel = player.level;
-            player.xpToNext = Math.floor(player.xpToNext * 1.5);
+            player.xpToNext = Math.floor(player.xpToNext * PROGRESSION_CONFIG.XP_SCALING_FACTOR);
             
             // Show level up notification and draft directly
             handleLevelUp(k, player, newLevel);
@@ -34,17 +51,20 @@ export function setupProgressionSystem(k, player) {
             levelUpInProgress = false;
             return;
         }
-        
+
+        // Play level up sound
+        playLevelUp();
+
         // Show level up notification
         const notification = k.add([
             k.text(`Level ${level}!`, { size: 24 }),
-            k.pos(k.width() / 2, 100),
+            k.pos(k.width() / 2, PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_Y),
             k.anchor('center'),
             k.color(255, 255, 100),
             k.fixed()
         ]);
-        
-        k.wait(0.5, () => {
+
+        k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
             k.destroy(notification);
             // Show upgrade draft
             showUpgradeDraft(k, player, () => {

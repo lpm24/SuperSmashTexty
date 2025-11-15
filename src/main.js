@@ -6,14 +6,15 @@ import { setupShopScene } from './scenes/shop.js';
 import { setupSettingsScene } from './scenes/settings.js';
 import { setupStatisticsScene } from './scenes/statistics.js';
 import { setupCharacterSelectScene } from './scenes/characterSelect.js';
+import { GAME_CONFIG } from './config/constants.js';
 
 // Initialize KAPLAY
 const k = kaplay({
-    width: 800,
-    height: 600,
-    background: [0, 0, 0],
-    scale: 1,
-    debug: false, // Disable debug for cleaner gameplay
+    width: GAME_CONFIG.CANVAS_WIDTH,
+    height: GAME_CONFIG.CANVAS_HEIGHT,
+    background: GAME_CONFIG.BACKGROUND_COLOR,
+    scale: GAME_CONFIG.CANVAS_SCALE,
+    debug: GAME_CONFIG.DEBUG_MODE,
     root: document.querySelector('#game-container'),
 });
 

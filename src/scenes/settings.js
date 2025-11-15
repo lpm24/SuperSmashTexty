@@ -1,5 +1,11 @@
 // Settings scene - allows players to configure game options
 import { getSettings, updateSetting, resetSettings, saveSettings } from '../systems/settings.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS,
+    formatButtonText
+} from '../config/uiConfig.js';
 
 export function setupSettingsScene(k) {
     k.scene('settings', (args) => {
@@ -14,19 +20,19 @@ export function setupSettingsScene(k) {
             k.rect(k.width(), k.height()),
             k.pos(0, 0),
             k.anchor('topleft'),
-            k.color(20, 20, 30),
+            k.color(...UI_COLORS.BG_DARK),
             k.fixed(),
-            k.z(0)
+            k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
-        
+
         // Title
         k.add([
-            k.text('SETTINGS', { size: 36 }),
+            k.text(formatButtonText('Settings'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         // Tab buttons

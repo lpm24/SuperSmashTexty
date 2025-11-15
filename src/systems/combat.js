@@ -1,5 +1,42 @@
-// Combat system - handles autofire and collisions
+/**
+ * Combat System
+ *
+ * Handles all combat mechanics including:
+ * - Autofire system for player weapons
+ * - Projectile spawning with spread patterns
+ * - Critical hit calculations
+ * - Damage calculations with defense
+ * - Orbital weapon mechanics
+ * - Enemy collision and knockback
+ * - Player damage and invulnerability frames
+ */
+
+// Entity imports
 import { createProjectile } from '../entities/projectile.js';
+
+// Configuration imports
+import {
+    COMBAT_CONFIG,
+    WEAPON_CONFIG,
+    rollCriticalHit,
+    calculateCriticalDamage,
+    calculateDamageAfterDefense
+} from '../config/constants.js';
+
+// Sound system imports
+import {
+    playWeaponFire,
+    playEnemyHit,
+    playPlayerHit,
+    playExplosion
+} from './sounds.js';
+
+// Particle system imports
+import {
+    spawnBloodSplatter,
+    spawnHitImpact,
+    spawnDeathExplosion
+} from './particleSystem.js';
 
 export function setupCombatSystem(k, player) {
     let lastFireTime = 0;
@@ -66,46 +103,51 @@ export function setupCombatSystem(k, player) {
                 // Fire all projectiles
                 directions.forEach((direction, index) => {
                     // Small delay for multi-shot without spread (staggered)
-                    const delay = spreadAngle === 0 && projectileCount > 1 ? index * 0.02 : 0;
-                    
+                    const delay = spreadAngle === 0 && projectileCount > 1
+                        ? index * COMBAT_CONFIG.MULTISHOT_STAGGER_DELAY
+                        : 0;
+
                     k.wait(delay, () => {
                         // Check for critical hit
-                        const isCrit = Math.random() < (player.critChance || 0);
-                        let finalDamage = isCrit 
-                            ? Math.floor(player.projectileDamage * (player.critDamage || 2.0))
+                        const isCrit = rollCriticalHit(player.critChance || 0);
+                        let finalDamage = isCrit
+                            ? calculateCriticalDamage(player.projectileDamage, player.critDamage || 2.0)
                             : player.projectileDamage;
-                        
+
                         // Apply synergy bonuses (e.g., armor piercing)
                         if (player.piercingDamageBonus && (player.piercing || 0) > 0) {
                             finalDamage = Math.floor(finalDamage * player.piercingDamageBonus);
                         }
-                        
+
                         // Use weapon's character and color for projectiles
-                        const weaponRange = player.weaponRange || 750;
-                        
+                        const weaponRange = player.weaponRange || WEAPON_CONFIG.DEFAULT_WEAPON_RANGE;
+
+                        // Play weapon firing sound
+                        playWeaponFire(player.weaponKey);
+
                         // Handle special weapon types
                         if (player.weaponKey === 'explosive') {
                             // Explosive launcher - create explosive projectile
-                            const projectile = createExplosiveProjectile(k, player.pos.x, player.pos.y, direction, 
-                                player.projectileSpeed, finalDamage, 
+                            const projectile = createExplosiveProjectile(k, player.pos.x, player.pos.y, direction,
+                                player.projectileSpeed, finalDamage,
                                 player.explosionRadius, player.explosionDamage, weaponRange);
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
                         } else if (player.weaponKey === 'chainLightning') {
                             // Chain lightning - create chaining projectile
-                            const projectile = createChainProjectile(k, player.pos.x, player.pos.y, direction, 
-                                player.projectileSpeed, finalDamage, 
+                            const projectile = createChainProjectile(k, player.pos.x, player.pos.y, direction,
+                                player.projectileSpeed, finalDamage,
                                 player.chainRange, player.maxJumps, player.chainDamageReduction, weaponRange);
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
                         } else {
                             // Standard projectile
-                            const projectile = createProjectile(k, player.pos.x, player.pos.y, direction, 
-                                player.projectileSpeed, finalDamage, 
+                            const projectile = createProjectile(k, player.pos.x, player.pos.y, direction,
+                                player.projectileSpeed, finalDamage,
                                 player.piercing || 0, player.obstaclePiercing || 0, isCrit, weaponRange);
-                            
+
                             // Apply weapon visual properties
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
@@ -113,7 +155,7 @@ export function setupCombatSystem(k, player) {
                         }
                     });
                 });
-                
+
                 lastFireTime = time;
             }
         }
@@ -185,26 +227,32 @@ export function setupCombatSystem(k, player) {
         if (projectile.piercedEnemies && projectile.piercedEnemies.has(enemy)) {
             return; // Already hit this enemy
         }
-        
+
+        // Play enemy hit sound
+        playEnemyHit();
+
         // Use takeDamage if available (handles armor/shields), otherwise use hurt
         if (enemy.takeDamage) {
             enemy.takeDamage(projectile.damage);
         } else {
             enemy.hurt(projectile.damage);
         }
-        
+
+        // Spawn blood splatter particle effect
+        spawnBloodSplatter(k, enemy.pos.x, enemy.pos.y, { isCrit: projectile.isCrit });
+
         // Track this enemy for piercing
         if (projectile.piercedEnemies) {
             projectile.piercedEnemies.add(enemy);
         }
-        
+
         // Destroy projectile if it can't pierce anymore
         // If piercing = n, projectile can hit n+1 enemies total
         // piercing = 0: hit 1 enemy, piercing = 1: hit 2 enemies, etc.
         if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
             k.destroy(projectile);
         }
-        
+
         // Knockback enemy away from projectile direction
         const knockbackDir = k.vec2(
             enemy.pos.x - projectile.pos.x,
@@ -213,14 +261,19 @@ export function setupCombatSystem(k, player) {
         const knockbackDist = knockbackDir.len();
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
-            const knockbackAmount = 15; // Reduced knockback distance
+            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_ENEMY_FROM_PROJECTILE;
             enemy.pos.x += normalized.x * knockbackAmount;
             enemy.pos.y += normalized.y * knockbackAmount;
         }
-        
+
+        // Spawn hit impact particle effect
+        spawnHitImpact(k, enemy.pos.x, enemy.pos.y, knockbackDir, { isCrit: projectile.isCrit });
+
         // Visual feedback (different color for crits)
-        enemy.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
-        k.wait(0.1, () => {
+        enemy.color = projectile.isCrit
+            ? k.rgb(...COMBAT_CONFIG.CRIT_COLOR)
+            : k.rgb(...COMBAT_CONFIG.HIT_COLOR);
+        k.wait(COMBAT_CONFIG.HIT_FLASH_DURATION, () => {
             if (enemy.exists()) {
                 enemy.color = k.rgb(255, 100, 100);
             }
@@ -295,9 +348,16 @@ export function setupCombatSystem(k, player) {
         if (projectile.isCrit) {
             finalDamage = Math.floor(finalDamage * 1.5); // 50% crit bonus
         }
-        
+
         // Use takeDamage to handle armor/shields
         miniboss.takeDamage(finalDamage);
+
+        // Spawn blood splatter particle effect
+        spawnBloodSplatter(k, miniboss.pos.x, miniboss.pos.y, { isCrit: projectile.isCrit });
+
+        // Spawn hit impact particle effect
+        const impactDir = k.vec2(miniboss.pos.x - projectile.pos.x, miniboss.pos.y - projectile.pos.y);
+        spawnHitImpact(k, miniboss.pos.x, miniboss.pos.y, impactDir, { isCrit: projectile.isCrit });
         
         // Track this miniboss for piercing
         if (projectile.piercedEnemies) {
@@ -340,17 +400,20 @@ export function setupCombatSystem(k, player) {
             // Fallback to regular damage if takeDamage not available
             boss.hurt(projectile.damage);
         }
-        
+
+        // Spawn blood splatter particle effect
+        spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
+
         // Track this boss for piercing
         if (projectile.piercedEnemies) {
             projectile.piercedEnemies.add(boss);
         }
-        
+
         // Destroy projectile if it can't pierce anymore
         if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
             k.destroy(projectile);
         }
-        
+
         // Knockback boss away from projectile direction
         const knockbackDir = k.vec2(
             boss.pos.x - projectile.pos.x,
@@ -363,6 +426,9 @@ export function setupCombatSystem(k, player) {
             boss.pos.x += normalized.x * knockbackAmount;
             boss.pos.y += normalized.y * knockbackAmount;
         }
+
+        // Spawn hit impact particle effect
+        spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
         
         // Visual feedback (different color for crits)
         boss.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
@@ -386,15 +452,19 @@ export function setupCombatSystem(k, player) {
             // Dodged! No damage taken
             return;
         }
-        
+
+        // Play player hit sound
+        playPlayerHit();
+
         // Apply damage with defense reduction (use enemy's damage if available)
-        const baseDamage = enemy.damage || 10;
-        // Apply damage reduction (The Tank ability)
-        const damageAfterReduction = baseDamage * (1 - (player.damageReduction || 0));
-        const finalDamage = Math.max(1, damageAfterReduction - (player.defense || 0));
+        const baseDamage = enemy.damage || COMBAT_CONFIG.BASE_ENEMY_DAMAGE;
+        const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
         player.invulnerable = true;
         player.invulnerableTime = player.invulnerableDuration;
+
+        // Spawn blood splatter particle effect for player
+        spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
         
         // Leech lifesteal: heal enemy when it hits player
         if (enemy.lifesteal && enemy.exists()) {
@@ -414,13 +484,13 @@ export function setupCombatSystem(k, player) {
         const knockbackDist = knockbackDir.len();
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
-            const knockbackAmount = 20; // Knockback distance for enemies
+            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_ENEMY;
             enemy.pos.x += normalized.x * knockbackAmount;
             enemy.pos.y += normalized.y * knockbackAmount;
         }
-        
+
         // Initial hit flash (will be overridden by immunity flash)
-        player.color = k.rgb(255, 100, 100);
+        player.color = k.rgb(...COMBAT_CONFIG.HIT_COLOR);
     });
     
     // Collision: Miniboss hits Player
@@ -429,19 +499,25 @@ export function setupCombatSystem(k, player) {
         
         // Check if player is invulnerable (immunity frames)
         if (player.invulnerable) return;
-        
+
+        // Play player hit sound
+        playPlayerHit();
+
         // Minibosses deal more damage than regular enemies but less than bosses
         // Melee miniboss deals melee damage, others use base damage
-        let baseDamage = 15; // Default for most minibosses
+        let baseDamage = COMBAT_CONFIG.BASE_MINIBOSS_DAMAGE;
         if (miniboss.type === 'brute' || miniboss.type === 'berserker' || miniboss.type === 'guardian') {
             if (miniboss.meleeDamage) {
                 baseDamage = miniboss.meleeDamage;
             }
         }
-        const finalDamage = Math.max(1, baseDamage - (player.defense || 0));
+        const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, 0);
         player.hurt(finalDamage);
         player.invulnerable = true;
         player.invulnerableTime = player.invulnerableDuration;
+
+        // Spawn blood splatter particle effect for player
+        spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
         
         // Knockback miniboss away from player (player doesn't move)
         const knockbackDir = k.vec2(
@@ -472,20 +548,25 @@ export function setupCombatSystem(k, player) {
             // Dodged! No damage taken
             return;
         }
-        
-        // Bosses deal more damage (15-20 base damage)
+
+        // Play player hit sound
+        playPlayerHit();
+
+        // Bosses deal more damage
         // Melee guardian deals melee damage, others use base damage
-        let baseDamage = 18; // Default for most bosses
+        let baseDamage = COMBAT_CONFIG.BASE_BOSS_DAMAGE;
         if (boss.type === 'twinGuardianMelee' && boss.meleeDamage) {
-            baseDamage = boss.meleeDamage * (boss.enraged ? 1.25 : 1.0); // Use melee damage, apply enrage
+            const enrageMultiplier = boss.enraged ? COMBAT_CONFIG.BOSS_ENRAGE_DAMAGE_MULTIPLIER : 1.0;
+            baseDamage = boss.meleeDamage * enrageMultiplier;
         }
-        
-        // Apply damage reduction (The Tank ability)
-        const damageAfterReduction = baseDamage * (1 - (player.damageReduction || 0));
-        const finalDamage = Math.max(1, damageAfterReduction - (player.defense || 0));
+
+        const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
         player.invulnerable = true;
         player.invulnerableTime = player.invulnerableDuration;
+
+        // Spawn blood splatter particle effect for player
+        spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
         
         // Knockback boss away from player (player doesn't move)
         const knockbackDir = k.vec2(
@@ -519,14 +600,20 @@ export function setupCombatSystem(k, player) {
             // Dodged! No damage taken
             return;
         }
-        
+
+        // Play player hit sound
+        playPlayerHit();
+
         // Apply damage with damage reduction (The Tank ability)
         const damageAfterReduction = projectile.damage * (1 - (player.damageReduction || 0));
         const finalDamage = Math.max(1, damageAfterReduction - (player.defense || 0));
         player.hurt(finalDamage);
         player.invulnerable = true;
         player.invulnerableTime = player.invulnerableDuration;
-        
+
+        // Spawn blood splatter particle effect for player
+        spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
+
         // Destroy projectile
         k.destroy(projectile);
         
@@ -631,7 +718,7 @@ function initializeOrbitalWeapons(k, player) {
     }
     
     const orbCount = player.projectileCount || 1;
-    const orbitRadius = player.orbitRadius || 45;
+    const orbitRadius = player.orbitRadius || WEAPON_CONFIG.BASE_ORBIT_RADIUS;
     
     // Create initial orbs
     for (let i = 0; i < orbCount; i++) {
@@ -652,7 +739,7 @@ function initializeOrbitalWeapons(k, player) {
         
         orb.damage = player.projectileDamage || 12;
         orb.contactCooldown = 0; // Cooldown to prevent multiple hits per frame
-        orb.contactCooldownDuration = 0.2; // 0.2 seconds between hits
+        orb.contactCooldownDuration = WEAPON_CONFIG.ORBITAL_CONTACT_COOLDOWN;
         
         player.orbitalOrbs.push(orb);
         player.orbitalAngles.push(angle);
@@ -682,9 +769,9 @@ function updateOrbitalWeapons(k, player) {
     }
     
     if (!player.orbitalOrbs || !player.orbitalAngles) return;
-    
-    const rotationSpeed = player.rotationSpeed || 180;
-    const orbitRadius = player.orbitRadius || 45;
+
+    const rotationSpeed = player.rotationSpeed || WEAPON_CONFIG.BASE_ROTATION_SPEED;
+    const orbitRadius = player.orbitRadius || WEAPON_CONFIG.BASE_ORBIT_RADIUS;
     
     // Update each orb
     player.orbitalOrbs.forEach((orb, index) => {
@@ -738,10 +825,13 @@ function createChainProjectile(k, x, y, direction, speed, damage, chainRange, ma
 // Explode projectile and deal area damage
 function explodeProjectile(k, projectile, x, y) {
     if (!projectile.exists()) return;
-    
+
+    // Play explosion sound
+    playExplosion();
+
     const explosionRadius = projectile.explosionRadius || 50;
     const explosionDamage = projectile.explosionDamage || 15;
-    
+
     // Damage all enemies in radius
     const enemies = k.get('enemy');
     const bosses = k.get('boss');

@@ -33,7 +33,7 @@ export const WEAPON_DEFINITIONS = {
         critDamage: 2.0,
         range: 700, // Medium-long range
         category: 'rapid',
-        upgradeCategories: ['damage', 'fireRate', 'multiShot', 'piercing', 'crit', 'speed']
+        upgradeCategories: ['damage', 'fireRate', 'multiShot', 'piercing', 'crit'] // Removed 'speed' (passive upgrade)
     },
     shotgun: {
         name: 'Spread Shotgun',

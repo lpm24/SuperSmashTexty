@@ -1,6 +1,12 @@
 // Upgrade draft UI scene
 import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
+import { playUpgradeSelect } from '../systems/sounds.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS
+} from '../config/uiConfig.js';
 
 // Track if upgrade draft is currently showing
 let upgradeDraftActive = false;
@@ -26,21 +32,21 @@ export function showUpgradeDraft(k, player, onSelect) {
         k.rect(k.width(), k.height()),
         k.pos(0, 0),
         k.anchor('topleft'),
-        k.color(0, 0, 0),
-        k.opacity(0.8),
+        k.color(...UI_COLORS.BG_DARK),
+        k.opacity(0.9),
         k.fixed(),
-        k.z(1000),
+        k.z(UI_Z_LAYERS.MODAL),
         'upgradeOverlay'
     ]);
-    
+
     // Title
     const title = k.add([
-        k.text('Level Up! Choose an Upgrade', { size: 32 }),
+        k.text('Level Up! Choose an Upgrade', { size: UI_TEXT_SIZES.TITLE }),
         k.pos(k.width() / 2, 80),
         k.anchor('center'),
-        k.color(255, 255, 100),
+        k.color(...UI_COLORS.WARNING),
         k.fixed(),
-        k.z(1001),
+        k.z(UI_Z_LAYERS.MODAL + 1),
         'upgradeUI'
     ]);
     
@@ -64,46 +70,46 @@ export function showUpgradeDraft(k, player, onSelect) {
             k.rect(cardWidth, cardHeight),
             k.pos(cardX, cardY),
             k.anchor('center'),
-            k.color(50, 50, 50),
-            k.outline(2, k.rgb(150, 150, 150)),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.fixed(),
-            k.z(1001),
+            k.z(UI_Z_LAYERS.MODAL + 1),
             k.area(),
             'upgradeUI',
             'upgradeCard'
         ]);
-        
+
         // Upgrade name (with width constraint to prevent overflow)
         const nameText = k.add([
-            k.text(upgrade.name, { size: 20, width: cardWidth - 20 }),
+            k.text(upgrade.name, { size: UI_TEXT_SIZES.BUTTON, width: cardWidth - 20 }),
             k.pos(cardX, cardY - 40),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1002),
+            k.z(UI_Z_LAYERS.MODAL + 2),
             'upgradeUI'
         ]);
-        
+
         // Upgrade description (with stack count, width constraint to prevent overflow)
         const description = getUpgradeDescription(upgrade, player);
         const descText = k.add([
-            k.text(description, { size: 16, width: cardWidth - 20 }),
+            k.text(description, { size: UI_TEXT_SIZES.BODY, width: cardWidth - 20 }),
             k.pos(cardX, cardY + 10),
             k.anchor('center'),
-            k.color(200, 200, 200),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
-            k.z(1002),
+            k.z(UI_Z_LAYERS.MODAL + 2),
             'upgradeUI'
         ]);
-        
+
         // Selection number
         const numText = k.add([
-            k.text(`${index + 1}`, { size: 24 }),
+            k.text(`${index + 1}`, { size: UI_TEXT_SIZES.HEADER }),
             k.pos(cardX, cardY - 60),
             k.anchor('center'),
-            k.color(255, 255, 100),
+            k.color(...UI_COLORS.WARNING),
             k.fixed(),
-            k.z(1002),
+            k.z(UI_Z_LAYERS.MODAL + 2),
             'upgradeUI'
         ]);
         
@@ -123,9 +129,12 @@ export function showUpgradeDraft(k, player, onSelect) {
     // Selection function
     function selectUpgrade(index) {
         if (!upgradeDraftActive) return; // Prevent double-selection
-        
+
         const selected = upgrades[index];
-        
+
+        // Play upgrade selection sound
+        playUpgradeSelect();
+
         // Mark upgrade draft as inactive first to prevent re-entry
         upgradeDraftActive = false;
         

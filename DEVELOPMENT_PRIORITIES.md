@@ -1,224 +1,176 @@
 # Development Priorities & Next Steps
 
-**Analysis Date:** 2025-01-XX  
-**Purpose:** Prioritized action plan for addressing current issues and ideas
+**Last Updated:** 2025-01-14
+**Status:** Post-Architecture Refactor
 
 ---
 
-## 📊 Priority Categories
+## 🎉 Major Milestone: Architecture Refactor Complete!
 
-### 🔴 **IMMEDIATE (Do Now) - Quick Wins & Critical Fixes**
-
-These are quick fixes that improve gameplay feel immediately and don't require major refactoring:
-
-1. **Visual Pause Indication** ⚡ (5 min)
-   - Add visual overlay/text when game is paused
-   - Simple: Show "PAUSED" text or dim screen overlay
-   - **Impact:** High - eliminates confusion
-
-2. **Remove Radius from Display** ⚡ (2 min)
-   - Remove `debugText.text = Radius: ${player.pickupRadius}px` from HUD
-   - **Impact:** Medium - cleaner UI, will be in stats page later
-
-3. **Display Level/XP as Decimal** ⚡ (5 min)
-   - Change from "Level: 1" and "XP: 0/10" to "Level: 1.0%" or "1.0 (0%)"
-   - Format: `Level: ${player.level}.${Math.floor((player.xp / player.xpToNext) * 10)}`
-   - **Impact:** Medium - cleaner, more compact display
-
-4. **Consolidate Floor/Room Display** ⚡ (5 min)
-   - Combine "Floor: 1 Room: 1" into single line or more compact format
-   - Consider: "F1 R1" or "Floor 1-1" or keep but reduce spacing
-   - **Impact:** Medium - cleaner top-left HUD
-
-5. **Fix Boss Armor Bar Text Color** ⚡ (2 min)
-   - Change `bossArmorText.color` from `[200, 200, 200]` to higher contrast
-   - Use white `[255, 255, 255]` or light yellow `[255, 255, 200]`
-   - **Impact:** Medium - readability improvement
-
-6. **Fix Armor Damage Bug** 🐛 (15 min)
-   - **Issue:** Armor appears to take same/more damage, not less
-   - **Root Cause:** Need to verify armor damage reduction logic
-   - **Fix:** Review `boss.takeDamage()` in `boss.js` - ensure damage reduction applies correctly
-   - **Impact:** High - critical gameplay bug
-
-7. **Lower Projectile Range** ⚡ (10 min)
-   - Add max range/lifetime to projectiles (currently infinite for pistol)
-   - Set reasonable range: ~600-800 pixels (2-3 seconds at 300 px/s)
-   - **Impact:** High - important for weapon differentiation
+**What Was Accomplished (Jan 2025):**
+- ✅ **Constants System**: Centralized game config for easy tuning
+- ✅ **Data-Driven Content**: 21 enemies, 4 bosses, 5 minibosses as pure data
+- ✅ **Multiplayer Architecture**: GameState, InputManager, NetworkManager
+- ✅ **Full Documentation**: Comprehensive headers and inline comments
+- ✅ **Code Cleanup**: Zero dead code, organized imports, pristine structure
+- ✅ **Future-Ready**: Architecture prepared for Windows/browser co-op multiplayer
 
 ---
 
-### 🟡 **HIGH PRIORITY (This Week) - Gameplay Flow**
+## ✅ Completed Priority Items
 
-These improve core gameplay flow and player experience:
+### Immediate (All Complete!)
+- ✅ Visual pause indication (pause overlay implemented)
+- ✅ Remove radius from display (clean HUD)
+- ✅ Level/XP decimal format (`Level: 1.55` shows 55% to next level)
+- ✅ Consolidate floor/room display (`F1 R1` format)
+- ✅ Fix boss armor text color (white text on bars)
+- ✅ Fix armor damage bug (multi-layer damage system working correctly)
+- ✅ Lower projectile range (range limits implemented, 600px default)
 
-8. **Boss Spawn Location Fix** 🎯 (20 min)
-   - Bosses should spawn at top door or random door, not center if player is there
-   - Check spawn logic in `game.js` around line 400
-   - **Impact:** High - prevents unfair spawns
+### High Priority (All Complete!)
+- ✅ Boss spawn location fix (avoids entrance door)
+- ✅ Player entry from correct door (`entryDirection` system)
+- ✅ Player always enters from door (safe spawn zones implemented)
+- ✅ Increase door visual size (using `=` characters)
+- ✅ No obstacles in first room (floor 1, room 1 check)
+- ✅ Visual obstacle distinction (walls `#` vs cover distinct)
+- ✅ Enemies remaining counter (shows X/Y in HUD)
 
-9. **Player Entry from Correct Door** 🎯 (30 min)
-   - Track which door player exited from previous room
-   - Spawn player at corresponding door in new room
-   - Store exit direction in `gameState` and use for spawn
-   - **Impact:** High - improves room transition feel
-
-10. **Player Always Enters from Door** 🎯 (45 min)
-    - Never spawn player in center
-    - Ensure room generation doesn't place obstacles blocking entrance door
-    - Modify obstacle generation to check entrance door position
-    - **Impact:** High - consistent, fair gameplay
-
-11. **Increase Door Visual Size** ⚡ (10 min)
-    - Change door from single `=` to multiple characters: `===` or `═══`
-    - Consider different display for vertical vs horizontal doors
-    - Vertical: `|||` or `│││`, Horizontal: `===` or `═══`
-    - **Impact:** Medium - better visibility
-
-12. **No Obstacles in First Room** ⚡ (5 min)
-    - Add check: `if (currentRoom === 1 && currentFloor === 1) { skip obstacles }`
-    - Or reduce obstacle chance to 0% for first room
-    - **Impact:** Medium - better new player experience
-
-13. **Visual Obstacle Distinction** ⚡ (15 min)
-    - Make walls vs cover visually distinct
-    - Options: Different colors, different characters, outlines
-    - Walls: `█` (full block), Cover: `▓` (dark shade) or `▒` (medium shade)
-    - **Impact:** Medium - gameplay clarity
-
-14. **Enemies Remaining Counter** ⚡ (10 min)
-    - Add HUD element: "Enemies: X/Y" or "Remaining: X"
-    - Show when room is active (not completed)
-    - **Impact:** Medium - helpful player feedback
+### Medium Priority (Most Complete!)
+- ✅ Twin Guardians as separate bosses (implemented with opposite door spawning)
+- ✅ Penetrating shots decision (separate `piercing` and `obstaclePiercing` stats)
+- ✅ Regenerative shields for bosses (implemented with 3s cooldown after damage)
+- ⚠️ Enemy AI obstacle handling (basic avoidance, could be improved)
 
 ---
 
-### 🟢 **MEDIUM PRIORITY (Next 1-2 Weeks) - Polish & Balance**
+## 🎯 Current Focus Areas
 
-These can wait until core gameplay is solid:
+### 🔴 **Performance & Optimization**
+1. **Object Pooling** (Future)
+   - Pool projectiles, enemies, pickups to reduce GC pressure
+   - **Impact:** High - better performance at high enemy counts
+   - **Complexity:** Medium (2-3 hours)
 
-15. **Improve Enemy AI Obstacle Handling** 🔧 (1-2 hours)
-    - Enemies getting stuck on opposite side of obstacles
-    - Implement pathfinding or better obstacle avoidance
-    - Consider: A* pathfinding, obstacle avoidance steering, or simpler "go around" logic
-    - **Impact:** Medium - improves enemy behavior
+2. **Spatial Partitioning** (Future)
+   - Implement quadtree for collision detection
+   - **Impact:** High - scales better with many entities
+   - **Complexity:** High (4-6 hours)
 
-16. **Twin Guardians as Separate Bosses** 🎯 (2-3 hours)
-    - Split into two separate boss entities
-    - Spawn from opposite doors
-    - Different AI for each (melee vs ranged)
-    - **Impact:** High - better boss design, but can wait
+### 🟡 **Content Expansion**
+3. **More Synergies** (Active Development)
+   - Add more upgrade combinations beyond the current 8
+   - **Impact:** High - increases build variety
+   - **Complexity:** Low-Medium (data-driven now!)
 
-17. **Penetrating Shots Through Obstacles** 🤔 (30 min)
-    - **Design Decision Needed:** Should penetrating shots go through obstacles?
-    - Currently: Penetrating shots go through enemies AND obstacles
-    - Options:
-      - A) Keep current (penetrates both)
-      - B) Only penetrate enemies, not obstacles
-      - C) Separate "obstacle piercing" upgrade
-    - **Impact:** Medium - affects gameplay balance
+4. **More Room Templates** (Active Development)
+   - Add variety beyond current 6 templates
+   - **Impact:** Medium - increases visual variety
+   - **Complexity:** Low (easy with data-driven system)
 
-18. **Regenerative Shields for Bosses** 💡 (1-2 hours)
-    - New mechanic: Shields `{}` that regenerate
-    - Different from armor `[]` - takes normal damage but regens
-    - **Impact:** Low-Medium - new feature, can wait
+5. **Balance Tuning** (Ongoing)
+   - Fine-tune enemy health, damage, spawn rates
+   - **Impact:** High - affects game feel
+   - **Complexity:** Low (constants system makes this easy!)
 
----
+### 🟢 **Future Features**
+6. **Multiplayer Implementation** (Architecture Ready!)
+   - Implement WebRTC/WebSocket networking
+   - Use existing NetworkManager as foundation
+   - **Impact:** Very High - major feature
+   - **Complexity:** Very High (weeks of work)
 
-### 🔵 **FUTURE / DESIGN NOTES (Later)**
+7. **More Weapon Types** (Easy with Data System)
+   - Add new weapons beyond current 7 types
+   - **Impact:** Medium - build variety
+   - **Complexity:** Low (data-driven)
 
-19. **Verticality Concept** 📝
-    - Note: Large rooms with raised platforms, steps
-    - **Status:** Design note only, no implementation
-    - **When:** Consider after core gameplay is polished
-
----
-
-## 🎯 Recommended Implementation Order
-
-### **Sprint 1: Quick Wins (1-2 hours)**
-1. Visual pause indication
-2. Remove radius display
-3. Level/XP decimal format
-4. Consolidate floor/room display
-5. Fix boss armor text color
-6. Fix armor damage bug
-7. Lower projectile range
-
-### **Sprint 2: Gameplay Flow (2-3 hours)**
-8. Boss spawn location fix
-9. Player entry from correct door
-10. Player always enters from door
-11. Increase door visual size
-12. No obstacles in first room
-13. Visual obstacle distinction
-14. Enemies remaining counter
-
-### **Sprint 3: Polish (1-2 weeks)**
-15. Improve enemy AI obstacle handling
-16. Twin guardians as separate bosses
-17. Penetrating shots design decision
-18. Regenerative shields (optional)
+8. **Advanced Procedural Generation** (Future)
+   - More complex room layouts
+   - Multiple floor themes
+   - **Impact:** Medium - visual variety
+   - **Complexity:** Medium
 
 ---
 
-## 🐛 Critical Bugs to Fix First
+## 🐛 Known Issues
 
-1. **Armor Damage Bug** - Bosses taking incorrect damage
-2. **Boss Spawn Location** - Unfair spawns
-3. **Player Entry** - Inconsistent room transitions
+### Minor Issues
+- **Enemy pathfinding**: Enemies can get stuck on obstacles (low priority, gameplay still works)
+- **Visual effects**: No particle system yet (polish item)
+
+### No Critical Bugs! 🎉
+All major gameplay bugs have been fixed!
 
 ---
 
-## 💡 Design Decisions Needed
+## 💡 Design Decisions Made
 
-1. **Penetrating Shots:** Should they go through obstacles?
-   - **Recommendation:** Only penetrate enemies, not obstacles (creates strategic choice)
+1. ✅ **Penetrating Shots:** Separate stats for enemy penetration vs obstacle penetration
+   - Allows strategic choices (pierce enemies vs pierce walls)
 
-2. **Door Visual:** Vertical vs horizontal representation?
-   - **Recommendation:** Use `═══` for horizontal, `│││` for vertical
+2. ✅ **Armor vs Shields:** Different mechanics implemented
+   - Armor `[]`: Reduces damage, damaged first after shields
+   - Shields `{}`: Takes normal damage, regenerates after 3s
 
-3. **Armor vs Shields:** Different mechanics?
-   - **Recommendation:** 
-     - Armor `[]`: Reduces damage, can be destroyed
-     - Shields `{}`: Takes normal damage, regenerates
-   - Can implement shields later
+3. ✅ **State Management:** Centralized GameState for multiplayer
+   - All state is serializable (JSON-ready)
+   - Input history for rollback/replay
+
+---
+
+## 📊 Implementation Order (Recommended)
+
+### Phase 1: Content & Polish (Now - Next 2 Weeks)
+1. Add more synergies (easy wins)
+2. Add more room templates
+3. Balance tuning pass
+4. More upgrade variety
+
+### Phase 2: Performance (As Needed)
+1. Profile performance with many entities
+2. Implement object pooling if needed
+3. Add spatial partitioning if needed
+
+### Phase 3: Multiplayer (Future Major Feature)
+1. Implement WebRTC/WebSocket layer
+2. Test state synchronization
+3. Handle latency and prediction
+4. Implement lobby/matchmaking
+
+---
+
+## 🎯 Success Metrics
+
+**Code Quality:**
+- ✅ Zero dead code
+- ✅ Comprehensive documentation
+- ✅ Clean, maintainable architecture
+- ✅ Easy to add content (data-driven)
+
+**Gameplay:**
+- ✅ Core loop is fun and engaging
+- ✅ No critical bugs
+- ✅ Balanced difficulty progression
+- 🔄 Adequate content variety (expanding)
+
+**Technical:**
+- ✅ Fast hot reload (Vite)
+- ✅ Multiplayer-ready architecture
+- ✅ Browser localStorage saves
+- 🔄 Performance optimization (as needed)
 
 ---
 
 ## 📝 Notes
 
-- **Quick Wins** can be done in parallel or batched
-- **Gameplay Flow** items should be done together for consistency
-- **Polish** items can wait until game is more complete
-- Focus on **bugs and critical gameplay** first, then polish
+- **Focus on content and polish** now that architecture is solid
+- **Performance optimization** can wait until needed (no issues currently)
+- **Multiplayer** is a major feature requiring significant time investment
+- **Data-driven system** makes adding content extremely fast
+- **Architecture** is production-ready and future-proof
 
 ---
 
-## ✅ Completion Checklist
-
-### Immediate
-- [ ] Visual pause indication
-- [ ] Remove radius from display
-- [ ] Level/XP decimal format
-- [ ] Consolidate floor/room display
-- [ ] Fix boss armor text color
-- [ ] Fix armor damage bug
-- [ ] Lower projectile range
-
-### High Priority
-- [ ] Boss spawn location fix
-- [ ] Player entry from correct door
-- [ ] Player always enters from door
-- [ ] Increase door visual size
-- [ ] No obstacles in first room
-- [ ] Visual obstacle distinction
-- [ ] Enemies remaining counter
-
-### Medium Priority
-- [ ] Improve enemy AI obstacle handling
-- [ ] Twin guardians as separate bosses
-- [ ] Penetrating shots design decision
-- [ ] Regenerative shields (optional)
-
-
+**Next Review:** After next content/balance pass

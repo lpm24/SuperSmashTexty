@@ -1,7 +1,15 @@
 # SuperSmashTexty - Content Brainstorming
 
-**Last Updated:** 2025-01-XX  
+**Last Updated:** 2025-01-14
 **Purpose:** Brainstorming and notes for game content (weapons, enemies, characters, bosses, upgrades, etc.)
+
+**Implementation Status Note:** Many items in this brainstorm have been implemented as of January 2025 architecture refactor:
+- ✅ **21 Enemy types** implemented in `src/data/enemies.js`
+- ✅ **4 Bosses, 5 Minibosses** implemented in `src/data/bosses.js` and `src/data/minibosses.js`
+- ✅ **7 Weapon types** implemented in `src/data/weapons.js`
+- ✅ **8 Synergy combinations** implemented in `src/systems/synergies.js`
+- ✅ **Character system** with multiple unlockable characters
+- 🔄 **Content expansion ongoing** - see `DEVELOPMENT_PRIORITIES.md` for current focus
 
 **Character Set Note:** Using Unicode symbols for better visual variety. See `CHARACTER_SET_GUIDE.md` for full character options and alternatives.
 

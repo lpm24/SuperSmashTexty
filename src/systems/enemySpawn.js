@@ -1,6 +1,16 @@
-// Enemy spawn system - handles weighted random enemy selection
+/**
+ * Enemy Spawn System
+ *
+ * Handles enemy selection and spawning logic:
+ * - Weighted random selection based on floor
+ * - Floor-specific enemy pools (5 per floor)
+ * - Progressive difficulty (enemies get harder each floor)
+ * - Balanced variety within each floor
+ * - Mix of different enemy types and behaviors
+ */
 
 // Enemy spawn weights by floor
+// Each floor has 5 enemy types with different weights
 const ENEMY_SPAWN_WEIGHTS = {
     1: {
         rusher: 25,    // Basic Rusher ▶
@@ -21,8 +31,9 @@ const ENEMY_SPAWN_WEIGHTS = {
         shieldBearer: 15, // Shield Bearer ▓
         golem: 15,       // Golem ◼
         wraith: 15,      // Wraith ≈
-        spawner: 15,    // Spawner ◔
-        buffer: 20      // Buffer ✚
+        spawner: 15,     // Spawner ◔
+        buffer: 20,      // Buffer ✚
+        orbiter: 10      // Orbiter ◉ - Walks perimeter, explodes into shrapnel
     },
     4: {
         healer: 25,     // Healer ✛

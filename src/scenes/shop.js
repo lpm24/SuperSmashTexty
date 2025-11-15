@@ -1,6 +1,13 @@
 // Shop scene - allows players to purchase unlocks
 import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
+import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
+import {
+    UI_TEXT_SIZES,
+    UI_COLORS,
+    UI_Z_LAYERS,
+    formatButtonText
+} from '../config/uiConfig.js';
 
 export function setupShopScene(k) {
     k.scene('shop', () => {
@@ -15,29 +22,29 @@ export function setupShopScene(k) {
             k.rect(k.width(), k.height()),
             k.pos(0, 0),
             k.anchor('topleft'),
-            k.color(20, 20, 30),
+            k.color(...UI_COLORS.BG_DARK),
             k.fixed(),
-            k.z(0)
+            k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
-        
+
         // Title
         k.add([
-            k.text('SHOP', { size: 36 }),
+            k.text(formatButtonText('Shop'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         // Currency display
         const currencyText = k.add([
-            k.text(`${currencyName}: ${currency}`, { size: 24 }),
+            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.HEADER }),
             k.pos(k.width() - 20, 20),
             k.anchor('topright'),
-            k.color(100, 255, 100),
+            k.color(...UI_COLORS.GOLD),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         // Category tabs
@@ -61,23 +68,24 @@ export function setupShopScene(k) {
                 k.rect(tabWidth, tabHeight),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 100 : 50, isActive ? 100 : 50, isActive ? 150 : 80),
-                k.outline(2, k.rgb(150, 150, 150)),
+                k.color(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM)),
+                k.outline(2, k.rgb(...UI_COLORS.BORDER)),
                 k.area(),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
-            
+
             const tabLabel = k.add([
-                k.text(cat.label, { size: 16 }),
+                k.text(cat.label, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
+                k.color(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY)),
                 k.fixed(),
-                k.z(1001)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             
             tabBg.onClick(() => {
+                playMenuNav();
                 currentCategory = cat.key;
                 refreshShop();
             });
@@ -252,6 +260,9 @@ export function setupShopScene(k) {
                             // Handle result (permanent upgrades return object, regular unlocks return boolean)
                             if (currentCategory === 'permanentUpgrades') {
                                 if (result && result.success) {
+                                    // Play purchase success sound
+                                    playPurchaseSuccess();
+
                                     // Purchase successful
                                     const successMsg = k.add([
                                         k.text('Purchased!', { size: 20 }),
@@ -261,26 +272,29 @@ export function setupShopScene(k) {
                                         k.fixed(),
                                         k.z(2000)
                                     ]);
-                                    
+
                                     k.wait(0.5, () => {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
-                                    
+
                                     // Refresh shop
                                     refreshShop();
                                     // Update currency display
                                     currencyText.text = `${currencyName}: ${getCurrency()}`;
                                 } else if (result && result.reason === 'insufficientCurrency') {
+                                    // Play purchase error sound
+                                    playPurchaseError();
+
                                     // Not enough currency
                                     const errorMsg = k.add([
-                                        k.text('Not enough currency!', { size: 20 }),
+                                        k.text(`Not enough ${currencyName}!`, { size: 20 }),
                                         k.pos(k.width() / 2, k.height() / 2),
                                         k.anchor('center'),
                                         k.color(255, 100, 100),
                                         k.fixed(),
                                         k.z(2000)
                                     ]);
-                                    
+
                                     k.wait(0.5, () => {
                                         if (errorMsg.exists()) k.destroy(errorMsg);
                                     });
@@ -288,6 +302,9 @@ export function setupShopScene(k) {
                             } else {
                                 // Regular unlock (returns boolean)
                                 if (result) {
+                                    // Play purchase success sound
+                                    playPurchaseSuccess();
+
                                     // Purchase successful
                                     const successMsg = k.add([
                                         k.text('Purchased!', { size: 20 }),
@@ -297,19 +314,22 @@ export function setupShopScene(k) {
                                         k.fixed(),
                                         k.z(2000)
                                     ]);
-                                    
+
                                     k.wait(0.5, () => {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
-                                    
+
                                     // Refresh shop
                                     refreshShop();
                                     // Update currency display
                                     currencyText.text = `${currencyName}: ${getCurrency()}`;
                                 } else {
+                                    // Play purchase error sound
+                                    playPurchaseError();
+
                                     // Not enough currency
                                     const errorMsg = k.add([
-                                        k.text('Not enough currency!', { size: 20 }),
+                                        k.text(`Not enough ${currencyName}!`, { size: 20 }),
                                         k.pos(k.width() / 2, k.height() / 2),
                                         k.anchor('center'),
                                         k.color(255, 100, 100),
@@ -357,6 +377,7 @@ export function setupShopScene(k) {
         ]);
         
         backButton.onClick(() => {
+            playMenuNav();
             k.go('menu');
         });
         

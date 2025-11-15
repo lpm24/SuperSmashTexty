@@ -1,4 +1,18 @@
-// Projectile entity definition
+/**
+ * Projectile Entity
+ *
+ * Creates and manages bullet/projectile entities:
+ * - Player and enemy projectiles
+ * - Piercing mechanics (enemy and obstacle)
+ * - Critical hit visual feedback
+ * - Range limiting
+ * - Lifetime tracking
+ * - Collision detection and cleanup
+ */
+
+// Configuration imports
+import { WEAPON_CONFIG } from '../config/constants.js';
+
 export function createProjectile(k, x, y, direction, speed, damage, piercing = 0, obstaclePiercing = 0, isCrit = false, maxRange = null) {
     const projectile = k.add([
         k.text('*', { size: 16 }),
@@ -15,8 +29,8 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     projectile.piercedEnemies = new Set(); // Track which enemies this has already hit
     projectile.piercedObstacles = new Set(); // Track which obstacles this has already hit
     projectile.isCrit = isCrit;
-    // Set max range - use provided range or default based on speed
-    projectile.maxRange = maxRange || 750; // Maximum distance in pixels
+    // Set max range - use provided range or default
+    projectile.maxRange = maxRange || WEAPON_CONFIG.DEFAULT_WEAPON_RANGE;
     projectile.distanceTraveled = 0;
     projectile.direction = direction; // Store direction for manual movement
     projectile.speed = speed; // Store speed for manual movement
