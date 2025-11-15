@@ -2737,6 +2737,9 @@ export function setupGameScene(k) {
         
         // Button handlers
         resumeButton.onClick(() => {
+            // Only allow clicking when pause menu is visible
+            if (!k.paused || resumeButton.hidden) return;
+
             k.paused = false;
             // Restore minimap mode
             if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
@@ -2756,6 +2759,9 @@ export function setupGameScene(k) {
         });
 
         quitButton.onClick(() => {
+            // Only allow clicking when pause menu is visible
+            if (!k.paused || quitButton.hidden) return;
+
             // Cleanup multiplayer
             if (isMultiplayerActive()) {
                 cleanupMultiplayer();
