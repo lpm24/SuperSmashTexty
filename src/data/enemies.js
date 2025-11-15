@@ -15,7 +15,7 @@ export const ENEMY_TYPES = {
         baseHealth: 25, // 20-30 range
         baseSpeed: 90, // 80-100 range
         size: 18,
-        baseXPValue: 6,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'rush',
         pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 9 // 8-10 range
@@ -26,7 +26,7 @@ export const ENEMY_TYPES = {
         baseHealth: 30, // 25-35 range
         baseSpeed: 70, // 60-80 range
         size: 18,
-        baseXPValue: 7,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'shoot',
         fireRate: 0.8, // Shots per second
         projectileSpeed: 200,
@@ -38,8 +38,9 @@ export const ENEMY_TYPES = {
         baseHealth: 45, // 40-50 range
         baseSpeed: 50, // 40-60 range
         size: 20,
-        baseXPValue: 8,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 11 // 10-12 range
     },
     slime: {
@@ -48,8 +49,9 @@ export const ENEMY_TYPES = {
         baseHealth: 12, // 10-15 range
         baseSpeed: 40, // 30-50 range
         size: 16,
-        baseXPValue: 4,
+        baseXPValue: 1, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 5,
         splits: true // Splits on death
     },
@@ -59,7 +61,7 @@ export const ENEMY_TYPES = {
         baseHealth: 10, // 8-12 range
         baseSpeed: 135, // 120-150 range
         size: 14,
-        baseXPValue: 5,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'erratic',
         damage: 6 // 5-7 range
     },
@@ -73,8 +75,9 @@ export const ENEMY_TYPES = {
         baseHealth: 20, // 15-25 range
         baseSpeed: 175, // 150-200 range (charge speed)
         size: 18,
-        baseXPValue: 8,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'charge',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 17, // 15-20 range
         chargeCooldown: 3 // Seconds between charges
     },
@@ -84,7 +87,7 @@ export const ENEMY_TYPES = {
         baseHealth: 60, // 50-70 range
         baseSpeed: 0, // Stationary
         size: 20,
-        baseXPValue: 10,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'turret',
         fireRate: 1.2, // Shots per second
         projectileSpeed: 250,
@@ -96,8 +99,9 @@ export const ENEMY_TYPES = {
         baseHealth: 125, // 100-150 range
         baseSpeed: 40, // 30-50 range
         size: 24,
-        baseXPValue: 15,
+        baseXPValue: 5, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 22 // 20-25 range
     },
     zippy: {
@@ -106,7 +110,7 @@ export const ENEMY_TYPES = {
         baseHealth: 7, // 5-10 range
         baseSpeed: 200, // 180-220 range
         size: 14,
-        baseXPValue: 6,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'erratic',
         damage: 5 // 4-6 range
     },
@@ -116,7 +120,7 @@ export const ENEMY_TYPES = {
         baseHealth: 25, // 20-30 range
         baseSpeed: 80, // 70-90 range
         size: 18,
-        baseXPValue: 8,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'rush',
         pathfindingMode: 'smart',
         damage: 8,
@@ -130,7 +134,7 @@ export const ENEMY_TYPES = {
         baseHealth: 35, // Slightly tankier
         baseSpeed: 60, // Slower, methodical movement
         size: 20,
-        baseXPValue: 12, // Higher reward for unique enemy
+        baseXPValue: 4, // Reduced by 3x for balance
         behavior: 'perimeter', // Walks around edge of map
         pathfindingMode: 'perimeter',
         damage: 10,
@@ -150,7 +154,7 @@ export const ENEMY_TYPES = {
         baseHealth: 70, // 60-80 range
         baseSpeed: 50, // 40-60 range
         size: 20,
-        baseXPValue: 12,
+        baseXPValue: 4, // Reduced by 3x for balance
         behavior: 'shoot',
         fireRate: 0.6, // Slower but more powerful
         projectileSpeed: 180,
@@ -162,8 +166,9 @@ export const ENEMY_TYPES = {
         baseHealth: 90, // 80-100 range
         baseSpeed: 40, // 30-50 range
         size: 22,
-        baseXPValue: 14,
+        baseXPValue: 5, // Reduced by 3x for balance
         behavior: 'shield',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 15,
         blocksProjectiles: true // Blocks from front (simplified for now)
     },
@@ -173,8 +178,9 @@ export const ENEMY_TYPES = {
         baseHealth: 250, // 200-300 range
         baseSpeed: 30, // 20-40 range
         size: 26,
-        baseXPValue: 20,
+        baseXPValue: 7, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 30 // 25-35 range
     },
     wraith: {
@@ -183,7 +189,7 @@ export const ENEMY_TYPES = {
         baseHealth: 20, // 15-25 range
         baseSpeed: 225, // 200-250 range
         size: 16,
-        baseXPValue: 10,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'teleport',
         damage: 13, // 12-15 range
         teleportCooldown: 4, // Seconds between teleports
@@ -195,7 +201,7 @@ export const ENEMY_TYPES = {
         baseHealth: 80, // 70-90 range
         baseSpeed: 40, // 30-50 range
         size: 20,
-        baseXPValue: 15,
+        baseXPValue: 5, // Reduced by 3x for balance
         behavior: 'spawner',
         damage: 8,
         spawnInterval: 6, // Spawn every 6 seconds
@@ -207,7 +213,7 @@ export const ENEMY_TYPES = {
         baseHealth: 35, // 30-40 range
         baseSpeed: 50, // 40-60 range
         size: 18,
-        baseXPValue: 10,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'buffer',
         damage: 6,
         buffRadius: 100, // Buffs enemies within this radius
@@ -223,7 +229,7 @@ export const ENEMY_TYPES = {
         baseHealth: 70, // 60-80 range
         baseSpeed: 40, // 30-50 range
         size: 20,
-        baseXPValue: 12,
+        baseXPValue: 4, // Reduced by 3x for balance
         behavior: 'healer',
         damage: 8,
         healRadius: 120, // Heals enemies within this radius
@@ -236,7 +242,7 @@ export const ENEMY_TYPES = {
         baseHealth: 25, // 20-30 range
         baseSpeed: 90, // 80-100 range
         size: 18,
-        baseXPValue: 9,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'teleportPlayer',
         damage: 8,
         teleportRange: 200, // Teleport player this distance
@@ -248,7 +254,7 @@ export const ENEMY_TYPES = {
         baseHealth: 60, // 50-70 range
         baseSpeed: 50, // 40-60 range
         size: 20,
-        baseXPValue: 11,
+        baseXPValue: 4, // Reduced by 3x for balance
         behavior: 'freeze',
         damage: 10,
         slowRadius: 80, // Slows player within this radius
@@ -260,8 +266,9 @@ export const ENEMY_TYPES = {
         baseHealth: 30, // 25-35 range
         baseSpeed: 80, // 70-90 range
         size: 18,
-        baseXPValue: 9,
+        baseXPValue: 3, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 8,
         lifesteal: 7 // 5-10 range, heals this much on hit
     },
@@ -275,8 +282,9 @@ export const ENEMY_TYPES = {
         baseHealth: 30,
         baseSpeed: 50,
         size: 20,
-        baseXPValue: 5,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 8
     },
     tank: {
@@ -285,8 +293,9 @@ export const ENEMY_TYPES = {
         baseHealth: 80,
         baseSpeed: 30,
         size: 24,
-        baseXPValue: 12,
+        baseXPValue: 4, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 20
     },
     fast: {
@@ -295,8 +304,9 @@ export const ENEMY_TYPES = {
         baseHealth: 20,
         baseSpeed: 90,
         size: 16,
-        baseXPValue: 7,
+        baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'rush',
+        pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 6
     }
 };

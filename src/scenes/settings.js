@@ -1,5 +1,7 @@
 // Settings scene - allows players to configure game options
 import { getSettings, updateSetting, resetSettings, saveSettings } from '../systems/settings.js';
+import { getPlayerName, setPlayerName, getInviteCode } from '../systems/metaProgression.js';
+import { generateRandomName } from '../systems/nameGenerator.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -7,13 +9,177 @@ import {
     formatButtonText
 } from '../config/uiConfig.js';
 
+/**
+ * Show name edit dialog
+ */
+function showNameEditDialog(k, currentName, onSave) {
+    // Overlay
+    const overlay = k.add([
+        k.rect(k.width(), k.height()),
+        k.pos(0, 0),
+        k.color(0, 0, 0),
+        k.opacity(0.7),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY)
+    ]);
+
+    // Dialog box
+    const dialogWidth = 400;
+    const dialogHeight = 180;
+    const dialogBg = k.add([
+        k.rect(dialogWidth, dialogHeight),
+        k.pos(k.width() / 2, k.height() / 2),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(3, k.rgb(...UI_COLORS.BORDER)),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 1)
+    ]);
+
+    // Title
+    k.add([
+        k.text('Edit Player Name', { size: UI_TEXT_SIZES.LABEL }),
+        k.pos(k.width() / 2, k.height() / 2 - 60),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    // Input display background
+    const inputBg = k.add([
+        k.rect(300, 40),
+        k.pos(k.width() / 2, k.height() / 2 - 10),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_LIGHT),
+        k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    // Input display
+    let inputText = currentName;
+    const inputDisplay = k.add([
+        k.text(inputText, { size: UI_TEXT_SIZES.LABEL }),
+        k.pos(k.width() / 2, k.height() / 2 - 10),
+        k.anchor('center'),
+        k.color(...UI_COLORS.GOLD),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3)
+    ]);
+
+    // Error/Info message
+    const infoMsg = k.add([
+        k.text('(Max 20 characters)', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2, k.height() / 2 + 25),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_SECONDARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    // Close function
+    function closeDialog() {
+        k.destroy(overlay);
+        k.destroy(dialogBg);
+        inputBg.destroy();
+        inputDisplay.destroy();
+        infoMsg.destroy();
+    }
+
+    // Cancel button
+    const cancelButton = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 60),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(2, k.rgb(...UI_COLORS.TEXT_PRIMARY)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    k.add([
+        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 60),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3)
+    ]);
+
+    cancelButton.onClick(() => {
+        closeDialog();
+    });
+
+    // Save button
+    const saveButton = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 60),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    k.add([
+        k.text('Save', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 60),
+        k.anchor('center'),
+        k.color(...UI_COLORS.GOLD),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3)
+    ]);
+
+    saveButton.onClick(() => {
+        if (inputText.trim().length > 0) {
+            onSave(inputText.trim());
+            closeDialog();
+        } else {
+            infoMsg.text = 'Name cannot be empty!';
+            infoMsg.color = k.rgb(255, 100, 100);
+        }
+    });
+
+    // Keyboard input
+    k.onCharInput((ch) => {
+        // Allow letters, numbers, spaces
+        if (inputText.length < 20 && /[a-zA-Z0-9 ]/.test(ch)) {
+            inputText += ch;
+            inputDisplay.text = inputText;
+            infoMsg.text = '(Max 20 characters)';
+            infoMsg.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
+        }
+    });
+
+    k.onKeyPress('backspace', () => {
+        if (inputText.length > 0) {
+            inputText = inputText.slice(0, -1);
+            inputDisplay.text = inputText || ' '; // Show space if empty
+        }
+    });
+
+    k.onKeyPress('escape', () => {
+        closeDialog();
+    });
+
+    k.onKeyPress('enter', () => {
+        if (inputText.trim().length > 0) {
+            onSave(inputText.trim());
+            closeDialog();
+        }
+    });
+}
+
 export function setupSettingsScene(k) {
     k.scene('settings', (args) => {
         // Check if we came from game (pause menu)
         const fromGame = args?.fromGame || false;
         
         let settings = getSettings();
-        let currentTab = 'audio'; // audio, controls, visual, gameplay
+        let currentTab = 'player'; // player, audio, controls, visual, gameplay
         
         // Background
         k.add([
@@ -42,6 +208,7 @@ export function setupSettingsScene(k) {
         const tabHeight = 30;
         
         const tabs = [
+            { key: 'player', label: 'Player' },
             { key: 'audio', label: 'Audio' },
             { key: 'controls', label: 'Controls' },
             { key: 'visual', label: 'Visual' },
@@ -65,7 +232,7 @@ export function setupSettingsScene(k) {
                 k.outline(2, k.rgb(150, 150, 150)),
                 k.area(),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             const tabLabel = k.add([
@@ -74,7 +241,7 @@ export function setupSettingsScene(k) {
                 k.anchor('center'),
                 k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
                 k.fixed(),
-                k.z(1001)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             
             tabBg.onClick(() => {
@@ -121,8 +288,138 @@ export function setupSettingsScene(k) {
             // Display settings based on current tab
             const startY = contentY + 20;
             let currentY = startY;
-            
-            if (currentTab === 'audio') {
+
+            if (currentTab === 'player') {
+                // Player Name Section
+                const nameLabel = k.add([
+                    k.text('Player Name:', { size: UI_TEXT_SIZES.LABEL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+                settingsItems.push(nameLabel);
+                currentY += 40;
+
+                // Current name display with edit button
+                let currentName = getPlayerName();
+                const nameDisplayBg = k.add([
+                    k.rect(300, 40),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.BG_LIGHT),
+                    k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const nameDisplay = k.add([
+                    k.text(currentName, { size: UI_TEXT_SIZES.LABEL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.GOLD),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                settingsItems.push(nameDisplayBg, nameDisplay);
+                currentY += 60;
+
+                // Edit Name button
+                const editButton = k.add([
+                    k.rect(140, 35),
+                    k.pos(k.width() / 2 - 80, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.BG_MEDIUM),
+                    k.outline(2, k.rgb(...UI_COLORS.TEXT_PRIMARY)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const editText = k.add([
+                    k.text('Edit Name', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(k.width() / 2 - 80, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                editButton.onClick(() => {
+                    showNameEditDialog(k, currentName, (newName) => {
+                        setPlayerName(newName);
+                        nameDisplay.text = newName;
+                        currentName = newName;
+                    });
+                });
+
+                // Randomize button
+                const randomButton = k.add([
+                    k.rect(140, 35),
+                    k.pos(k.width() / 2 + 80, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.BG_MEDIUM),
+                    k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const randomText = k.add([
+                    k.text('Randomize', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(k.width() / 2 + 80, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.GOLD),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                randomButton.onClick(() => {
+                    const newName = generateRandomName();
+                    setPlayerName(newName);
+                    nameDisplay.text = newName;
+                    currentName = newName;
+                });
+
+                settingsItems.push(editButton, editText, randomButton, randomText);
+                currentY += 60;
+
+                // Invite Code Section
+                const codeLabel = k.add([
+                    k.text('Your Invite Code:', { size: UI_TEXT_SIZES.LABEL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+                settingsItems.push(codeLabel);
+                currentY += 40;
+
+                const inviteCode = getInviteCode();
+                const codeDisplay = k.add([
+                    k.text(inviteCode, { size: UI_TEXT_SIZES.TITLE }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.GOLD),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+                settingsItems.push(codeDisplay);
+                currentY += 50;
+
+                const codeNote = k.add([
+                    k.text('Share this code with friends to join your party!', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+                settingsItems.push(codeNote);
+
+            } else if (currentTab === 'audio') {
                 // Master Volume
                 currentY = addVolumeSlider(k, 'Master Volume', settings.audio.masterVolume, currentY, (value) => {
                     updateSetting('audio', 'masterVolume', value);
@@ -161,7 +458,7 @@ export function setupSettingsScene(k) {
                         k.anchor('left'),
                         k.color(200, 200, 200),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
                     
                     // Key display (moved right for more space)
@@ -172,7 +469,7 @@ export function setupSettingsScene(k) {
                         k.color(50, 50, 70),
                         k.outline(2, k.rgb(100, 100, 120)),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
                     
                     const keyText = k.add([
@@ -181,7 +478,7 @@ export function setupSettingsScene(k) {
                         k.anchor('center'),
                         k.color(255, 255, 255),
                         k.fixed(),
-                        k.z(1001)
+                        k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
                     
                     settingsItems.push(labelText, keyDisplay, keyText);
@@ -196,7 +493,7 @@ export function setupSettingsScene(k) {
                         k.anchor('center'),
                         k.color(150, 150, 150),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
                     settingsItems.push(noteText);
                 }
@@ -236,7 +533,7 @@ export function setupSettingsScene(k) {
                         k.anchor('center'),
                         k.color(150, 150, 150),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
                     settingsItems.push(noteText);
                 }
@@ -252,7 +549,7 @@ export function setupSettingsScene(k) {
                 k.anchor('left'),
                 k.color(200, 200, 200),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             // Slider track (moved right for more space)
@@ -266,7 +563,7 @@ export function setupSettingsScene(k) {
                 k.outline(2, k.rgb(100, 100, 120)),
                 k.area(),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             // Helper function to get gradient color based on value (0-1)
@@ -301,7 +598,7 @@ export function setupSettingsScene(k) {
                 k.anchor('center'),
                 k.color(fillColor.r, fillColor.g, fillColor.b),
                 k.fixed(),
-                k.z(1001)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             
             // Slider handle
@@ -324,7 +621,7 @@ export function setupSettingsScene(k) {
                 k.anchor('left'),
                 k.color(255, 255, 255),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             // Slider interaction
@@ -401,7 +698,7 @@ export function setupSettingsScene(k) {
                 k.anchor('left'),
                 k.color(200, 200, 200),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             // Toggle background (moved right for more space)
@@ -415,7 +712,7 @@ export function setupSettingsScene(k) {
                 k.outline(2, k.rgb(100, 100, 120)),
                 k.area(),
                 k.fixed(),
-                k.z(1000)
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
             
             // Toggle handle
@@ -428,7 +725,7 @@ export function setupSettingsScene(k) {
                 k.color(255, 255, 255),
                 k.outline(1, k.rgb(200, 200, 200)),
                 k.fixed(),
-                k.z(1001)
+                k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             
             // Toggle text
@@ -472,7 +769,7 @@ export function setupSettingsScene(k) {
             k.outline(2, k.rgb(150, 100, 100)),
             k.area(),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
         
         const resetText = k.add([
@@ -481,7 +778,7 @@ export function setupSettingsScene(k) {
             k.anchor('center'),
             k.color(255, 200, 200),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         resetButton.onClick(() => {
@@ -501,7 +798,7 @@ export function setupSettingsScene(k) {
             k.outline(2, k.rgb(150, 150, 150)),
             k.area(),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
         
         const backText = k.add([
@@ -510,7 +807,7 @@ export function setupSettingsScene(k) {
             k.anchor('center'),
             k.color(200, 200, 200),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         backButton.onClick(() => {

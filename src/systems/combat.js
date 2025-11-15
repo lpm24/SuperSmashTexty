@@ -14,6 +14,9 @@
 // Entity imports
 import { createProjectile } from '../entities/projectile.js';
 
+// System imports
+import { decrementPowerupAmmo } from './powerupWeapons.js';
+
 // Configuration imports
 import {
     COMBAT_CONFIG,
@@ -38,9 +41,58 @@ import {
     spawnDeathExplosion
 } from './particleSystem.js';
 
+// Helper function to apply knockback while respecting collisions and room boundaries
+function applySafeKnockback(k, entity, knockbackDir, knockbackAmount) {
+    if (!entity || !entity.exists()) return;
+
+    const roomMargin = 20; // Keep entities away from room edges
+    const maxX = k.width() - roomMargin;
+    const maxY = k.height() - roomMargin;
+    const minX = roomMargin;
+    const minY = roomMargin;
+
+    // Calculate new position
+    const newX = entity.pos.x + knockbackDir.x * knockbackAmount;
+    const newY = entity.pos.y + knockbackDir.y * knockbackAmount;
+
+    // Constrain to room boundaries first
+    const boundedX = Math.max(minX, Math.min(maxX, newX));
+    const boundedY = Math.max(minY, Math.min(maxY, newY));
+
+    // Store original position
+    const originalX = entity.pos.x;
+    const originalY = entity.pos.y;
+
+    // Try to move to new position
+    entity.pos.x = boundedX;
+    entity.pos.y = boundedY;
+
+    // Check for collision with walls or obstacles
+    const walls = k.get('wall');
+    const obstacles = k.get('obstacle');
+    const allObstacles = [...walls, ...obstacles];
+
+    let colliding = false;
+    for (const obstacle of allObstacles) {
+        if (!obstacle.exists()) continue;
+
+        // Check if entity area overlaps with obstacle
+        if (entity.isColliding && entity.isColliding(obstacle)) {
+            colliding = true;
+            break;
+        }
+    }
+
+    // If colliding, revert to original position
+    if (colliding) {
+        entity.pos.x = originalX;
+        entity.pos.y = originalY;
+    }
+}
+
 export function setupCombatSystem(k, player) {
     let lastFireTime = 0;
-    
+
     // Initialize orbital weapons if applicable
     if (player.weaponKey === 'orbital') {
         initializeOrbitalWeapons(k, player);
@@ -80,7 +132,7 @@ export function setupCombatSystem(k, player) {
                     directions.push(baseDirection);
                 } else if (spreadAngle > 0) {
                     // Spread pattern (shotgun)
-                    const angleStep = spreadAngle / (projectileCount - 1);
+                    const angleStep = projectileCount > 1 ? spreadAngle / (projectileCount - 1) : 0;
                     const startAngle = -spreadAngle / 2;
                     for (let i = 0; i < projectileCount; i++) {
                         const angle = startAngle + (angleStep * i);
@@ -126,7 +178,25 @@ export function setupCombatSystem(k, player) {
                         playWeaponFire(player.weaponKey);
 
                         // Handle special weapon types
-                        if (player.weaponKey === 'explosive') {
+                        if (player.weaponKey === 'flamethrower') {
+                            // Flamethrower - create projectile with burn DoT effect
+                            const projectile = createProjectile(k, player.pos.x, player.pos.y, direction,
+                                player.projectileSpeed, finalDamage,
+                                player.piercing || 0, player.obstaclePiercing || 0, isCrit, weaponRange);
+
+                            // Apply weapon visual properties
+                            if (player.weaponDef) {
+                                projectile.useWeaponVisual(player.weaponDef);
+                            }
+
+                            // Add burn DoT effect
+                            const burnDamagePerTick = Math.floor(finalDamage * 0.3); // 30% of hit damage per tick
+                            const burnDuration = 2.0; // 2 seconds of burn
+                            const dotMultiplier = player.fireDotMultiplier || 1.0;
+
+                            projectile.burnDamage = Math.floor(burnDamagePerTick * dotMultiplier);
+                            projectile.burnDuration = burnDuration;
+                        } else if (player.weaponKey === 'explosive') {
                             // Explosive launcher - create explosive projectile
                             const projectile = createExplosiveProjectile(k, player.pos.x, player.pos.y, direction,
                                 player.projectileSpeed, finalDamage,
@@ -157,6 +227,9 @@ export function setupCombatSystem(k, player) {
                 });
 
                 lastFireTime = time;
+
+                // Decrement powerup weapon ammo if applicable
+                decrementPowerupAmmo(player);
             }
         }
     });
@@ -217,12 +290,12 @@ export function setupCombatSystem(k, player) {
     // Collision: Projectile hits Enemy
     k.onCollide('projectile', 'enemy', (projectile, enemy) => {
         if (k.paused) return;
-        
+
         // Only player projectiles can hit enemies (enemy/boss projectiles pass through)
         if (projectile.isEnemyProjectile || projectile.isBossProjectile) {
             return;
         }
-        
+
         // Check if this projectile has already hit this enemy (for piercing)
         if (projectile.piercedEnemies && projectile.piercedEnemies.has(enemy)) {
             return; // Already hit this enemy
@@ -236,6 +309,13 @@ export function setupCombatSystem(k, player) {
             enemy.takeDamage(projectile.damage);
         } else {
             enemy.hurt(projectile.damage);
+        }
+
+        // Apply fire DoT if projectile has burn effect
+        if (projectile.burnDamage && projectile.burnDuration) {
+            enemy.burnDamage = projectile.burnDamage;
+            enemy.burnDuration = projectile.burnDuration;
+            enemy.burnTimer = 0;
         }
 
         // Spawn blood splatter particle effect
@@ -262,8 +342,7 @@ export function setupCombatSystem(k, player) {
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
             const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_ENEMY_FROM_PROJECTILE;
-            enemy.pos.x += normalized.x * knockbackAmount;
-            enemy.pos.y += normalized.y * knockbackAmount;
+            applySafeKnockback(k, enemy, normalized, knockbackAmount);
         }
 
         // Spawn hit impact particle effect
@@ -352,6 +431,13 @@ export function setupCombatSystem(k, player) {
         // Use takeDamage to handle armor/shields
         miniboss.takeDamage(finalDamage);
 
+        // Apply fire DoT if projectile has burn effect
+        if (projectile.burnDamage && projectile.burnDuration) {
+            miniboss.burnDamage = projectile.burnDamage;
+            miniboss.burnDuration = projectile.burnDuration;
+            miniboss.burnTimer = 0;
+        }
+
         // Spawn blood splatter particle effect
         spawnBloodSplatter(k, miniboss.pos.x, miniboss.pos.y, { isCrit: projectile.isCrit });
 
@@ -401,6 +487,13 @@ export function setupCombatSystem(k, player) {
             boss.hurt(projectile.damage);
         }
 
+        // Apply fire DoT if projectile has burn effect
+        if (projectile.burnDamage && projectile.burnDuration) {
+            boss.burnDamage = projectile.burnDamage;
+            boss.burnDuration = projectile.burnDuration;
+            boss.burnTimer = 0;
+        }
+
         // Spawn blood splatter particle effect
         spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
 
@@ -422,9 +515,8 @@ export function setupCombatSystem(k, player) {
         const knockbackDist = knockbackDir.len();
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
-            const knockbackAmount = 10; // Reduced knockback for bosses
-            boss.pos.x += normalized.x * knockbackAmount;
-            boss.pos.y += normalized.y * knockbackAmount;
+            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_BOSS_FROM_PROJECTILE;
+            applySafeKnockback(k, boss, normalized, knockbackAmount);
         }
 
         // Spawn hit impact particle effect
@@ -460,8 +552,12 @@ export function setupCombatSystem(k, player) {
         const baseDamage = enemy.damage || COMBAT_CONFIG.BASE_ENEMY_DAMAGE;
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
-        player.invulnerable = true;
-        player.invulnerableTime = player.invulnerableDuration;
+
+        // Set invulnerability frames (don't reset timer if already invulnerable)
+        if (!player.invulnerable) {
+            player.invulnerable = true;
+            player.invulnerableTime = player.invulnerableDuration;
+        }
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
@@ -485,8 +581,7 @@ export function setupCombatSystem(k, player) {
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
             const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_ENEMY;
-            enemy.pos.x += normalized.x * knockbackAmount;
-            enemy.pos.y += normalized.y * knockbackAmount;
+            applySafeKnockback(k, enemy, normalized, knockbackAmount);
         }
 
         // Initial hit flash (will be overridden by immunity flash)
@@ -513,8 +608,12 @@ export function setupCombatSystem(k, player) {
         }
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, 0);
         player.hurt(finalDamage);
-        player.invulnerable = true;
-        player.invulnerableTime = player.invulnerableDuration;
+
+        // Set invulnerability frames (don't reset timer if already invulnerable)
+        if (!player.invulnerable) {
+            player.invulnerable = true;
+            player.invulnerableTime = player.invulnerableDuration;
+        }
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
@@ -527,9 +626,8 @@ export function setupCombatSystem(k, player) {
         const knockbackDist = knockbackDir.len();
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
-            const knockbackAmount = 25; // Knockback distance
-            miniboss.pos.x += normalized.x * knockbackAmount;
-            miniboss.pos.y += normalized.y * knockbackAmount;
+            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_MINIBOSS;
+            applySafeKnockback(k, miniboss, normalized, knockbackAmount);
         }
         
         // Visual feedback
@@ -562,8 +660,12 @@ export function setupCombatSystem(k, player) {
 
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
-        player.invulnerable = true;
-        player.invulnerableTime = player.invulnerableDuration;
+
+        // Set invulnerability frames (don't reset timer if already invulnerable)
+        if (!player.invulnerable) {
+            player.invulnerable = true;
+            player.invulnerableTime = player.invulnerableDuration;
+        }
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
@@ -576,9 +678,8 @@ export function setupCombatSystem(k, player) {
         const knockbackDist = knockbackDir.len();
         if (knockbackDist > 0) {
             const normalized = knockbackDir.unit();
-            const knockbackAmount = 15; // Reduced knockback for bosses (they're heavier)
-            boss.pos.x += normalized.x * knockbackAmount;
-            boss.pos.y += normalized.y * knockbackAmount;
+            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_BOSS;
+            applySafeKnockback(k, boss, normalized, knockbackAmount);
         }
         
         // Initial hit flash (will be overridden by immunity flash)
@@ -608,8 +709,12 @@ export function setupCombatSystem(k, player) {
         const damageAfterReduction = projectile.damage * (1 - (player.damageReduction || 0));
         const finalDamage = Math.max(1, damageAfterReduction - (player.defense || 0));
         player.hurt(finalDamage);
-        player.invulnerable = true;
-        player.invulnerableTime = player.invulnerableDuration;
+
+        // Set invulnerability frames (don't reset timer if already invulnerable)
+        if (!player.invulnerable) {
+            player.invulnerable = true;
+            player.invulnerableTime = player.invulnerableDuration;
+        }
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });

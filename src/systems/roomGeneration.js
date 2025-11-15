@@ -8,7 +8,17 @@
  * - Floor-based color theming
  * - Safe spawn zone enforcement
  * - Progressive complexity (more obstacles on higher floors)
+ * - Obstacle boundary constraints
+ * - Room-to-room variation
  */
+
+// Room configuration
+const ROOM_WIDTH = 800;
+const ROOM_HEIGHT = 600;
+const ROOM_MARGIN = 20;
+
+// Track last used template to avoid repetition
+let lastRoomTemplate = null;
 
 /**
  * Room template definitions
@@ -72,13 +82,38 @@ export const ROOM_TEMPLATES = {
     }
 };
 
+/**
+ * Constrain obstacle position to stay within room boundaries
+ * @param {number} x - Obstacle center x position
+ * @param {number} y - Obstacle center y position
+ * @param {number} width - Obstacle width
+ * @param {number} height - Obstacle height
+ * @returns {object} - Clamped {x, y} position
+ */
+export function constrainObstacleToRoom(x, y, width, height) {
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+
+    // Calculate boundaries (accounting for obstacle size)
+    const minX = ROOM_MARGIN + halfWidth;
+    const maxX = ROOM_WIDTH - ROOM_MARGIN - halfWidth;
+    const minY = ROOM_MARGIN + halfHeight;
+    const maxY = ROOM_HEIGHT - ROOM_MARGIN - halfHeight;
+
+    // Clamp position
+    const clampedX = Math.max(minX, Math.min(maxX, x));
+    const clampedY = Math.max(minY, Math.min(maxY, y));
+
+    return { x: clampedX, y: clampedY };
+}
+
 // Get color scheme for floor (visual progression)
 export function getFloorColors(k, floor) {
     // Color progression: darker/more intense as floors increase
     const baseHue = (floor * 30) % 360; // Rotate hue per floor
     const saturation = Math.min(100 + floor * 5, 150);
     const brightness = Math.max(150 - floor * 5, 100);
-    
+
     return {
         wallColor: k.rgb(
             Math.floor(brightness * 0.6),
@@ -109,9 +144,32 @@ export function getRandomRoomTemplate() {
 }
 
 // Get weighted random room template (can favor certain templates)
+// Avoids repeating the same template consecutively
 export function getWeightedRoomTemplate(floor) {
-    // Simple implementation - can be expanded with weights
-    // For now, all templates have equal weight
-    return getRandomRoomTemplate();
+    const templates = Object.keys(ROOM_TEMPLATES);
+
+    // Filter out the last template to avoid repetition
+    const availableTemplates = lastRoomTemplate
+        ? templates.filter(key => key !== lastRoomTemplate)
+        : templates;
+
+    // If somehow we filtered everything (shouldn't happen), use all templates
+    const templatePool = availableTemplates.length > 0 ? availableTemplates : templates;
+
+    // Select random template from pool
+    const randomKey = templatePool[Math.floor(Math.random() * templatePool.length)];
+
+    // Update last template tracker
+    lastRoomTemplate = randomKey;
+
+    return {
+        key: randomKey,
+        ...ROOM_TEMPLATES[randomKey]
+    };
+}
+
+// Reset room template history (call when starting new run)
+export function resetRoomTemplateHistory() {
+    lastRoomTemplate = null;
 }
 

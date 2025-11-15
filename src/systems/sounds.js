@@ -522,6 +522,50 @@ export function playXPPickup() {
 }
 
 /**
+ * Currency/cash pickup sound
+ */
+export function playCurrencyPickup() {
+  const variation = Math.random();
+
+  if (variation < 0.33) {
+    // Bright coin "ching" - two quick tones
+    playTone(vary(800, 0.2), 0.06, 'sine', 0.16, {
+      attack: 0.005,
+      decay: 0.04
+    });
+    setTimeout(() => {
+      playTone(vary(1000, 0.2), 0.05, 'triangle', 0.14, {
+        attack: 0.005,
+        decay: 0.03
+      });
+    }, 30);
+  } else if (variation < 0.66) {
+    // Metallic ping
+    playTone(vary(900, 0.2), 0.08, 'triangle', 0.16, {
+      attack: 0.005,
+      decay: 0.05,
+      pitchBend: 0.85
+    });
+    playTone(vary(1200, 0.2), 0.06, 'sine', 0.12, {
+      attack: 0.01,
+      decay: 0.04
+    });
+  } else {
+    // Cash register "ka-ching"
+    playTone(vary(750, 0.2), 0.05, 'square', 0.14, {
+      attack: 0.005,
+      decay: 0.03
+    });
+    setTimeout(() => {
+      playTone(vary(1100, 0.2), 0.07, 'sine', 0.16, {
+        attack: 0.005,
+        decay: 0.05
+      });
+    }, 40);
+  }
+}
+
+/**
  * Level up sound
  */
 export function playLevelUp() {

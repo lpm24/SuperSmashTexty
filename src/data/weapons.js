@@ -3,9 +3,10 @@
 export const WEAPON_DEFINITIONS = {
     pistol: {
         name: 'Basic Pistol',
+        icon: '⌐', // Gun icon
         char: '•', // Bullet point
         color: [255, 255, 255],
-        fireRate: 1.5, // Shots per second
+        fireRate: 3.75, // Shots per second (2.5x multiplier)
         projectileSpeed: 300,
         baseDamage: 10,
         projectileCount: 1,
@@ -20,9 +21,10 @@ export const WEAPON_DEFINITIONS = {
     },
     smg: {
         name: 'Rapid Fire SMG',
+        icon: '▓', // Rapid fire icon
         char: '│', // Box drawing vertical
         color: [100, 200, 255],
-        fireRate: 3.0, // Shots per second
+        fireRate: 7.5, // Shots per second (2.5x multiplier)
         projectileSpeed: 350,
         baseDamage: 6,
         projectileCount: 1,
@@ -37,9 +39,10 @@ export const WEAPON_DEFINITIONS = {
     },
     shotgun: {
         name: 'Spread Shotgun',
+        icon: '╬', // Spread pattern icon
         char: '◦', // White bullet
         color: [255, 200, 100],
-        fireRate: 0.8, // Shots per second
+        fireRate: 2.0, // Shots per second (2.5x multiplier)
         projectileSpeed: 250,
         baseDamage: 8, // Per pellet
         projectileCount: 3, // 3-5 pellets
@@ -54,9 +57,10 @@ export const WEAPON_DEFINITIONS = {
     },
     sniper: {
         name: 'Sniper Rifle',
+        icon: '━', // Long barrel icon
         char: '→', // Arrow
         color: [100, 255, 255],
-        fireRate: 0.4, // Very slow
+        fireRate: 1.0, // Very slow (2.5x multiplier)
         projectileSpeed: 500, // Very fast
         baseDamage: 20, // Very high
         projectileCount: 1,
@@ -71,9 +75,10 @@ export const WEAPON_DEFINITIONS = {
     },
     flamethrower: {
         name: 'Flame Thrower',
+        icon: '≋', // Flame wave icon
         char: '═', // Double line
         color: [255, 150, 50],
-        fireRate: 5.0, // Continuous fire (ticks per second)
+        fireRate: 12.5, // Continuous fire (ticks per second) (2.5x multiplier)
         projectileSpeed: 200,
         baseDamage: 8, // Per tick
         projectileCount: 1,
@@ -88,6 +93,7 @@ export const WEAPON_DEFINITIONS = {
     },
     orbital: {
         name: 'Orbital Weapons',
+        icon: '◎', // Orbital icon
         char: '○', // White circle
         color: [100, 200, 255],
         fireRate: 0, // No firing - passive orbs
@@ -107,9 +113,10 @@ export const WEAPON_DEFINITIONS = {
     },
     explosive: {
         name: 'Explosive Launcher',
+        icon: '◉', // Explosion icon
         char: '●', // Black circle
         color: [255, 100, 50],
-        fireRate: 0.6, // Slow fire rate
+        fireRate: 1.5, // Slow fire rate (2.5x multiplier)
         projectileSpeed: 200, // Slow, visible
         baseDamage: 25, // Base explosion damage
         projectileCount: 1,
@@ -126,9 +133,10 @@ export const WEAPON_DEFINITIONS = {
     },
     chainLightning: {
         name: 'Chain Lightning',
+        icon: '⚡', // Lightning icon
         char: '⚡', // Lightning bolt
         color: [255, 255, 100],
-        fireRate: 1.2, // Shots per second
+        fireRate: 3.0, // Shots per second (2.5x multiplier)
         projectileSpeed: 400, // Fast
         baseDamage: 12, // Base damage
         projectileCount: 1,

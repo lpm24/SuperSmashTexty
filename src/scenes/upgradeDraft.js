@@ -79,10 +79,27 @@ export function showUpgradeDraft(k, player, onSelect) {
             'upgradeCard'
         ]);
 
+        // Upgrade icon (large and prominent)
+        if (upgrade.icon) {
+            const iconColor = upgrade.category === 'passive'
+                ? UI_COLORS.SUCCESS
+                : (upgrade.weaponKey ? UI_COLORS.WARNING : UI_COLORS.INFO);
+
+            k.add([
+                k.text(upgrade.icon, { size: 48 }),
+                k.pos(cardX, cardY - 50),
+                k.anchor('center'),
+                k.color(...iconColor),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 2),
+                'upgradeUI'
+            ]);
+        }
+
         // Upgrade name (with width constraint to prevent overflow)
         const nameText = k.add([
             k.text(upgrade.name, { size: UI_TEXT_SIZES.BUTTON, width: cardWidth - 20 }),
-            k.pos(cardX, cardY - 40),
+            k.pos(cardX, cardY - 5),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
@@ -94,7 +111,7 @@ export function showUpgradeDraft(k, player, onSelect) {
         const description = getUpgradeDescription(upgrade, player);
         const descText = k.add([
             k.text(description, { size: UI_TEXT_SIZES.BODY, width: cardWidth - 20 }),
-            k.pos(cardX, cardY + 10),
+            k.pos(cardX, cardY + 30),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),

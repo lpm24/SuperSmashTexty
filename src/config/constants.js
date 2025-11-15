@@ -178,6 +178,12 @@ export const PICKUP_CONFIG = {
     XP_PULSE_AMOUNT: 0.2, // Amount of pulse scaling (0.2 = 20% scale change)
     XP_COLOR: [100, 255, 100], // Green
 
+    // Currency Pickups
+    CURRENCY_LIFETIME: 15, // Seconds before currency despawns (longer than XP)
+    CURRENCY_PULSE_SPEED: 4, // Speed of pulse animation
+    CURRENCY_PULSE_AMOUNT: 0.15, // Amount of pulse scaling
+    CURRENCY_COLOR: [255, 215, 0], // Gold
+
     // Magnetization
     MAGNETIZE_SPEED: 200, // Speed at which pickups move toward player when magnetized (pixels/second)
     MAGNETIZE_ACCELERATION: 50, // Acceleration of magnetized pickups (pixels/second²)
@@ -198,8 +204,8 @@ export const PERFORMANCE_CONFIG = {
 
     // Max entities (safety limits)
     MAX_PROJECTILES: 500,
-    MAX_ENEMIES: 100,
-    MAX_PICKUPS: 200,
+    MAX_ENEMIES: 300, // Increased for 3x enemy count
+    MAX_PICKUPS: 600, // Increased for 3x pickups
 };
 
 // =============================================================================

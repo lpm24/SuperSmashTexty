@@ -12,13 +12,19 @@
 
 // Configuration imports
 import { WEAPON_CONFIG } from '../config/constants.js';
+import { registerProjectile, isHost, isMultiplayerActive } from '../systems/multiplayerGame.js';
 
 export function createProjectile(k, x, y, direction, speed, damage, piercing = 0, obstaclePiercing = 0, isCrit = false, maxRange = null) {
+    // Calculate rotation angle from direction vector
+    // Add 90 degrees offset since most bullet characters (like │) are vertical by default
+    const angle = (Math.atan2(direction.y, direction.x) * (180 / Math.PI)) + 90;
+
     const projectile = k.add([
         k.text('*', { size: 16 }),
         k.pos(x, y),
         k.anchor('center'),
         k.color(isCrit ? 255 : 255, isCrit ? 200 : 255, isCrit ? 0 : 100), // Orange/red for crits
+        k.rotate(angle), // Rotate to face direction of travel
         k.area(),
         'projectile'
     ]);
@@ -76,6 +82,11 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
             k.destroy(projectile);
         }
     });
+
+    // Multiplayer: Register projectile for network sync if host
+    if (isMultiplayerActive() && isHost()) {
+        registerProjectile(projectile);
+    }
 
     return projectile;
 }

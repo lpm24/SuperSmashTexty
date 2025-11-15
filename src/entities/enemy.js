@@ -17,6 +17,7 @@ import { getEnemyDefinition } from '../data/enemies.js';
 
 // System imports
 import { getSmartMoveDirection, getPerimeterMoveDirection } from '../systems/pathfinding.js';
+import { registerEnemy, isHost, isMultiplayerActive } from '../systems/multiplayerGame.js';
 
 export function createEnemy(k, x, y, type = 'basic', floor = 1) {
     const baseConfig = getEnemyDefinition(type);
@@ -513,8 +514,8 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
         if (k.paused) return;
         
         // Shield regeneration (if shields exist and regen rate > 0)
-        // Only regen if cooldown has expired (not damaged recently)
-        if (enemy.shieldRegenRate > 0 && enemy.shieldHealth < enemy.maxShieldHealth) {
+        // Only regen if cooldown has expired (not damaged recently) and enemy is alive
+        if (enemy.shieldRegenRate > 0 && enemy.shieldHealth < enemy.maxShieldHealth && enemy.hp() > 0 && !enemy.isDead) {
             // Update cooldown timer
             if (enemy.shieldRegenCooldown > 0) {
                 enemy.shieldRegenCooldown -= k.dt();
@@ -537,7 +538,39 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                 }
             }
         }
-        
+
+        // Process burn DoT (Damage over Time) from flamethrower
+        if (enemy.burnDuration > 0 && enemy.hp() > 0 && !enemy.isDead) {
+            enemy.burnTimer = (enemy.burnTimer || 0) + k.dt();
+            const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
+
+            if (enemy.burnTimer >= burnTickInterval) {
+                // Deal burn damage
+                if (enemy.takeDamage) {
+                    enemy.takeDamage(enemy.burnDamage);
+                } else {
+                    enemy.hurt(enemy.burnDamage);
+                }
+
+                // Visual feedback for burn damage (orange tint)
+                enemy.color = k.rgb(255, 150, 50);
+                k.wait(0.1, () => {
+                    if (enemy.exists()) {
+                        enemy.color = k.rgb(...enemy.originalColor);
+                    }
+                });
+
+                enemy.burnTimer = 0;
+            }
+
+            // Decrease burn duration
+            enemy.burnDuration -= k.dt();
+            if (enemy.burnDuration <= 0) {
+                enemy.burnDamage = 0;
+                enemy.burnTimer = 0;
+            }
+        }
+
         const player = k.get('player')[0];
         if (!player || !player.exists()) return;
         
@@ -1064,6 +1097,12 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             });
         }
     });
+
+    // Multiplayer: Register enemy for network sync if host
+    if (isMultiplayerActive() && isHost()) {
+        registerEnemy(enemy);
+        enemy.enemyType = type; // Store type for sync
+    }
 
     return enemy;
 }

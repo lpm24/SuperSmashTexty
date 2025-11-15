@@ -314,8 +314,8 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
         if (k.paused) return;
         
         // Shield regeneration (if shields exist and regen rate > 0)
-        // Only regen if cooldown has expired (not damaged recently)
-        if (boss.shieldRegenRate > 0 && boss.shieldHealth < boss.maxShieldHealth) {
+        // Only regen if cooldown has expired (not damaged recently) and boss is alive
+        if (boss.shieldRegenRate > 0 && boss.shieldHealth < boss.maxShieldHealth && boss.hp() > 0 && !boss.isDead) {
             // Update cooldown timer
             if (boss.shieldRegenCooldown > 0) {
                 boss.shieldRegenCooldown -= k.dt();
@@ -338,7 +338,40 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
                 }
             }
         }
-        
+
+        // Process burn DoT (Damage over Time) from flamethrower
+        if (boss.burnDuration > 0 && boss.hp() > 0 && !boss.isDead) {
+            boss.burnTimer = (boss.burnTimer || 0) + k.dt();
+            const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
+
+            if (boss.burnTimer >= burnTickInterval) {
+                // Deal burn damage
+                if (boss.takeDamage) {
+                    boss.takeDamage(boss.burnDamage);
+                } else {
+                    boss.hurt(boss.burnDamage);
+                }
+
+                // Visual feedback for burn damage (orange tint)
+                const originalColor = boss.color;
+                boss.color = k.rgb(255, 150, 50);
+                k.wait(0.1, () => {
+                    if (boss.exists()) {
+                        boss.updateVisual();
+                    }
+                });
+
+                boss.burnTimer = 0;
+            }
+
+            // Decrease burn duration
+            boss.burnDuration -= k.dt();
+            if (boss.burnDuration <= 0) {
+                boss.burnDamage = 0;
+                boss.burnTimer = 0;
+            }
+        }
+
         const player = k.get('player')[0];
         if (!player || !player.exists()) return;
         
@@ -896,7 +929,7 @@ export function createTwinGuardians(k, door1, door2, floor = 1) {
     
     // Set up death handlers for enrage system
     meleeGuardian.onDeath(() => {
-        if (rangedGuardian.exists() && !rangedGuardian.enraged) {
+        if (rangedGuardian && rangedGuardian.exists() && !rangedGuardian.enraged) {
             // Enrage the ranged guardian
             rangedGuardian.enraged = true;
             rangedGuardian.speed = Math.floor(rangedGuardian.speed * 1.5); // +50% speed
@@ -905,9 +938,9 @@ export function createTwinGuardians(k, door1, door2, floor = 1) {
             rangedGuardian.color = k.rgb(255, 200, 0); // Yellow/orange when enraged
         }
     });
-    
+
     rangedGuardian.onDeath(() => {
-        if (meleeGuardian.exists() && !meleeGuardian.enraged) {
+        if (meleeGuardian && meleeGuardian.exists() && !meleeGuardian.enraged) {
             // Enrage the melee guardian
             meleeGuardian.enraged = true;
             meleeGuardian.speed = Math.floor(meleeGuardian.speed * 1.5); // +50% speed

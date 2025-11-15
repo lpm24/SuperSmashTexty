@@ -11,8 +11,9 @@ import { playMenuNav } from './sounds.js';
  * Minimap display modes
  */
 const MINIMAP_MODE = {
-    COMPACT: 'compact',
-    EXPANDED: 'expanded'
+    MINIMIZED: 'minimized',  // Just a map button
+    OPEN: 'open',            // Small minimap
+    MAXIMIZED: 'maximized'   // Large minimap with legend
 };
 
 /**
@@ -22,18 +23,19 @@ export class Minimap {
     constructor(k, floorMap) {
         this.k = k;
         this.floorMap = floorMap;
-        this.mode = MINIMAP_MODE.COMPACT;
+        this.mode = MINIMAP_MODE.MINIMIZED; // Start minimized
         this.elements = [];
 
         // Position
-        this.compactPos = { x: k.width() - 120, y: 30 };
-        this.expandedPos = { x: k.width() - 250, y: 30 };
+        this.buttonPos = { x: k.width() - 50, y: 70 };     // Minimized button position (moved down to avoid credit counter)
+        this.openPos = { x: k.width() - 120, y: 70 };      // Open minimap position
+        this.maximizedPos = { x: k.width() - 250, y: 70 }; // Maximized minimap position
 
         this.render();
     }
 
     /**
-     * Toggle between compact and expanded modes
+     * Cycle through minimap modes: minimized → open → maximized → minimized
      */
     toggle() {
         try {
@@ -41,7 +43,15 @@ export class Minimap {
         } catch (e) {
             console.warn('[Minimap] Sound playback failed:', e);
         }
-        this.mode = this.mode === MINIMAP_MODE.COMPACT ? MINIMAP_MODE.EXPANDED : MINIMAP_MODE.COMPACT;
+
+        // Cycle through states
+        if (this.mode === MINIMAP_MODE.MINIMIZED) {
+            this.mode = MINIMAP_MODE.OPEN;
+        } else if (this.mode === MINIMAP_MODE.OPEN) {
+            this.mode = MINIMAP_MODE.MAXIMIZED;
+        } else {
+            this.mode = MINIMAP_MODE.MINIMIZED;
+        }
 
         // Delay update to next frame to avoid destroying elements during click event
         this.k.wait(0, () => {
@@ -73,18 +83,68 @@ export class Minimap {
      * Render minimap based on current mode
      */
     render() {
-        if (this.mode === MINIMAP_MODE.COMPACT) {
-            this.renderCompact();
+        if (this.mode === MINIMAP_MODE.MINIMIZED) {
+            this.renderMinimized();
+        } else if (this.mode === MINIMAP_MODE.OPEN) {
+            this.renderOpen();
         } else {
-            this.renderExpanded();
+            this.renderMaximized();
         }
     }
 
     /**
-     * Render compact minimap (always visible, small)
+     * Render minimized state - just a small map button
      */
-    renderCompact() {
-        const { x, y } = this.compactPos;
+    renderMinimized() {
+        const { x, y } = this.buttonPos;
+        const buttonSize = 40;
+
+        // Button background
+        const bg = this.k.add([
+            this.k.rect(buttonSize, buttonSize),
+            this.k.pos(x, y),
+            this.k.anchor('center'),
+            this.k.color(30, 30, 50),
+            this.k.outline(2, this.k.rgb(100, 150, 200)),
+            this.k.fixed(),
+            this.k.z(900),
+            this.k.area(),
+            'minimap'
+        ]);
+
+        bg.onClick(() => this.toggle());
+        this.elements.push(bg);
+
+        // Map icon
+        const icon = this.k.add([
+            this.k.text('◧', { size: 24 }),
+            this.k.pos(x, y),
+            this.k.anchor('center'),
+            this.k.color(150, 180, 255),
+            this.k.fixed(),
+            this.k.z(901),
+            'minimap'
+        ]);
+        this.elements.push(icon);
+
+        // Floor number badge
+        const badge = this.k.add([
+            this.k.text(`${this.floorMap.floor}`, { size: 10 }),
+            this.k.pos(x + 12, y - 12),
+            this.k.anchor('center'),
+            this.k.color(255, 255, 100),
+            this.k.fixed(),
+            this.k.z(902),
+            'minimap'
+        ]);
+        this.elements.push(badge);
+    }
+
+    /**
+     * Render open state - small minimap view
+     */
+    renderOpen() {
+        const { x, y } = this.openPos;
         const cellSize = 12;
         const grid = this.floorMap.getGridForMinimap();
 
@@ -178,7 +238,7 @@ export class Minimap {
 
         // Click hint
         const hint = this.k.add([
-            this.k.text('(click)', { size: 8 }),
+            this.k.text('(click to expand)', { size: 8 }),
             this.k.pos(x + 60, y + 75),
             this.k.anchor('center'),
             this.k.color(120, 120, 140),
@@ -190,10 +250,10 @@ export class Minimap {
     }
 
     /**
-     * Render expanded minimap (toggled on)
+     * Render maximized state - large minimap with legend
      */
-    renderExpanded() {
-        const { x, y } = this.expandedPos;
+    renderMaximized() {
+        const { x, y } = this.maximizedPos;
         const cellSize = 18;
         const grid = this.floorMap.getGridForMinimap();
 
@@ -343,7 +403,7 @@ export class Minimap {
 
         // Close hint
         const hint = this.k.add([
-            this.k.text('(click to close)', { size: 9 }),
+            this.k.text('(click to minimize)', { size: 9 }),
             this.k.pos(x + width / 2, y + height - 10),
             this.k.anchor('center'),
             this.k.color(120, 120, 140),

@@ -69,11 +69,16 @@ export function createPlayer(k, x, y) {
     player.baseFireRate = weaponDef.fireRate;
     player.baseProjectileSpeed = weaponDef.projectileSpeed;
     player.baseProjectileDamage = weaponDef.baseDamage;
-    
-    // Weapon stats (from weapon definition)
+
+    // Apply character damage bonus to base weapon damage
+    const characterDamageBonus = charData.stats.damage || 10; // Default to 10 if not specified
+    const weaponBaseDamage = weaponDef.baseDamage;
+    const characterDamageMultiplier = characterDamageBonus / 10; // Normalize (10 is baseline)
+
+    // Weapon stats (from weapon definition + character bonuses)
     player.fireRate = weaponDef.fireRate;
     player.projectileSpeed = weaponDef.projectileSpeed;
-    player.projectileDamage = weaponDef.baseDamage;
+    player.projectileDamage = Math.floor(weaponBaseDamage * characterDamageMultiplier);
     player.lastFireTime = 0;
     
     // Advanced weapon stats (from weapon definition)
@@ -140,42 +145,50 @@ export function createPlayer(k, x, y) {
 
     // Movement
     let moveDir = k.vec2(0, 0);
-    
+
     k.onKeyDown(['w', 'up'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         moveDir.y = -1;
     });
-    
+
     k.onKeyDown(['s', 'down'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         moveDir.y = 1;
     });
-    
+
     k.onKeyDown(['a', 'left'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         moveDir.x = -1;
     });
-    
+
     k.onKeyDown(['d', 'right'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         moveDir.x = 1;
     });
     
     k.onKeyRelease(['w', 'up'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('s') && !k.isKeyDown('down')) {
             moveDir.y = 0;
         }
     });
-    
+
     k.onKeyRelease(['s', 'down'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('w') && !k.isKeyDown('up')) {
             moveDir.y = 0;
         }
     });
     
     k.onKeyRelease(['a', 'left'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('d') && !k.isKeyDown('right')) {
             moveDir.x = 0;
         }
     });
-    
+
     k.onKeyRelease(['d', 'right'], () => {
+        if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('a') && !k.isKeyDown('left')) {
             moveDir.x = 0;
         }

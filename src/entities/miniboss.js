@@ -215,8 +215,8 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
         if (k.paused) return;
         
         // Shield regeneration (if shields exist and regen rate > 0)
-        // Only regen if cooldown has expired (not damaged recently)
-        if (miniboss.shieldRegenRate > 0 && miniboss.shieldHealth < miniboss.maxShieldHealth) {
+        // Only regen if cooldown has expired (not damaged recently) and miniboss is alive
+        if (miniboss.shieldRegenRate > 0 && miniboss.shieldHealth < miniboss.maxShieldHealth && miniboss.hp() > 0 && !miniboss.isDead) {
             // Update cooldown timer
             if (miniboss.shieldRegenCooldown > 0) {
                 miniboss.shieldRegenCooldown -= k.dt();
@@ -239,7 +239,40 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
                 }
             }
         }
-        
+
+        // Process burn DoT (Damage over Time) from flamethrower
+        if (miniboss.burnDuration > 0 && miniboss.hp() > 0 && !miniboss.isDead) {
+            miniboss.burnTimer = (miniboss.burnTimer || 0) + k.dt();
+            const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
+
+            if (miniboss.burnTimer >= burnTickInterval) {
+                // Deal burn damage
+                if (miniboss.takeDamage) {
+                    miniboss.takeDamage(miniboss.burnDamage);
+                } else {
+                    miniboss.hurt(miniboss.burnDamage);
+                }
+
+                // Visual feedback for burn damage (orange tint)
+                const originalColor = miniboss.color;
+                miniboss.color = k.rgb(255, 150, 50);
+                k.wait(0.1, () => {
+                    if (miniboss.exists()) {
+                        miniboss.updateVisual();
+                    }
+                });
+
+                miniboss.burnTimer = 0;
+            }
+
+            // Decrease burn duration
+            miniboss.burnDuration -= k.dt();
+            if (miniboss.burnDuration <= 0) {
+                miniboss.burnDamage = 0;
+                miniboss.burnTimer = 0;
+            }
+        }
+
         const player = k.get('player')[0];
         if (!player || !player.exists()) return;
         
@@ -346,6 +379,15 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
                 miniboss.pos.y += moveAmount.y;
             }
         }
+
+        // Keep miniboss in bounds (room boundaries)
+        const roomWidth = k.width();
+        const roomHeight = k.height();
+        const margin = 20;
+        const minibossSize = miniboss.size || 24;
+
+        miniboss.pos.x = k.clamp(miniboss.pos.x, margin + minibossSize, roomWidth - margin - minibossSize);
+        miniboss.pos.y = k.clamp(miniboss.pos.y, margin + minibossSize, roomHeight - margin - minibossSize);
     });
     
     // Mark as not dead initially

@@ -1,13 +1,17 @@
 // Meta progression system - handles currency, saves, and unlocks
 
+import { generateRandomName, generateInviteCode } from './nameGenerator.js';
+
 const STORAGE_KEY = 'superSmashTexty_save';
 const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
-const CURRENCY_ICON = '◎'; // Icon used for display
+const CURRENCY_ICON = '$'; // Icon used for display
 
 // Default save data structure
 const DEFAULT_SAVE = {
     version: 1,
     currency: 0,
+    playerName: null, // Will be generated on first load
+    inviteCode: null, // Will be generated on first load
     unlocks: {
         characters: ['survivor'], // Default character is always unlocked
         weapons: ['default'], // Default weapon is always unlocked
@@ -35,12 +39,32 @@ export function loadSave() {
         if (saved) {
             const data = JSON.parse(saved);
             // Merge with default to handle missing fields
-            return { ...DEFAULT_SAVE, ...data };
+            const mergedData = { ...DEFAULT_SAVE, ...data };
+
+            // Generate player name if not set
+            if (!mergedData.playerName) {
+                mergedData.playerName = generateRandomName();
+                saveGame(mergedData);
+            }
+
+            // Generate invite code if not set
+            if (!mergedData.inviteCode) {
+                mergedData.inviteCode = generateInviteCode();
+                saveGame(mergedData);
+            }
+
+            return mergedData;
         }
     } catch (e) {
         console.error('Error loading save:', e);
     }
-    return { ...DEFAULT_SAVE };
+
+    // First time load - generate name and code
+    const newSave = { ...DEFAULT_SAVE };
+    newSave.playerName = generateRandomName();
+    newSave.inviteCode = generateInviteCode();
+    saveGame(newSave);
+    return newSave;
 }
 
 // Save data to localStorage
@@ -292,6 +316,26 @@ export function getCurrencyName() {
 // Get currency icon (same as getCurrencyName for backward compatibility)
 export function getCurrencyIcon() {
     return CURRENCY_ICON;
+}
+
+// Get player name
+export function getPlayerName() {
+    const save = loadSave();
+    return save.playerName || 'Player';
+}
+
+// Set player name
+export function setPlayerName(name) {
+    const save = loadSave();
+    save.playerName = name;
+    saveGame(save);
+    return save.playerName;
+}
+
+// Get invite code
+export function getInviteCode() {
+    const save = loadSave();
+    return save.inviteCode || '000000';
 }
 
 // Reset save (for testing/debugging)

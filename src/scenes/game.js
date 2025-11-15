@@ -18,7 +18,7 @@ import { createPlayer } from '../entities/player.js';
 import { createEnemy } from '../entities/enemy.js';
 import { createBoss, createTwinGuardians } from '../entities/boss.js';
 import { createMiniboss } from '../entities/miniboss.js';
-import { createXPPickup } from '../entities/pickup.js';
+import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon, createPowerupWeaponPickup } from '../entities/pickup.js';
 import { createDoor } from '../entities/door.js';
 import { createObstacle } from '../entities/obstacle.js';
 import { createProjectile } from '../entities/projectile.js';
@@ -27,15 +27,22 @@ import { createProjectile } from '../entities/projectile.js';
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
-import { getWeightedRoomTemplate, getFloorColors } from '../systems/roomGeneration.js';
+import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies } from '../systems/synergies.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
+import { UPGRADES } from '../systems/upgrades.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
-import { playXPPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
+import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
 import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
+import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
+import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
+import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
+import { getParty, getPartySize } from '../systems/partySystem.js';
+import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount } from '../systems/multiplayerGame.js';
+import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
 import { PICKUP_CONFIG } from '../config/constants.js';
@@ -137,6 +144,7 @@ export function setupGameScene(k) {
             gameState.playerStats = null;
             gameState.entryDirection = null;
             gameState.floorMap = null; // Clear old floor map
+            resetRoomTemplateHistory(); // Reset room template variation
             // Reset run statistics
             runStats = {
                 floorsReached: 1,
@@ -228,6 +236,66 @@ export function setupGameScene(k) {
         }
         
         // ==========================================
+        // MULTIPLAYER: Initialize multiplayer game if party has multiple players
+        // ==========================================
+        const party = getParty();
+        const partySize = getPartySize();
+        const networkInfo = getNetworkInfo();
+        let players = [player]; // Array of all player entities
+
+        if (partySize > 1 && networkInfo.isInitialized) {
+            console.log('[Multiplayer] Initializing multiplayer game with', partySize, 'players');
+
+            // Find local player slot
+            const localSlot = party.slots.findIndex(slot => slot.isLocal);
+
+            // Initialize multiplayer system with kaplay instance
+            initMultiplayerGame(party.isHost, localSlot, k);
+
+            // Register local player
+            registerPlayer(localSlot, player);
+
+            // Spawn additional players for other party members
+            party.slots.forEach((slot, index) => {
+                if (index !== localSlot && slot.playerId !== null) {
+                    // Spawn remote player
+                    const offsetX = (index - localSlot) * 30; // Small offset
+                    const remotePlayer = createPlayer(k, playerSpawnX + offsetX, playerSpawnY);
+
+                    // Mark as remote player (disable local input)
+                    remotePlayer.isRemote = true;
+                    remotePlayer.playerName = slot.playerName;
+
+                    // Apply permanent upgrades to remote player too
+                    applyPermanentUpgrades(k, remotePlayer);
+
+                    // Register remote player
+                    registerPlayer(index, remotePlayer);
+                    players.push(remotePlayer);
+
+                    // Add name tag above remote player
+                    const nameTag = k.add([
+                        k.text(slot.playerName, { size: 10 }),
+                        k.pos(0, -30),
+                        k.color(150, 150, 255),
+                        k.z(100)
+                    ]);
+
+                    // Make name tag follow player
+                    nameTag.onUpdate(() => {
+                        if (remotePlayer.exists()) {
+                            nameTag.pos = k.vec2(remotePlayer.pos.x, remotePlayer.pos.y - 30);
+                        } else {
+                            nameTag.destroy();
+                        }
+                    });
+                }
+            });
+
+            console.log('[Multiplayer] Spawned', players.length, 'players');
+        }
+
+        // ==========================================
         // NEW ARCHITECTURE: Sync player entity with PlayerState
         // ==========================================
 
@@ -298,7 +366,10 @@ export function setupGameScene(k) {
             : getWeightedRoomTemplate(currentFloor);
         const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
-        
+
+        // Floor decorations (cosmetic theming based on floor)
+        renderFloorDecorations(k, currentFloor, k.width(), k.height());
+
         // Room boundaries (visual) - use floor-based colors
         k.add([
             k.rect(k.width() - margin * 2, 2),
@@ -378,21 +449,24 @@ export function setupGameScene(k) {
             const obstacleRadius = Math.max(obs.width, obs.height) / 2;
             
             // Skip obstacle if it's too close to spawn or entrance door
-            if (distanceToSpawn < safeZoneRadius + obstacleRadius || 
+            if (distanceToSpawn < safeZoneRadius + obstacleRadius ||
                 distanceToEntrance < safeZoneRadius + obstacleRadius) {
                 return; // Skip this obstacle
             }
-            
-            const obstacleColor = obs.type === 'wall' 
-                ? floorColors.obstacleColor 
+
+            // Constrain obstacle position to room boundaries
+            const constrainedPos = constrainObstacleToRoom(obs.x, obs.y, obs.width, obs.height);
+
+            const obstacleColor = obs.type === 'wall'
+                ? floorColors.obstacleColor
                 : floorColors.coverColor;
             const obstacle = createObstacle(
-                k, 
-                obs.x, 
-                obs.y, 
-                obs.width, 
-                obs.height, 
-                obs.type, 
+                k,
+                constrainedPos.x,
+                constrainedPos.y,
+                obs.width,
+                obs.height,
+                obs.type,
                 obs.char || '#',
                 obstacleColor
             );
@@ -401,46 +475,468 @@ export function setupGameScene(k) {
         }
         
         // HUD
-        const healthBar = k.add([
-            k.text(formatHealth(100, 100), { size: UI_TEXT_SIZES.HUD }),
+        // Top-left panel background (smaller, just for enemy counter)
+        const topLeftPanelBg = k.add([
+            k.rect(100, 40),
+            k.pos(10, 10),
+            k.color(0, 0, 0),
+            k.opacity(0.6),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG - 1)
+        ]);
+
+        // Enemy counter with skull icon (top left)
+        const enemyIcon = k.add([
+            k.text('☠', { size: UI_TEXT_SIZES.HUD }),
             k.pos(20, 20),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        const levelText = k.add([
-            k.text(`${UI_TERMS.LEVEL}: 1`, { size: UI_TEXT_SIZES.HUD }),
-            k.pos(20, 40),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        const floorText = k.add([
-            k.text(formatFloorRoom(1, 1, true), { size: UI_TEXT_SIZES.HUD }),
-            k.pos(20, 60),
-            k.color(...UI_COLORS.INFO),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        const xpText = k.add([
-            k.text(formatXP(0, 10), { size: UI_TEXT_SIZES.HUD }),
-            k.pos(20, 80),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.color(...UI_COLORS.WARNING),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
         const enemiesCounter = k.add([
-            k.text('Enemies: 0/0', { size: UI_TEXT_SIZES.HUD }),
-            k.pos(20, 100),
+            k.text('0/0', { size: UI_TEXT_SIZES.HUD }),
+            k.pos(40, 20),
             k.color(...UI_COLORS.WARNING),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
+        // Top-right panel background
+        const topRightPanelBg = k.add([
+            k.rect(120, 40),
+            k.pos(k.width() - 10, 10),
+            k.anchor('topright'),
+            k.color(0, 0, 0),
+            k.opacity(0.6),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG - 1)
+        ]);
+
+        // Credit counter (top right) - z-layer 950 to appear above minimap
+        const creditIcon = k.add([
+            k.text('$', { size: UI_TEXT_SIZES.LABEL }),
+            k.pos(k.width() - 20, 20),
+            k.anchor('topright'),
+            k.color(255, 215, 0), // Gold color
+            k.fixed(),
+            k.z(950)
+        ]);
+
+        const creditText = k.add([
+            k.text('0', { size: UI_TEXT_SIZES.HUD }),
+            k.pos(k.width() - 40, 20),
+            k.anchor('topright'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(950)
+        ]);
+
+        // Multiplayer Connection Indicator (only show if multiplayer is active)
+        let connectionIndicator = null;
+        let connectionText = null;
+        if (isMultiplayerActive()) {
+            const playerCount = getPlayerCount();
+            const statusColor = networkInfo.isHost ? [100, 255, 100] : [100, 200, 255];
+            const statusText = networkInfo.isHost ? 'HOST' : 'CLIENT';
+
+            connectionIndicator = k.add([
+                k.circle(4),
+                k.pos(20, 70),
+                k.color(...statusColor),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            connectionText = k.add([
+                k.text(`${statusText} (${playerCount}P)`, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(30, 70),
+                k.anchor('left'),
+                k.color(...statusColor),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        }
+
+        // XP Bar (bottom of screen)
+        const xpBarWidth = k.width() - 40;
+        const xpBarHeight = 20;
+        const xpBarY = k.height() - 30;
+
+        const xpBarBg = k.add([
+            k.rect(xpBarWidth, xpBarHeight),
+            k.pos(20, xpBarY),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(2, k.rgb(...UI_COLORS.TEXT_DISABLED)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG)
+        ]);
+
+        const xpBarFill = k.add([
+            k.rect(0, xpBarHeight - 4),
+            k.pos(22, xpBarY + 2),
+            k.color(100, 200, 255), // Blue XP color
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG + 1)
+        ]);
+
+        const xpBarText = k.add([
+            k.text('XP: 0/10', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2, xpBarY + xpBarHeight / 2),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Level text (over XP bar, left side)
+        const levelText = k.add([
+            k.text(`${UI_TERMS.LEVEL}: 1`, { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(30, xpBarY + xpBarHeight / 2),
+            k.anchor('left'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Player Health Bar (follows player when damaged, shown below player)
+        const playerHealthBarWidth = 60;
+        const playerHealthBarHeight = 8;
+        const playerHealthBarOffsetY = 25; // Below player
+
+        const playerHealthBarBg = k.add([
+            k.rect(playerHealthBarWidth, playerHealthBarHeight),
+            k.pos(0, 0),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
+            k.z(UI_Z_LAYERS.OVERLAY)
+        ]);
+
+        const playerHealthBarFill = k.add([
+            k.rect(playerHealthBarWidth - 2, playerHealthBarHeight - 2),
+            k.pos(0, 0),
+            k.anchor('center'),
+            k.color(100, 255, 100), // Green health color
+            k.z(UI_Z_LAYERS.OVERLAY + 1)
+        ]);
+
+        // Initially hide player health bar (only show when damaged)
+        playerHealthBarBg.hidden = true;
+        playerHealthBarFill.hidden = true;
+
+        // ==========================================
+        // WEAPON INDICATOR (Bottom Left - Icon Only)
+        // ==========================================
+        const weaponIconSize = 48;
+        const weaponIconX = 20;
+        const weaponIconY = k.height() - 70; // Above XP bar
+
+        const weaponIconBg = k.add([
+            k.rect(weaponIconSize, weaponIconSize),
+            k.pos(weaponIconX, weaponIconY),
+            k.color(0, 0, 0),
+            k.opacity(0.8),
+            k.outline(2, k.rgb(150, 150, 150)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG)
+        ]);
+
+        const weaponIconText = k.add([
+            k.text('⌐', { size: 32 }),
+            k.pos(weaponIconX + weaponIconSize / 2, weaponIconY + weaponIconSize / 2),
+            k.anchor('center'),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Weapon detail popup (shown on click or when paused)
+        const weaponDetailWidth = 220;
+        const weaponDetailHeight = 90;
+
+        const weaponDetailBg = k.add([
+            k.rect(weaponDetailWidth, weaponDetailHeight),
+            k.pos(weaponIconX, weaponIconY - weaponDetailHeight - 10),
+            k.color(0, 0, 0),
+            k.opacity(0.9),
+            k.outline(2, k.rgb(200, 200, 200)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 5)
+        ]);
+
+        const weaponDetailIcon = k.add([
+            k.text('⌐', { size: 24 }),
+            k.pos(weaponIconX + 15, weaponIconY - weaponDetailHeight - 10 + 15),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        const weaponDetailName = k.add([
+            k.text('Basic Pistol', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(weaponIconX + 50, weaponIconY - weaponDetailHeight - 10 + 10),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        const weaponDetailDamage = k.add([
+            k.text('DMG: 10', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(weaponIconX + 50, weaponIconY - weaponDetailHeight - 10 + 30),
+            k.color(255, 150, 150),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        const weaponDetailFireRate = k.add([
+            k.text('RATE: 3.75/s', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(weaponIconX + 50, weaponIconY - weaponDetailHeight - 10 + 47),
+            k.color(150, 200, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        const weaponDetailDPS = k.add([
+            k.text('DPS: 37.5', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(weaponIconX + 50, weaponIconY - weaponDetailHeight - 10 + 64),
+            k.color(255, 255, 150),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        // Initially hide weapon detail popup
+        weaponDetailBg.hidden = true;
+        weaponDetailIcon.hidden = true;
+        weaponDetailName.hidden = true;
+        weaponDetailDamage.hidden = true;
+        weaponDetailFireRate.hidden = true;
+        weaponDetailDPS.hidden = true;
+
+        // Click handler for weapon icon
+        weaponIconBg.onClick(() => {
+            weaponDetailBg.hidden = !weaponDetailBg.hidden;
+            weaponDetailIcon.hidden = !weaponDetailIcon.hidden;
+            weaponDetailName.hidden = !weaponDetailName.hidden;
+            weaponDetailDamage.hidden = !weaponDetailDamage.hidden;
+            weaponDetailFireRate.hidden = !weaponDetailFireRate.hidden;
+            weaponDetailDPS.hidden = !weaponDetailDPS.hidden;
+        });
+
+        // ==========================================
+        // POWERUP WEAPON INDICATOR (Above Main Weapon - Bottom Left)
+        // ==========================================
+        const powerupIconSize = 40;
+        const powerupIconX = weaponIconX;
+        const powerupIconY = weaponIconY - powerupIconSize - 10; // Above weapon icon
+
+        const powerupIconBg = k.add([
+            k.rect(powerupIconSize, powerupIconSize),
+            k.pos(powerupIconX, powerupIconY),
+            k.color(0, 0, 0),
+            k.opacity(0.8),
+            k.outline(2, k.rgb(200, 200, 50)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG)
+        ]);
+
+        const powerupIconText = k.add([
+            k.text('◎', { size: 28 }),
+            k.pos(powerupIconX + powerupIconSize / 2, powerupIconY + powerupIconSize / 2),
+            k.anchor('center'),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        const powerupAmmoText = k.add([
+            k.text('20', { size: 14 }),
+            k.pos(powerupIconX + powerupIconSize + 5, powerupIconY + powerupIconSize / 2),
+            k.anchor('left'),
+            k.color(255, 255, 150),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Initially hide powerup indicator (only show when player has powerup)
+        powerupIconBg.hidden = true;
+        powerupIconText.hidden = true;
+        powerupAmmoText.hidden = true;
+
+        // ==========================================
+        // ACTIVE BUFFS/UPGRADES DISPLAY (Near Weapon - Bottom Left)
+        // ==========================================
+        const buffsDisplayX = weaponIconX + weaponIconSize + 10; // Right of weapon icon
+        const buffsDisplayY = weaponIconY;
+        const buffIconSize = 32;
+        const buffIconSpacing = 40;
+
+        // Container for buff icons (will be populated dynamically)
+        const activeBuffIcons = [];
+
+        // Function to update buff display
+        function updateBuffDisplay() {
+            // Clear existing buff icons
+            activeBuffIcons.forEach(icon => {
+                if (icon.exists()) k.destroy(icon);
+            });
+            activeBuffIcons.length = 0;
+
+            if (!player.exists()) return;
+
+            // Collect all upgrades with their stacks
+            const upgradesWithStacks = [];
+
+            // Add weapon upgrades
+            if (player.upgradeStacks) {
+                Object.entries(player.upgradeStacks).forEach(([key, stacks]) => {
+                    if (stacks > 0) {
+                        upgradesWithStacks.push({ key, stacks });
+                    }
+                });
+            }
+
+            // Position buffs horizontally from weapon icon
+            // Create buff icons
+            upgradesWithStacks.forEach((upgrade, index) => {
+                const xPos = buffsDisplayX + index * buffIconSpacing;
+
+                // Get upgrade definition for icon
+                const upgradeDef = UPGRADES[upgrade.key];
+                if (!upgradeDef) return;
+
+                // Background
+                const bg = k.add([
+                    k.rect(buffIconSize, buffIconSize),
+                    k.pos(xPos, buffsDisplayY),
+                    k.color(0, 0, 0),
+                    k.opacity(0.7),
+                    k.outline(1, k.rgb(150, 150, 150)),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_BG)
+                ]);
+
+                // Icon
+                const icon = k.add([
+                    k.text(upgradeDef.icon, { size: 20 }),
+                    k.pos(xPos + buffIconSize / 2, buffsDisplayY + buffIconSize / 2),
+                    k.anchor('center'),
+                    k.color(255, 255, 255),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                // Stack count
+                const stackText = k.add([
+                    k.text(upgrade.stacks.toString(), { size: 10 }),
+                    k.pos(xPos + buffIconSize - 4, buffsDisplayY + buffIconSize - 4),
+                    k.anchor('botright'),
+                    k.color(255, 255, 100),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                ]);
+
+                activeBuffIcons.push(bg, icon, stackText);
+            });
+        }
+
+        // ==========================================
+        // TOOLTIP SYSTEM
+        // ==========================================
+        const tooltip = k.add([
+            k.rect(200, 60),
+            k.pos(0, 0),
+            k.color(0, 0, 0),
+            k.opacity(0.9),
+            k.outline(2, k.rgb(200, 200, 200)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 10)
+        ]);
+
+        const tooltipText = k.add([
+            k.text('', { size: UI_TEXT_SIZES.SMALL, width: 190 }),
+            k.pos(5, 5),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 11)
+        ]);
+
+        tooltip.hidden = true;
+        tooltipText.hidden = true;
+
+        // Tooltip data for HUD elements
+        const tooltipData = {
+            level: () => `Level ${player.level}\nXP: ${player.xp}/${player.xpToNext}\nProgress: ${Math.floor((player.xp / player.xpToNext) * 100)}%`,
+            enemies: () => {
+                const remaining = k.get('enemy').length + k.get('miniboss').length;
+                return `Enemies Remaining\nClear all to progress\nKills this run: ${runStats.enemiesKilled}`;
+            },
+            currency: () => `Total Credits: ${getCurrency()}\nUse in shop between floors\nEarn by killing enemies`,
+            weapon: () => {
+                const weaponDef = player.weaponDef;
+                if (!weaponDef) return 'No weapon equipped';
+                return `${weaponDef.name}\nDamage: ${player.projectileDamage}\nFire Rate: ${player.fireRate.toFixed(2)}/s\nDPS: ${(player.projectileDamage * player.fireRate).toFixed(1)}`;
+            },
+            health: () => `Health: ${Math.floor(player.hp())}/${player.maxHealth}\nDamage Reduction: ${Math.floor(player.damageReduction * 100)}%`
+        };
+
+        // Show tooltip on hover
+        function showTooltip(key, x, y) {
+            const data = tooltipData[key];
+            if (!data) return;
+
+            const text = data();
+            tooltipText.text = text;
+
+            // Position tooltip near mouse but keep on screen
+            tooltip.pos.x = Math.min(x + 10, k.width() - 210);
+            tooltip.pos.y = Math.min(y + 10, k.height() - 70);
+            tooltipText.pos.x = tooltip.pos.x + 5;
+            tooltipText.pos.y = tooltip.pos.y + 5;
+
+            tooltip.hidden = false;
+            tooltipText.hidden = false;
+        }
+
+        function hideTooltip() {
+            tooltip.hidden = true;
+            tooltipText.hidden = true;
+        }
+
+        // Hover detection for tooltips
+        k.onUpdate(() => {
+            const mousePos = k.mousePos();
+            let hovering = false;
+
+            // Check level text
+            if (mousePos.x >= 20 && mousePos.x <= 180 && mousePos.y >= 20 && mousePos.y <= 35) {
+                showTooltip('level', mousePos.x, mousePos.y);
+                hovering = true;
+            }
+            // Check enemy counter
+            else if (mousePos.x >= 20 && mousePos.x <= 180 && mousePos.y >= 40 && mousePos.y <= 55 && !enemiesCounter.hidden) {
+                showTooltip('enemies', mousePos.x, mousePos.y);
+                hovering = true;
+            }
+            // Check credit counter
+            else if (mousePos.x >= k.width() - 130 && mousePos.x <= k.width() - 10 && mousePos.y >= 10 && mousePos.y <= 50) {
+                showTooltip('currency', mousePos.x, mousePos.y);
+                hovering = true;
+            }
+            // Check weapon panel
+            else if (mousePos.x >= weaponIconX && mousePos.x <= weaponIconX + weaponIconSize &&
+                     mousePos.y >= weaponIconY && mousePos.y <= weaponIconY + weaponIconSize) {
+                showTooltip('weapon', mousePos.x, mousePos.y);
+                hovering = true;
+            }
+            // Health bar tooltip removed - health bar moves with player
+
+            if (!hovering) {
+                hideTooltip();
+            }
+        });
+
         // Boss HUD elements (only shown when boss exists)
         const bossNameText = k.add([
             k.text('', { size: UI_TEXT_SIZES.LABEL }),
@@ -554,31 +1050,136 @@ export function setupGameScene(k) {
             updateParticles(k);
         });
 
+        // Update multiplayer system
+        k.onUpdate(() => {
+            if (k.paused) return;
+            if (isMultiplayerActive()) {
+                updateMultiplayer(k.dt());
+            }
+        });
+
         // Update HUD
         k.onUpdate(() => {
             const currentHP = player.exists() ? player.hp() : 0;
-            healthBar.text = formatHealth(Math.max(0, Math.floor(currentHP)), player.maxHealth);
+            const healthPercent = player.maxHealth > 0 ? currentHP / player.maxHealth : 1;
 
-            // Level/XP as decimal: Level X.YZ where YZ is hundredths of XP progress (e.g., 1.55 = 55% to next)
-            const xpPercent = player.xpToNext > 0 ? Math.floor((player.xp / player.xpToNext) * 100) : 0;
-            const xpPercentStr = xpPercent.toString().padStart(2, '0'); // Pad to 2 digits (e.g., "05" for 5%)
-            levelText.text = `${UI_TERMS.LEVEL}: ${player.level}.${xpPercentStr}`;
+            // Update level text
+            levelText.text = `${UI_TERMS.LEVEL}: ${player.level}`;
 
-            xpText.text = formatXP(player.xp, player.xpToNext);
-            floorText.text = formatFloorRoom(currentFloor, currentRoom, true);
-            
+            // Update XP bar
+            const xpProgress = player.xpToNext > 0 ? player.xp / player.xpToNext : 0;
+            xpBarFill.width = Math.max(0, (xpBarWidth - 4) * xpProgress);
+            xpBarText.text = formatXP(player.xp, player.xpToNext);
+
+            // Update credit counter
+            creditText.text = getCurrency().toString();
+
+            // Update player health bar (follows player, only show when damaged)
+            if (healthPercent < 1 && player.exists()) {
+                playerHealthBarBg.hidden = false;
+                playerHealthBarFill.hidden = false;
+
+                // Position below player
+                const healthBarX = player.pos.x;
+                const healthBarY = player.pos.y + playerHealthBarOffsetY;
+                playerHealthBarBg.pos = k.vec2(healthBarX, healthBarY);
+                playerHealthBarFill.pos = k.vec2(healthBarX, healthBarY);
+
+                // Update health bar width
+                playerHealthBarFill.width = Math.max(0, (playerHealthBarWidth - 2) * healthPercent);
+
+                // Color based on health percentage
+                if (healthPercent > 0.6) {
+                    playerHealthBarFill.color = k.rgb(100, 255, 100); // Green
+                } else if (healthPercent > 0.3) {
+                    playerHealthBarFill.color = k.rgb(255, 200, 0); // Yellow/Orange
+                } else {
+                    playerHealthBarFill.color = k.rgb(255, 50, 50); // Red
+                }
+            } else {
+                playerHealthBarBg.hidden = true;
+                playerHealthBarFill.hidden = true;
+            }
+
             // Update enemies counter (only show in regular rooms, not boss rooms)
             if (!isBossRoom && !roomCompleted) {
                 const currentEnemies = k.get('enemy').length;
                 const totalEnemies = enemiesToSpawn + (isMinibossRoom ? 1 : 0); // Include miniboss if present
                 const currentMinibosses = k.get('miniboss').length;
                 const remainingEnemies = currentEnemies + currentMinibosses + Math.max(0, totalEnemies - enemiesSpawned - (isMinibossRoom && minibossSpawned ? 1 : 0));
-                enemiesCounter.text = `Enemies: ${remainingEnemies}/${totalEnemies}`;
+                enemiesCounter.text = `${remainingEnemies}/${totalEnemies}`;
                 enemiesCounter.hidden = false;
+                enemyIcon.hidden = false;
             } else {
                 enemiesCounter.hidden = true;
+                enemyIcon.hidden = true;
             }
-            
+
+            // Update weapon indicator
+            if (player.exists() && player.weaponDef) {
+                const weaponDef = player.weaponDef;
+                const dps = (player.projectileDamage * player.fireRate).toFixed(1);
+
+                // Update weapon icon
+                weaponIconText.text = weaponDef.icon || '⌐';
+                weaponIconText.color = k.rgb(...weaponDef.color);
+
+                // Update weapon detail popup info
+                weaponDetailIcon.text = weaponDef.icon || '⌐';
+                weaponDetailIcon.color = k.rgb(...weaponDef.color);
+                weaponDetailName.text = weaponDef.name;
+                weaponDetailDamage.text = `DMG: ${player.projectileDamage}`;
+                weaponDetailFireRate.text = `RATE: ${player.fireRate.toFixed(2)}/s`;
+                weaponDetailDPS.text = `DPS: ${dps}`;
+
+                // Show weapon details when paused
+                if (k.paused) {
+                    weaponDetailBg.hidden = false;
+                    weaponDetailIcon.hidden = false;
+                    weaponDetailName.hidden = false;
+                    weaponDetailDamage.hidden = false;
+                    weaponDetailFireRate.hidden = false;
+                    weaponDetailDPS.hidden = false;
+                }
+            }
+
+            // Update powerup weapon indicator and countdown
+            if (player.exists()) {
+                // Update time-based powerups
+                updatePowerupWeapon(player, k.dt());
+
+                // Update powerup HUD display
+                const powerupDisplay = getPowerupDisplay(player);
+                if (powerupDisplay) {
+                    // Show powerup indicator
+                    powerupIconBg.hidden = false;
+                    powerupIconText.hidden = false;
+                    powerupAmmoText.hidden = false;
+
+                    // Update icon and color
+                    powerupIconText.text = powerupDisplay.icon;
+                    powerupIconText.color = k.rgb(...powerupDisplay.color);
+                    powerupIconBg.outline.color = k.rgb(...powerupDisplay.color);
+
+                    // Update ammo/duration text
+                    if (powerupDisplay.isAmmoBased) {
+                        powerupAmmoText.text = `${powerupDisplay.ammo}`;
+                    } else if (powerupDisplay.isTimeBased) {
+                        powerupAmmoText.text = `${Math.ceil(powerupDisplay.duration)}s`;
+                    }
+                } else {
+                    // Hide powerup indicator
+                    powerupIconBg.hidden = true;
+                    powerupIconText.hidden = true;
+                    powerupAmmoText.hidden = true;
+                }
+            }
+
+            // Update buff display (call periodically, not every frame for performance)
+            if (k.time() % 0.5 < k.dt()) {
+                updateBuffDisplay();
+            }
+
             // Update boss HUD
             const bosses = k.get('boss');
             const twinGuardians = bosses.filter(b => b.type === 'twinGuardianMelee' || b.type === 'twinGuardianRanged');
@@ -908,7 +1509,7 @@ export function setupGameScene(k) {
         // Room state
         let roomCompleted = false;
         const isBossRoom = currentRoomNode ? currentRoomNode.isBossRoom : (currentRoom === 3); // Use floor map if available
-        let enemiesToSpawn = isBossRoom ? 0 : (8 + (currentFloor - 1) * 2); // No regular enemies in boss rooms
+        let enemiesToSpawn = isBossRoom ? 0 : (24 + (currentFloor - 1) * 6); // No regular enemies in boss rooms (3x multiplier)
         let enemiesSpawned = 0;
         let initialSpawnDelay = 2; // Wait before first spawn
         let bossSpawned = false;
@@ -997,7 +1598,7 @@ export function setupGameScene(k) {
         
         // Spawn enemies periodically
         let enemySpawnTimer = 0;
-        const enemySpawnInterval = 3; // seconds between spawns
+        const enemySpawnInterval = 0.33; // seconds between spawns (3x faster spawn rate)
         
         // Track room start time for entrance door exclusion (after first frame)
         let roomStartTimeSet = false;
@@ -1324,6 +1925,25 @@ export function setupGameScene(k) {
 
                     // Spawn XP pickup at enemy position
                     createXPPickup(k, posX, posY, xpValue);
+
+                    // Spawn currency drops (1-3 coins with random currency icons)
+                    const currencyDropCount = Math.floor(Math.random() * 3) + 1; // 1-3 drops
+                    const currencyValue = 1; // Each coin is worth 1 currency
+                    for (let i = 0; i < currencyDropCount; i++) {
+                        // Spread drops slightly
+                        const offsetX = (Math.random() - 0.5) * 20;
+                        const offsetY = (Math.random() - 0.5) * 20;
+                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue);
+                    }
+
+                    // Check for powerup weapon drop
+                    const powerupDrop = rollPowerupDrop(enemy.type, currentFloor);
+                    if (powerupDrop) {
+                        // Offset slightly to avoid overlap with other pickups
+                        const offsetX = (Math.random() - 0.5) * 30;
+                        const offsetY = (Math.random() - 0.5) * 30;
+                        createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
+                    }
                 }
             });
             
@@ -1348,7 +1968,19 @@ export function setupGameScene(k) {
 
                     // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
                     createXPPickup(k, posX, posY, xpValue);
-                    
+
+                    // Spawn currency drops (10-15 coins with random currency icons)
+                    const minibossCurrencyCount = Math.floor(Math.random() * 6) + 10; // 10-15 drops
+                    const minibossCurrencyValue = 1; // Each coin is worth 1 currency
+                    for (let i = 0; i < minibossCurrencyCount; i++) {
+                        // Spread drops in a circle
+                        const angle = (Math.PI * 2 / minibossCurrencyCount) * i;
+                        const radius = 30 + Math.random() * 20;
+                        const offsetX = Math.cos(angle) * radius;
+                        const offsetY = Math.sin(angle) * radius;
+                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, minibossCurrencyValue);
+                    }
+
                     // Miniboss death effects (visual feedback)
                     const deathText = k.add([
                         k.text('MINIBOSS DEFEATED!', { size: 20 }),
@@ -1385,7 +2017,21 @@ export function setupGameScene(k) {
 
                     // Spawn XP pickup at boss position (bosses give more XP)
                     createXPPickup(k, posX, posY, xpValue);
-                    
+
+                    // Spawn currency drops (20-30 coins with SAME currency icon)
+                    const bossCurrencyCount = Math.floor(Math.random() * 11) + 20; // 20-30 drops
+                    const bossCurrencyValue = 1; // Each coin is worth 1 currency
+                    const bossCurrencyIcon = getRandomCurrencyIcon(); // Pick ONE icon for all boss drops
+                    for (let i = 0; i < bossCurrencyCount; i++) {
+                        // Spread drops in a large circle
+                        const angle = (Math.PI * 2 / bossCurrencyCount) * i;
+                        const radius = 40 + Math.random() * 30;
+                        const offsetX = Math.cos(angle) * radius;
+                        const offsetY = Math.sin(angle) * radius;
+                        // Use the same icon for all boss drops
+                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, bossCurrencyValue, bossCurrencyIcon);
+                    }
+
                     // Boss death effects (visual feedback)
                     const deathText = k.add([
                         k.text('BOSS DEFEATED!', { size: 24 }),
@@ -1425,11 +2071,177 @@ export function setupGameScene(k) {
                     pickup.collected = true;
                     playXPPickup();
                     player.addXP(pickup.value);
+
+                    // Animate pickup flying to XP bar
+                    const flyingPickup = k.add([
+                        k.text('+', { size: 12 }),
+                        k.pos(pickup.pos.x, pickup.pos.y),
+                        k.color(100, 200, 255),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                    ]);
+
+                    // Target: center of XP bar
+                    const targetX = k.width() / 2;
+                    const targetY = xpBarY + xpBarHeight / 2;
+
+                    // Animate to target over 0.4 seconds
+                    const duration = 0.4;
+                    let elapsed = 0;
+                    const startX = pickup.pos.x;
+                    const startY = pickup.pos.y;
+
+                    flyingPickup.onUpdate(() => {
+                        elapsed += k.dt();
+                        const progress = Math.min(elapsed / duration, 1);
+
+                        // Ease-in interpolation
+                        const eased = progress * progress;
+                        flyingPickup.pos.x = startX + (targetX - startX) * eased;
+                        flyingPickup.pos.y = startY + (targetY - startY) * eased;
+
+                        // Fade and scale down as it approaches
+                        flyingPickup.opacity = 1 - progress * 0.5;
+                        flyingPickup.scale = k.vec2(1 - progress * 0.5);
+
+                        if (progress >= 1) {
+                            k.destroy(flyingPickup);
+                            // Pulse XP bar on pickup collection
+                            xpBarFill.color = k.rgb(150, 255, 255);
+                            k.wait(0.1, () => {
+                                if (xpBarFill.exists()) {
+                                    xpBarFill.color = k.rgb(100, 200, 255);
+                                }
+                            });
+                        }
+                    });
+
                     k.destroy(pickup);
                 }
             });
         });
-        
+
+        // Handle currency pickup magnetization and collection
+        k.onUpdate(() => {
+            if (!player.exists() || k.paused) return;
+
+            k.get('currencyPickup').forEach(pickup => {
+                if (pickup.collected) return;
+
+                // Calculate distance to player
+                const distance = k.vec2(
+                    player.pos.x - pickup.pos.x,
+                    player.pos.y - pickup.pos.y
+                ).len();
+
+                // Start magnetizing if within pickup radius (once started, never stops)
+                if (!pickup.magnetizing && distance <= player.pickupRadius) {
+                    pickup.magnetizing = true;
+                    pickup.targetPlayer = player;
+                }
+
+                // Auto-collect if very close (collection radius is smaller than pickup radius)
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
+                    pickup.collected = true;
+                    playCurrencyPickup(); // Coin/cash pickup sound
+                    addCurrency(pickup.value); // Add currency to persistent storage
+
+                    // Animate pickup flying to credit counter
+                    const flyingCoin = k.add([
+                        k.text('$', { size: 10 }),
+                        k.pos(pickup.pos.x, pickup.pos.y),
+                        k.color(255, 215, 0),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                    ]);
+
+                    // Target: credit icon position
+                    const targetX = k.width() - 20;
+                    const targetY = 20;
+
+                    // Animate to target over 0.5 seconds
+                    const duration = 0.5;
+                    let elapsed = 0;
+                    const startX = pickup.pos.x;
+                    const startY = pickup.pos.y;
+
+                    flyingCoin.onUpdate(() => {
+                        elapsed += k.dt();
+                        const progress = Math.min(elapsed / duration, 1);
+
+                        // Ease-in interpolation
+                        const eased = progress * progress;
+                        flyingCoin.pos.x = startX + (targetX - startX) * eased;
+                        flyingCoin.pos.y = startY + (targetY - startY) * eased;
+
+                        // Keep visible throughout flight
+                        flyingCoin.opacity = 1;
+
+                        if (progress >= 1) {
+                            k.destroy(flyingCoin);
+                            // Pulse credit counter on collection
+                            creditIcon.scale = k.vec2(1.3);
+                            creditText.scale = k.vec2(1.2);
+                            k.wait(0.15, () => {
+                                if (creditIcon.exists()) creditIcon.scale = k.vec2(1);
+                                if (creditText.exists()) creditText.scale = k.vec2(1);
+                            });
+                        }
+                    });
+
+                    k.destroy(pickup);
+                }
+            });
+
+            // Handle powerup weapon pickup collection
+            k.get('powerupWeaponPickup').forEach(pickup => {
+                if (pickup.collected) return;
+
+                const distance = k.vec2(
+                    player.pos.x - pickup.pos.x,
+                    player.pos.y - pickup.pos.y
+                ).len();
+
+                // Start magnetizing if within pickup radius (once started, never stops)
+                if (!pickup.magnetizing && distance <= player.pickupRadius) {
+                    pickup.magnetizing = true;
+                    pickup.targetPlayer = player;
+                }
+
+                // Auto-collect if very close (collection radius is smaller than pickup radius)
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
+                    pickup.collected = true;
+                    playCurrencyPickup(); // Use currency pickup sound for now
+
+                    // Apply powerup weapon to player
+                    applyPowerupWeapon(player, pickup.powerupKey);
+
+                    // Visual feedback - flash effect
+                    const flash = k.add([
+                        k.text(pickup.text(), { size: 32 }),
+                        k.pos(player.pos.x, player.pos.y - 30),
+                        k.color(...pickup.color.toArray()),
+                        k.anchor('center'),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 1),
+                        k.opacity(1)
+                    ]);
+
+                    // Animate flash fading and rising
+                    let flashAge = 0;
+                    flash.onUpdate(() => {
+                        flashAge += k.dt();
+                        flash.pos.y -= 50 * k.dt();
+                        flash.opacity = Math.max(0, 1 - flashAge / 0.8);
+                        if (flashAge >= 0.8) {
+                            k.destroy(flash);
+                        }
+                    });
+
+                    k.destroy(pickup);
+                }
+            });
+        });
+
         // Handle door interaction (proximity-based)
         let doorEntered = false;
         k.onUpdate(() => {
@@ -1453,7 +2265,70 @@ export function setupGameScene(k) {
                 }
             });
         });
-        
+
+        // Spawn reward pickups when room is cleared
+        function spawnRoomClearRewards() {
+            if (!player.exists()) return;
+
+            // Determine spawn position (center of room)
+            const centerX = k.width() / 2;
+            const centerY = k.height() / 2;
+
+            // Calculate rewards based on floor and whether it's a boss room
+            const baseXP = 5;
+            const baseCurrency = 3;
+
+            // Boss rooms give more rewards
+            const xpMultiplier = isBossRoom ? 3 : 1;
+            const currencyMultiplier = isBossRoom ? 4 : 1;
+
+            // Floor scaling
+            const floorBonus = currentFloor * 0.5;
+
+            const numXPPickups = Math.floor((baseXP + floorBonus) * xpMultiplier);
+            const numCurrencyPickups = Math.floor((baseCurrency + floorBonus) * currencyMultiplier);
+
+            // Spawn XP pickups in a spread pattern
+            for (let i = 0; i < numXPPickups; i++) {
+                const angle = (Math.PI * 2 * i) / numXPPickups + Math.random() * 0.3;
+                const distance = 40 + Math.random() * 60;
+                const x = centerX + Math.cos(angle) * distance;
+                const y = centerY + Math.sin(angle) * distance;
+
+                // Each XP pickup is worth more on higher floors
+                const xpValue = Math.floor(1 + currentFloor * 0.5);
+                createXPPickup(k, x, y, xpValue);
+            }
+
+            // Spawn currency pickups in a spread pattern
+            for (let i = 0; i < numCurrencyPickups; i++) {
+                const angle = (Math.PI * 2 * i) / numCurrencyPickups + Math.random() * 0.3 + 0.5;
+                const distance = 50 + Math.random() * 70;
+                const x = centerX + Math.cos(angle) * distance;
+                const y = centerY + Math.sin(angle) * distance;
+
+                // Each currency pickup is worth more on higher floors
+                const currencyValue = Math.floor(1 + currentFloor * 0.3);
+                createCurrencyPickup(k, x, y, currencyValue);
+            }
+
+            // Extra bonus for boss rooms - spawn a few powerup weapons
+            if (isBossRoom) {
+                const powerupKeys = Object.keys(POWERUP_WEAPONS);
+                const numPowerups = 1 + Math.floor(Math.random() * 2); // 1-2 powerups
+
+                for (let i = 0; i < numPowerups; i++) {
+                    const angle = Math.random() * Math.PI * 2;
+                    const distance = 80 + Math.random() * 40;
+                    const x = centerX + Math.cos(angle) * distance;
+                    const y = centerY + Math.sin(angle) * distance;
+
+                    const randomPowerup = powerupKeys[Math.floor(Math.random() * powerupKeys.length)];
+                    createPowerupWeaponPickup(k, x, y, randomPowerup);
+                }
+            }
+        }
+
         // Handle room completion
         function handleRoomCompletion() {
             // ==========================================
@@ -1492,7 +2367,10 @@ export function setupGameScene(k) {
             if (gameState.minimap) {
                 gameState.minimap.update();
             }
-            
+
+            // Spawn reward pickups!
+            spawnRoomClearRewards();
+
             // Show completion message (different for boss rooms)
             const completionText = isBossRoom 
                 ? `BOSS DEFEATED! Floor ${currentFloor} Complete! Enter a door to continue`
@@ -1684,6 +2562,13 @@ export function setupGameScene(k) {
         
         // Game over on player death
         player.onDeath(() => {
+            // Cleanup orbital weapons if they exist
+            if (player.orbitalOrbs) {
+                player.orbitalOrbs.forEach(orb => {
+                    if (orb.exists()) k.destroy(orb);
+                });
+                player.orbitalOrbs = [];
+            }
             // Calculate currency earned
             const currencyEarned = calculateCurrencyEarned(runStats);
             
@@ -1700,7 +2585,12 @@ export function setupGameScene(k) {
             
             // Check for achievements
             checkAchievements(k);
-            
+
+            // Cleanup multiplayer
+            if (isMultiplayerActive()) {
+                cleanupMultiplayer();
+            }
+
             // Pass run stats to game over scene
             k.go('gameOver', {
                 runStats: { ...runStats },
@@ -1708,13 +2598,14 @@ export function setupGameScene(k) {
             });
         });
         
-        // Pause overlay
+        // Pause overlay - smaller centered box that doesn't cover UI
         const pauseOverlay = k.add([
-            k.rect(k.width(), k.height()),
-            k.pos(0, 0),
-            k.anchor('topleft'),
+            k.rect(500, 400),
+            k.pos(k.width() / 2, k.height() / 2),
+            k.anchor('center'),
             k.color(0, 0, 0),
-            k.opacity(0.7),
+            k.opacity(0.9),
+            k.outline(3, k.rgb(200, 200, 200)),
             k.fixed(),
             k.z(2000),
             'pauseOverlay'
@@ -1796,6 +2687,11 @@ export function setupGameScene(k) {
         });
 
         quitButton.onClick(() => {
+            // Cleanup multiplayer
+            if (isMultiplayerActive()) {
+                cleanupMultiplayer();
+            }
+
             // Reset game state
             gameState.currentFloor = 1;
             gameState.currentRoom = 1;

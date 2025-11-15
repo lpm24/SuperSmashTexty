@@ -35,6 +35,7 @@ export const UPGRADE_STACK_LIMITS = {
 export const UPGRADES = {
     damage: {
         name: 'Damage Boost',
+        icon: '⚔',
         description: '+25% damage',
         category: 'weapon',
         upgradeCategory: 'damage',
@@ -50,6 +51,7 @@ export const UPGRADES = {
     },
     fireRate: {
         name: 'Fire Rate',
+        icon: '⟫',
         description: '+20% fire rate',
         category: 'weapon',
         upgradeCategory: 'fireRate',
@@ -64,6 +66,7 @@ export const UPGRADES = {
     },
     speed: {
         name: 'Movement Speed',
+        icon: '☄',
         description: '+15% movement speed',
         category: 'passive',
         maxStacks: 10,
@@ -78,6 +81,7 @@ export const UPGRADES = {
     },
     health: {
         name: 'Max Health',
+        icon: '♥',
         description: '+20 max HP',
         category: 'passive',
         maxStacks: 10,
@@ -97,6 +101,7 @@ export const UPGRADES = {
     },
     projectileSpeed: {
         name: 'Projectile Speed',
+        icon: '➤',
         description: '+25% projectile speed',
         category: 'weapon',
         maxStacks: 10,
@@ -110,6 +115,7 @@ export const UPGRADES = {
     },
     xpGain: {
         name: 'XP Gain',
+        icon: '★',
         description: '+15% XP from enemies',
         category: 'passive',
         maxStacks: 10,
@@ -122,6 +128,7 @@ export const UPGRADES = {
     },
     pickupRadius: {
         name: 'Pickup Radius',
+        icon: '◐',
         description: '+50% pickup range',
         category: 'passive',
         maxStacks: 10,
@@ -135,6 +142,7 @@ export const UPGRADES = {
     },
     multiShot: {
         name: 'Multi-Shot',
+        icon: '⋮',
         description: '+1 projectile per shot',
         category: 'weapon',
         upgradeCategory: 'multiShot',
@@ -149,6 +157,7 @@ export const UPGRADES = {
     },
     piercing: {
         name: 'Piercing',
+        icon: '⇉',
         description: '+1 enemy penetration',
         category: 'weapon',
         upgradeCategory: 'piercing',
@@ -162,6 +171,7 @@ export const UPGRADES = {
     },
     obstaclePiercing: {
         name: 'Obstacle Piercing',
+        icon: '⊡',
         description: '+1 obstacle penetration',
         category: 'weapon',
         maxStacks: 5,
@@ -174,6 +184,7 @@ export const UPGRADES = {
     },
     critChance: {
         name: 'Critical Strike',
+        icon: '◆',
         description: '+10% crit chance',
         category: 'weapon',
         upgradeCategory: 'crit',
@@ -192,6 +203,7 @@ export const UPGRADES = {
     },
     critDamage: {
         name: 'Critical Power',
+        icon: '◈',
         description: '+50% crit damage',
         category: 'weapon',
         upgradeCategory: 'crit',
@@ -210,6 +222,7 @@ export const UPGRADES = {
     },
     spreadShot: {
         name: 'Spread Shot',
+        icon: '⋰',
         description: '+30° spread angle',
         category: 'weapon',
         upgradeCategory: 'spread',
@@ -224,6 +237,7 @@ export const UPGRADES = {
     },
     pelletCount: {
         name: 'More Pellets',
+        icon: '⁘',
         description: '+1 pellet per shot',
         category: 'weapon',
         upgradeCategory: 'pelletCount',
@@ -238,6 +252,7 @@ export const UPGRADES = {
     },
     range: {
         name: 'Extended Range',
+        icon: '↔',
         description: '+25% weapon range',
         category: 'weapon',
         upgradeCategory: 'range',
@@ -253,6 +268,7 @@ export const UPGRADES = {
     },
     dot: {
         name: 'Burn Damage',
+        icon: '♨',
         description: '+25% fire damage over time',
         category: 'weapon',
         upgradeCategory: 'dot',
@@ -267,6 +283,7 @@ export const UPGRADES = {
     },
     orbitalCount: {
         name: 'Extra Orb',
+        icon: '◉',
         description: '+1 orbital orb',
         category: 'weapon',
         upgradeCategory: 'orbitalCount',
@@ -286,6 +303,7 @@ export const UPGRADES = {
     },
     orbitalSpeed: {
         name: 'Faster Orbit',
+        icon: '⟲',
         description: '+50% orbital rotation speed',
         category: 'weapon',
         upgradeCategory: 'orbitalSpeed',
@@ -301,6 +319,7 @@ export const UPGRADES = {
     },
     orbitalRadius: {
         name: 'Wider Orbit',
+        icon: '○',
         description: '+20% orbital radius',
         category: 'weapon',
         upgradeCategory: 'orbitalRadius',
@@ -316,6 +335,7 @@ export const UPGRADES = {
     },
     explosionRadius: {
         name: 'Bigger Explosion',
+        icon: '◎',
         description: '+25% explosion radius',
         category: 'weapon',
         upgradeCategory: 'explosionRadius',
@@ -331,6 +351,7 @@ export const UPGRADES = {
     },
     explosionDamage: {
         name: 'Explosive Power',
+        icon: '☢',
         description: '+25% explosion damage',
         category: 'weapon',
         upgradeCategory: 'explosionDamage',
@@ -346,6 +367,7 @@ export const UPGRADES = {
     },
     chainJumps: {
         name: 'More Chains',
+        icon: '⚡',
         description: '+1 chain jump',
         category: 'weapon',
         upgradeCategory: 'chainJumps',
@@ -360,6 +382,7 @@ export const UPGRADES = {
     },
     chainRange: {
         name: 'Longer Chain',
+        icon: '⌁',
         description: '+25% chain range',
         category: 'weapon',
         upgradeCategory: 'chainRange',
@@ -375,6 +398,7 @@ export const UPGRADES = {
     },
     chainDamage: {
         name: 'Chain Power',
+        icon: '⚡',
         description: '-10% damage reduction per jump',
         category: 'weapon',
         upgradeCategory: 'chainDamage',
@@ -390,6 +414,7 @@ export const UPGRADES = {
     },
     defense: {
         name: 'Armor',
+        icon: '▲',
         description: '+2 damage reduction',
         category: 'passive',
         maxStacks: 10,
@@ -402,49 +427,10 @@ export const UPGRADES = {
     }
 };
 
-// Weapon selection upgrades (treated as special upgrades)
-export const WEAPON_UPGRADES = {
-    orbital: {
-        name: 'Orbital Weapons',
-        description: 'Passive orbs that rotate around you',
-        category: 'weapon',
-        getDescription: () => 'Orbital Weapons - Passive orbs that rotate around you'
-    },
-    explosive: {
-        name: 'Explosive Launcher',
-        description: 'Area damage projectiles',
-        category: 'weapon',
-        getDescription: () => 'Explosive Launcher - Area damage projectiles'
-    },
-    chainLightning: {
-        name: 'Chain Lightning',
-        description: 'Lightning that chains between enemies',
-        category: 'weapon',
-        getDescription: () => 'Chain Lightning - Lightning that chains between enemies'
-    }
-};
-
 // Check if upgrade is valid for player
 function isUpgradeValidForPlayer(upgrade, player) {
-    // Weapon upgrades (selecting a new weapon)
-    if (upgrade.category === 'weapon' && upgrade.weaponKey) {
-        // Can't select a weapon you already have
-        if (player.weapons && player.weapons.includes(upgrade.weaponKey)) {
-            return false;
-        }
-        // Can't exceed weapon limit
-        if (player.weapons && player.weapons.length >= 4) {
-            return false;
-        }
-        return true;
-    }
-    
     // Passive upgrades
     if (upgrade.category === 'passive') {
-        // Check if already at max passive upgrades
-        if (player.passiveUpgrades && player.passiveUpgrades.length >= 4) {
-            return false;
-        }
         // Check stack limit
         const stacks = player.upgradeStacks?.[upgrade.key] || 0;
         const maxStacks = upgrade.maxStacks || UPGRADE_STACK_LIMITS[upgrade.key] || 10;
@@ -453,7 +439,7 @@ function isUpgradeValidForPlayer(upgrade, player) {
         }
         return true;
     }
-    
+
     // Weapon stat upgrades
     if (upgrade.category === 'weapon') {
         // Check stack limit
@@ -462,47 +448,47 @@ function isUpgradeValidForPlayer(upgrade, player) {
         if (stacks >= maxStacks) {
             return false;
         }
-        
-        // Check weapon validity
-        const weaponKey = player.weaponKey || 'pistol';
-        
+
+        // Check weapon validity - only show upgrades for character's starting weapon
+        // (not powerup weapons, since those are temporary)
+        const startingWeapon = player.characterData?.weapon || player.weaponKey || 'pistol';
+
         if (upgrade.validWeapons) {
-            return upgrade.validWeapons.includes(weaponKey);
+            // Must match starting weapon exactly
+            return upgrade.validWeapons.includes(startingWeapon);
         }
-        
+
         if (upgrade.upgradeCategory) {
-            return isUpgradeValidForWeapon(weaponKey, upgrade.upgradeCategory);
+            return isUpgradeValidForWeapon(startingWeapon, upgrade.upgradeCategory);
         }
-        
+
         return true;
     }
-    
+
     return true;
 }
 
-// Get random upgrades for draft (weapon-aware, includes weapon selection)
+// Get random upgrades for draft (weapon-aware)
 export function getRandomUpgrades(count = 3, player = null) {
     const upgradeKeys = Object.keys(UPGRADES);
-    const weaponKeys = Object.keys(WEAPON_UPGRADES);
-    
-    // Combine regular upgrades and weapon selections
+
+    // Map upgrade keys to full upgrade objects
     let allOptions = upgradeKeys.map(key => ({ key, ...UPGRADES[key], type: 'upgrade' }));
-    allOptions = allOptions.concat(weaponKeys.map(key => ({ key, ...WEAPON_UPGRADES[key], weaponKey: key, type: 'weapon' })));
-    
+
     // Filter based on player state
     let validOptions = allOptions;
     if (player) {
         validOptions = allOptions.filter(option => isUpgradeValidForPlayer(option, player));
     }
-    
+
     // If not enough valid options, fall back to all options
     if (validOptions.length < count) {
         validOptions = allOptions;
     }
-    
+
     const selected = [];
     const used = new Set();
-    
+
     while (selected.length < count && selected.length < validOptions.length) {
         const randomIndex = Math.floor(Math.random() * validOptions.length);
         const option = validOptions[randomIndex];
@@ -511,60 +497,13 @@ export function getRandomUpgrades(count = 3, player = null) {
             selected.push(option);
         }
     }
-    
+
     return selected;
 }
 
 // Apply upgrade to player
 export function applyUpgrade(player, upgradeKey) {
-    // Check if it's a weapon selection
-    if (WEAPON_UPGRADES[upgradeKey]) {
-        // Add weapon to player's weapon list
-        if (!player.weapons.includes(upgradeKey)) {
-            player.weapons.push(upgradeKey);
-        }
-        // Switch to the new weapon
-        const weaponDef = getWeaponDefinition(upgradeKey);
-        player.weaponKey = upgradeKey;
-        player.weaponDef = weaponDef;
-        
-        // Apply weapon stats
-        player.fireRate = weaponDef.fireRate;
-        player.projectileSpeed = weaponDef.projectileSpeed;
-        player.projectileDamage = weaponDef.baseDamage;
-        player.projectileCount = weaponDef.projectileCount;
-        player.piercing = weaponDef.piercing;
-        player.obstaclePiercing = weaponDef.obstaclePiercing;
-        player.critChance = weaponDef.critChance;
-        player.critDamage = weaponDef.critDamage;
-        player.spreadAngle = weaponDef.spreadAngle;
-        player.weaponRange = weaponDef.range;
-        player.weaponCategory = weaponDef.category;
-        
-        // Apply weapon-specific properties
-        if (weaponDef.orbitRadius) {
-            player.orbitRadius = weaponDef.orbitRadius;
-            player.rotationSpeed = weaponDef.rotationSpeed;
-            player.orbitalOrbs = [];
-            player.orbitalAngles = [];
-            player.orbitalNeedsReinit = true;
-        }
-        if (weaponDef.explosionRadius) {
-            player.explosionRadius = weaponDef.explosionRadius;
-            player.explosionDamage = weaponDef.explosionDamage;
-        }
-        if (weaponDef.chainRange) {
-            player.chainRange = weaponDef.chainRange;
-            player.maxJumps = weaponDef.maxJumps;
-            player.chainDamageReduction = weaponDef.chainDamageReduction;
-        }
-        
-        // Reapply all upgrades to recalculate stats
-        recalculateAllUpgrades(player);
-        return;
-    }
-    
-    // Regular upgrade
+    // Get the upgrade
     const upgrade = UPGRADES[upgradeKey];
     if (!upgrade) return;
     
