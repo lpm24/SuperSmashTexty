@@ -170,6 +170,10 @@ export function setupGameScene(k) {
 
             // Create new minimap
             gameState.minimap = createMinimap(k, gameState.floorMap);
+            // Update k.gameData reference
+            if (k.gameData) {
+                k.gameData.minimap = gameState.minimap;
+            }
         } else {
             // Update minimap if it exists
             if (gameState.minimap) {
@@ -560,7 +564,7 @@ export function setupGameScene(k) {
 
         // XP Bar (bottom of screen)
         const xpBarWidth = k.width() - 40;
-        const xpBarHeight = 20;
+        const xpBarHeight = 15; // Reduced by 25% from 20
         const xpBarY = k.height() - 30;
 
         const xpBarBg = k.add([
@@ -574,14 +578,14 @@ export function setupGameScene(k) {
 
         const xpBarFill = k.add([
             k.rect(0, xpBarHeight - 4),
-            k.pos(22, xpBarY + 2),
-            k.color(100, 200, 255), // Blue XP color
+            k.pos(50, xpBarY + 2), // Start after level badge
+            k.color(100, 255, 100), // Green XP color (matches pickup)
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 1)
         ]);
 
         const xpBarText = k.add([
-            k.text('XP: 0/10', { size: UI_TEXT_SIZES.SMALL }),
+            k.text('0/10', { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(k.width() / 2, xpBarY + xpBarHeight / 2),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -589,18 +593,32 @@ export function setupGameScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Level text (over XP bar, left side)
+        // Level badge (circular frame on left end of XP bar)
+        const levelBadgeSize = 28;
+        const levelBadgeX = 20 + levelBadgeSize / 2;
+        const levelBadgeY = xpBarY + xpBarHeight / 2;
+
+        const levelBadgeBg = k.add([
+            k.circle(levelBadgeSize / 2),
+            k.pos(levelBadgeX, levelBadgeY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(100, 255, 100)), // Green outline to match XP
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BG + 2)
+        ]);
+
         const levelText = k.add([
-            k.text(`${UI_TERMS.LEVEL}: 1`, { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(30, xpBarY + xpBarHeight / 2),
-            k.anchor('left'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.text('1', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(levelBadgeX, levelBadgeY),
+            k.anchor('center'),
+            k.color(100, 255, 100), // Green text to match XP
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
         // Player Health Bar (follows player when damaged, shown below player)
-        const playerHealthBarWidth = 60;
+        const playerHealthBarWidth = 40; // Reduced from 60 to 40
         const playerHealthBarHeight = 8;
         const playerHealthBarOffsetY = 25; // Below player
 
@@ -616,7 +634,7 @@ export function setupGameScene(k) {
         const playerHealthBarFill = k.add([
             k.rect(playerHealthBarWidth - 2, playerHealthBarHeight - 2),
             k.pos(0, 0),
-            k.anchor('center'),
+            k.anchor('left'), // Changed from 'center' to 'left' so it drains from right
             k.color(100, 255, 100), // Green health color
             k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
@@ -630,7 +648,7 @@ export function setupGameScene(k) {
         // ==========================================
         const weaponIconSize = 48;
         const weaponIconX = 20;
-        const weaponIconY = k.height() - 70; // Above XP bar
+        const weaponIconY = k.height() - 85; // Above XP bar (moved up to avoid overlap)
 
         const weaponIconBg = k.add([
             k.rect(weaponIconSize, weaponIconSize),
@@ -904,8 +922,44 @@ export function setupGameScene(k) {
             tooltipText.hidden = true;
         }
 
+        function saveTooltipState() {
+            return {
+                hidden: tooltip.hidden,
+                text: tooltipText.text,
+                tooltipX: tooltip.pos.x,
+                tooltipY: tooltip.pos.y,
+                textX: tooltipText.pos.x,
+                textY: tooltipText.pos.y
+            };
+        }
+
+        function restoreTooltipState(state) {
+            if (!state) return;
+            tooltip.hidden = state.hidden;
+            tooltipText.hidden = state.hidden;
+            tooltipText.text = state.text;
+            tooltip.pos.x = state.tooltipX;
+            tooltip.pos.y = state.tooltipY;
+            tooltipText.pos.x = state.textX;
+            tooltipText.pos.y = state.textY;
+        }
+
+        // Export tooltip functions so they can be called from other modules
+        k.gameData = k.gameData || {};
+        k.gameData.hideTooltip = hideTooltip;
+        k.gameData.saveTooltipState = saveTooltipState;
+        k.gameData.restoreTooltipState = restoreTooltipState;
+        k.gameData.minimap = gameState.minimap;
+        k.gameData.minimapSavedMode = undefined;
+        k.gameData.tooltipSavedState = undefined;
+
         // Hover detection for tooltips
         k.onUpdate(() => {
+            // Don't show tooltips when paused or during upgrade draft
+            if (k.paused || isUpgradeDraftActive()) {
+                return;
+            }
+
             const mousePos = k.mousePos();
             let hovering = false;
 
@@ -1063,12 +1117,12 @@ export function setupGameScene(k) {
             const currentHP = player.exists() ? player.hp() : 0;
             const healthPercent = player.maxHealth > 0 ? currentHP / player.maxHealth : 1;
 
-            // Update level text
-            levelText.text = `${UI_TERMS.LEVEL}: ${player.level}`;
+            // Update level text (just show the number)
+            levelText.text = `${player.level}`;
 
             // Update XP bar
             const xpProgress = player.xpToNext > 0 ? player.xp / player.xpToNext : 0;
-            xpBarFill.width = Math.max(0, (xpBarWidth - 4) * xpProgress);
+            xpBarFill.width = Math.max(0, (xpBarWidth - 34) * xpProgress); // Account for level badge space
             xpBarText.text = formatXP(player.xp, player.xpToNext);
 
             // Update credit counter
@@ -1083,7 +1137,10 @@ export function setupGameScene(k) {
                 const healthBarX = player.pos.x;
                 const healthBarY = player.pos.y + playerHealthBarOffsetY;
                 playerHealthBarBg.pos = k.vec2(healthBarX, healthBarY);
-                playerHealthBarFill.pos = k.vec2(healthBarX, healthBarY);
+
+                // Fill bar uses 'left' anchor, so offset X to left edge of background
+                const fillBarX = healthBarX - (playerHealthBarWidth / 2) + 1; // +1 for border offset
+                playerHealthBarFill.pos = k.vec2(fillBarX, healthBarY);
 
                 // Update health bar width
                 playerHealthBarFill.width = Math.max(0, (playerHealthBarWidth - 2) * healthPercent);
@@ -2076,7 +2133,7 @@ export function setupGameScene(k) {
                     const flyingPickup = k.add([
                         k.text('+', { size: 12 }),
                         k.pos(pickup.pos.x, pickup.pos.y),
-                        k.color(100, 200, 255),
+                        k.color(100, 255, 100), // Green to match XP pickup color
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT + 1)
                     ]);
@@ -2107,10 +2164,10 @@ export function setupGameScene(k) {
                         if (progress >= 1) {
                             k.destroy(flyingPickup);
                             // Pulse XP bar on pickup collection
-                            xpBarFill.color = k.rgb(150, 255, 255);
+                            xpBarFill.color = k.rgb(150, 255, 150); // Bright green pulse
                             k.wait(0.1, () => {
                                 if (xpBarFill.exists()) {
-                                    xpBarFill.color = k.rgb(100, 200, 255);
+                                    xpBarFill.color = k.rgb(100, 255, 100); // Return to normal green
                                 }
                             });
                         }
@@ -2598,9 +2655,9 @@ export function setupGameScene(k) {
             });
         });
         
-        // Pause overlay - smaller centered box that doesn't cover UI
+        // Pause overlay - compact box that fits just the title and buttons
         const pauseOverlay = k.add([
-            k.rect(500, 400),
+            k.rect(270, 250),
             k.pos(k.width() / 2, k.height() / 2),
             k.anchor('center'),
             k.color(0, 0, 0),
@@ -2681,6 +2738,18 @@ export function setupGameScene(k) {
         // Button handlers
         resumeButton.onClick(() => {
             k.paused = false;
+            // Restore minimap mode
+            if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
+                k.gameData.minimap.mode = k.gameData.minimapSavedMode;
+                k.gameData.minimap.update();
+                k.gameData.minimapSavedMode = undefined;
+            }
+            // Restore tooltip state
+            if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
+                k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
+                k.gameData.tooltipSavedState = undefined;
+            }
+            playUnpause();
             pauseOverlay.hidden = true;
             pauseText.hidden = true;
             k.get('pauseButton').forEach(btn => btn.hidden = true);
@@ -2718,8 +2787,32 @@ export function setupGameScene(k) {
             // Play pause or unpause sound
             if (k.paused) {
                 playPause();
+                // Save tooltip state and hide it
+                if (k.gameData && k.gameData.saveTooltipState && k.gameData.hideTooltip) {
+                    k.gameData.tooltipSavedState = k.gameData.saveTooltipState();
+                    k.gameData.hideTooltip();
+                }
+                // Save current minimap mode and expand it
+                if (k.gameData && k.gameData.minimap) {
+                    k.gameData.minimapSavedMode = k.gameData.minimap.mode;
+                    if (k.gameData.minimap.mode !== 'maximized') {
+                        k.gameData.minimap.mode = 'maximized';
+                        k.gameData.minimap.update();
+                    }
+                }
             } else {
                 playUnpause();
+                // Restore minimap mode
+                if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
+                    k.gameData.minimap.mode = k.gameData.minimapSavedMode;
+                    k.gameData.minimap.update();
+                    k.gameData.minimapSavedMode = undefined;
+                }
+                // Restore tooltip state
+                if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
+                    k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
+                    k.gameData.tooltipSavedState = undefined;
+                }
             }
 
             pauseOverlay.hidden = !k.paused;

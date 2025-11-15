@@ -14,12 +14,28 @@ let upgradeDraftActive = false;
 export function showUpgradeDraft(k, player, onSelect) {
     // Don't show if already showing
     if (upgradeDraftActive) return;
-    
+
     // Mark upgrade draft as active
     upgradeDraftActive = true;
-    
+
     // Pause the game
     k.paused = true;
+
+    // Save tooltip state and hide it (accessed from k.gameData if available)
+    if (k.gameData && k.gameData.saveTooltipState && k.gameData.hideTooltip) {
+        k.gameData.tooltipSavedState = k.gameData.saveTooltipState();
+        k.gameData.hideTooltip();
+    }
+
+    // Save current minimap mode (accessed from k.gameData if available)
+    if (k.gameData && k.gameData.minimap) {
+        k.gameData.minimapSavedMode = k.gameData.minimap.mode;
+        // Set minimap to maximized for better visibility during upgrade selection
+        if (k.gameData.minimap.mode !== 'maximized') {
+            k.gameData.minimap.mode = 'maximized';
+            k.gameData.minimap.update();
+        }
+    }
     
     // Get 3 random upgrades (weapon-aware)
     const upgrades = getRandomUpgrades(3, player);
@@ -119,10 +135,10 @@ export function showUpgradeDraft(k, player, onSelect) {
             'upgradeUI'
         ]);
 
-        // Selection number
+        // Selection number (top-right corner of card)
         const numText = k.add([
             k.text(`${index + 1}`, { size: UI_TEXT_SIZES.HEADER }),
-            k.pos(cardX, cardY - 60),
+            k.pos(cardX + cardWidth / 2 - 20, cardY - cardHeight / 2 + 15),
             k.anchor('center'),
             k.color(...UI_COLORS.WARNING),
             k.fixed(),
@@ -154,25 +170,38 @@ export function showUpgradeDraft(k, player, onSelect) {
 
         // Mark upgrade draft as inactive first to prevent re-entry
         upgradeDraftActive = false;
-        
+
         // Note: Key handlers don't need to be removed - they check upgradeDraftActive flag
         // and will return early if the draft is not active
-        
+
         // Apply upgrade
         applyUpgrade(player, selected.key);
-        
+
         // Track upgrade for synergies
         trackUpgrade(player, selected.key);
-        
+
         // Check and apply synergies
         checkAndApplySynergies(k, player);
-        
+
         // Remove UI
         k.get('upgradeUI').forEach(obj => k.destroy(obj));
         k.get('upgradeOverlay').forEach(obj => k.destroy(obj));
-        
+
+        // Restore minimap mode
+        if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
+            k.gameData.minimap.mode = k.gameData.minimapSavedMode;
+            k.gameData.minimap.update();
+            k.gameData.minimapSavedMode = undefined;
+        }
+
         // Unpause game
         k.paused = false;
+
+        // Restore tooltip state after unpausing
+        if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
+            k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
+            k.gameData.tooltipSavedState = undefined;
+        }
         
         // Callback (call after unpausing)
         k.wait(0.1, () => {

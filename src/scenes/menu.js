@@ -546,9 +546,10 @@ export function setupMenuScene(k) {
         const partyPanelX = 20;
         const partyPanelY = 20;
         const partyPanelWidth = 188;
-        const slotHeight = 32;
-        const slotSpacing = 4;
-        const partyPanelHeight = (slotHeight * 4) + (slotSpacing * 3) + 80; // 4 slots + spacing + invite code area
+        const slotHeight = 24; // Reduced from 32 to 24
+        const slotSpacing = 3; // Reduced from 4 to 3
+        const titlePadding = 10; // Small padding at top instead of 35
+        const partyPanelHeight = titlePadding + (slotHeight * 4) + (slotSpacing * 3) + 60; // No title, just slots + invite area
 
         // Party panel background
         k.add([
@@ -564,7 +565,7 @@ export function setupMenuScene(k) {
         const partySlots = getPartyDisplayInfo();
 
         // Create party slot UI elements
-        const slotsStartY = partyPanelY + 35;
+        const slotsStartY = partyPanelY + titlePadding;
         partySlots.forEach((slot, index) => {
             const slotY = slotsStartY + (index * (slotHeight + slotSpacing));
 
@@ -614,10 +615,11 @@ export function setupMenuScene(k) {
         // Invite code section
         const inviteCodeY = slotsStartY + (4 * (slotHeight + slotSpacing)) + 10;
 
+        // Label on the left
         k.add([
-            k.text('Your Invite Code:', { size: UI_TEXT_SIZES.SMALL - 2 }),
-            k.pos(partyPanelX + partyPanelWidth / 2, inviteCodeY),
-            k.anchor('center'),
+            k.text('Invite Code:', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(partyPanelX + 10, inviteCodeY),
+            k.anchor('left'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
@@ -628,11 +630,12 @@ export function setupMenuScene(k) {
         // Check if multiplayer is available
         const multiplayerAvailable = isMultiplayerAvailable();
 
+        // Code/status on the right (same line)
         if (multiplayerAvailable) {
             k.add([
-                k.text(inviteCode, { size: UI_TEXT_SIZES.LABEL }),
-                k.pos(partyPanelX + partyPanelWidth / 2, inviteCodeY + 20),
-                k.anchor('center'),
+                k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
+                k.anchor('right'),
                 k.color(...UI_COLORS.GOLD),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
@@ -640,17 +643,17 @@ export function setupMenuScene(k) {
         } else {
             // Show offline status
             k.add([
-                k.text('OFFLINE', { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(partyPanelX + partyPanelWidth / 2, inviteCodeY + 20),
-                k.anchor('center'),
+                k.text('OFFLINE', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
+                k.anchor('right'),
                 k.color(...UI_COLORS.TEXT_DISABLED),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
         }
 
-        // Join Party button
-        const joinButtonY = inviteCodeY + 45;
+        // Join Party button (moved up since we removed a line)
+        const joinButtonY = inviteCodeY + 25;
         const joinButton = createMenuButton(
             k,
             'JOIN PARTY',
@@ -984,34 +987,43 @@ export function setupMenuScene(k) {
         });
 
         // Keyboard shortcuts (disabled when dialog is open)
-        k.onKeyPress('space', () => {
+        const spaceHandler = k.onKeyPress('space', () => {
             if (isDialogOpen) return;
             playMenuSelect();
             k.go('game', { resetState: true });
         });
 
-        k.onKeyPress('c', () => {
+        const cHandler = k.onKeyPress('c', () => {
             if (isDialogOpen) return;
             playMenuNav();
             k.go('characterSelect');
         });
 
-        k.onKeyPress('s', () => {
+        const sHandler = k.onKeyPress('s', () => {
             if (isDialogOpen) return;
             playMenuNav();
             k.go('shop');
         });
 
-        k.onKeyPress('o', () => {
+        const oHandler = k.onKeyPress('o', () => {
             if (isDialogOpen) return;
             playMenuNav();
             k.go('settings');
         });
 
-        k.onKeyPress('t', () => {
+        const tHandler = k.onKeyPress('t', () => {
             if (isDialogOpen) return;
             playMenuNav();
             k.go('statistics');
+        });
+
+        // Cleanup handlers when scene ends
+        k.onSceneLeave(() => {
+            spaceHandler.cancel();
+            cHandler.cancel();
+            sHandler.cancel();
+            oHandler.cancel();
+            tHandler.cancel();
         });
 
         // Animated ASCII creatures moving across screen
@@ -1196,7 +1208,7 @@ export function setupMenuScene(k) {
                     k.text('$', { size: 24 }),
                     k.pos(startX, startY),
                     k.color(...UI_COLORS.GOLD),
-                    k.area(),
+                    k.area({ scale: 2.5 }), // Larger hitbox for easier clicking
                     k.anchor('center'),
                     k.z(UI_Z_LAYERS.PARTICLES + 1),
                     'goldenEnemy'
