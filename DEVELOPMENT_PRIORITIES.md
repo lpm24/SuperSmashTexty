@@ -1,7 +1,7 @@
 # Development Priorities & Next Steps
 
-**Last Updated:** 2025-01-14
-**Status:** Post-Architecture Refactor
+**Last Updated:** 2025-01-15
+**Status:** Post-Architecture Refactor - Menu Polish Complete
 
 ---
 
@@ -41,9 +41,24 @@
 - ✅ Twin Guardians as separate bosses (implemented with opposite door spawning)
 - ✅ Penetrating shots decision (separate `piercing` and `obstaclePiercing` stats)
 - ✅ Regenerative shields for bosses (implemented with 3s cooldown after damage)
+- ✅ Menu UI standardization and polish (credit indicators, back buttons, character icons, escalating prices)
 - ⚠️ Enemy AI obstacle handling (basic avoidance, could be improved)
 
 ---
+
+## 🎉 Recent Updates (January 2025)
+
+### Menu UI Improvements
+- ✅ **Standardized Credit Indicator**: Unified credit display across all menus with rotating currency symbols ($, ₤, €, ₿, ¥, £, ¢, ₹)
+- ✅ **Standardized Back Buttons**: Consistent styling, size, and positioning across all menu scenes
+- ✅ **Character Icons in Shop**: Visual character icons displayed on shop's character page
+- ✅ **Shop Improvements**: 
+  - Escalating upgrade prices (Level 1=$50, Level 2=$65, Level 3=$90, Level 4=$115, Level 5=$160)
+  - Price display with $ prefix
+  - Green border for unlocked characters (replaces "UNLOCKED" text)
+- ✅ **Pause Menu**: Fixed spacing and removed "(ESC)" text from Resume button
+- ✅ **Weapon Detail State**: Properly saves and restores minimized/maximized state when pausing/unpausing
+- ✅ **Statistics Menu**: Added padding between Statistics and Achievements tab buttons
 
 ## 🎯 Current Focus Areas
 

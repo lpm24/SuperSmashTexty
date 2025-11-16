@@ -10,7 +10,8 @@ import {
     UI_SPACING,
     UI_BUTTON,
     UI_Z_LAYERS,
-    formatButtonText
+    formatButtonText,
+    createCreditIndicator
 } from '../config/uiConfig.js';
 
 // Track if a dialog is currently open (to disable menu hotkeys)
@@ -676,40 +677,8 @@ export function setupMenuScene(k) {
             showJoinPartyDialog(k, joinButton);
         });
 
-        // Currency display (top right) - with background panel
-        // Create text first to measure width
-        const currencyText = k.add([
-            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(0, 0),
-            k.opacity(0), // Hidden for measurement
-            k.fixed()
-        ]);
-
-        // Calculate panel width based on text width with padding
-        const panelWidth = currencyText.width + 30;
-        const panelHeight = 40;
-
-        // Destroy measurement text
-        k.destroy(currencyText);
-
-        const currencyPanel = k.add([
-            k.rect(panelWidth, panelHeight),
-            k.pos(k.width() - 20, 20),
-            k.anchor('topright'),
-            k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_BACKGROUND)
-        ]);
-
-        k.add([
-            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() - 20 - panelWidth / 2, 40),
-            k.anchor('center'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        // Currency display (standardized)
+        const creditIndicator = createCreditIndicator(k, currency, currencyName);
 
         // ==========================================
         // SELECTED CHARACTER DISPLAY (Bottom Right)

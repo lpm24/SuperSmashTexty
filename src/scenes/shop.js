@@ -6,7 +6,8 @@ import {
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
-    formatButtonText
+    formatButtonText,
+    createCreditIndicator
 } from '../config/uiConfig.js';
 
 export function setupShopScene(k) {
@@ -37,15 +38,8 @@ export function setupShopScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Currency display
-        const currencyText = k.add([
-            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.HEADER }),
-            k.pos(k.width() - 20, 20),
-            k.anchor('topright'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        // Currency display (standardized)
+        const creditIndicator = createCreditIndicator(k, currency, currencyName);
         
         // Category tabs
         const tabY = 90;
@@ -161,36 +155,67 @@ export function setupShopScene(k) {
                 const itemY = startY + row * itemSpacing;
                 
                 // Item card background
+                // For characters, use green border if unlocked
+                const isUnlockedChar = currentCategory === 'characters' && isUnlocked('characters', key);
+                const borderColor = isUnlockedChar ? k.rgb(100, 255, 100) : k.rgb(80, 80, 100);
+                
                 const cardBg = k.add([
                     k.rect(320, 90),
                     k.pos(itemX, itemY),
                     k.anchor('topleft'),
                     k.color(40, 40, 50),
-                    k.outline(2, k.rgb(80, 80, 100)),
+                    k.outline(2, borderColor),
                     k.area(),
                     k.fixed(),
                     k.z(1000)
                 ]);
                 
-                // Item name
+                // Character icon (if this is a character) - centered vertically
+                if (currentCategory === 'characters' && unlock.char) {
+                    const iconText = k.add([
+                        k.text(unlock.char, { size: 32 }),
+                        k.pos(itemX + 25, itemY + 45), // Center vertically: itemY + 90/2 = itemY + 45
+                        k.anchor('center'),
+                        k.color(...(isUnlockedChar && unlock.color ? unlock.color : [100, 100, 100])),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    unlockItems.push(iconText);
+                }
+                
+                // Item name (offset right if character icon is present)
+                const nameX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
                 const nameText = k.add([
                     k.text(unlock.name, { size: 18 }),
-                    k.pos(itemX + 10, itemY + 10),
+                    k.pos(nameX, itemY + 10),
                     k.anchor('topleft'),
                     k.color(255, 255, 255),
                     k.fixed(),
                     k.z(1001)
                 ]);
                 
-                // Item description (with width constraint to prevent overflow)
+                // Item description (with width constraint to prevent overflow, offset if character icon present)
+                const descX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
+                const descWidth = (currentCategory === 'characters' && unlock.char) ? 230 : 300;
                 const descText = k.add([
-                    k.text(unlock.description, { size: 14, width: 300 }),
-                    k.pos(itemX + 10, itemY + 35),
+                    k.text(unlock.description, { size: 14, width: descWidth }),
+                    k.pos(descX, itemY + 35),
                     k.anchor('topleft'),
                     k.color(200, 200, 200),
                     k.fixed(),
                     k.z(1001)
                 ]);
+                
+                // Calculate escalating price for permanent upgrades
+                function getUpgradePrice(level) {
+                    // Level 1 = $50, Level 2 = $65, Level 3 = $90, Level 4 = $115, Level 5 = $160
+                    const prices = [50, 65, 90, 115, 160];
+                    if (level < prices.length) {
+                        return prices[level];
+                    }
+                    // For levels beyond 5, increase by 50 each level
+                    return 160 + (level - 4) * 50;
+                }
                 
                 // Check if unlocked / level
                 let statusText = '';
@@ -204,6 +229,13 @@ export function setupShopScene(k) {
                         statusText = `MAX (${level}/${maxLevel})`;
                     } else {
                         statusText = `Level ${level}/${maxLevel}`;
+                        // Use escalating price based on current level
+                        purchaseCost = getUpgradePrice(level);
+                        canPurchase = currency >= purchaseCost;
+                    }
+                } else if (currentCategory === 'characters') {
+                    // For characters, don't show "UNLOCKED" text - border color indicates unlock status
+                    if (!isUnlocked('characters', key)) {
                         canPurchase = currency >= purchaseCost;
                     }
                 } else {
@@ -214,17 +246,21 @@ export function setupShopScene(k) {
                     }
                 }
                 
-                // Status text
-                const statusLabel = k.add([
-                    k.text(statusText, { size: 14 }),
-                    k.pos(itemX + 10, itemY + 60),
-                    k.anchor('topleft'),
-                    k.color(isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200, 
-                            isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 255 : 200, 
-                            isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200),
-                    k.fixed(),
-                    k.z(1001)
-                ]);
+                // Status text (only show if not a character, or if it's a permanent upgrade)
+                let statusLabel = null;
+                if (statusText && currentCategory !== 'characters') {
+                    const statusX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
+                    statusLabel = k.add([
+                        k.text(statusText, { size: 14 }),
+                        k.pos(statusX, itemY + 60),
+                        k.anchor('topleft'),
+                        k.color(isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200, 
+                                isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 255 : 200, 
+                                isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                }
                 
                 // Purchase button
                 if (canPurchase || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) < (unlock.maxLevel || 1))) {
@@ -240,7 +276,7 @@ export function setupShopScene(k) {
                     ]);
                     
                     const buttonText = k.add([
-                        k.text(`${purchaseCost} ${currencyName}`, { size: 14 }),
+                        k.text(`$${purchaseCost}`, { size: 14 }),
                         k.pos(itemX + 270, itemY + 70),
                         k.anchor('center'),
                         k.color(canPurchase ? 255 : 150, canPurchase ? 255 : 150, canPurchase ? 255 : 150),
@@ -280,7 +316,7 @@ export function setupShopScene(k) {
                                     // Refresh shop
                                     refreshShop();
                                     // Update currency display
-                                    currencyText.text = `${currencyName}: ${getCurrency()}`;
+                                    creditIndicator.updateCurrency(getCurrency());
                                 } else if (result && result.reason === 'insufficientCurrency') {
                                     // Play purchase error sound
                                     playPurchaseError();
@@ -322,7 +358,7 @@ export function setupShopScene(k) {
                                     // Refresh shop
                                     refreshShop();
                                     // Update currency display
-                                    currencyText.text = `${currencyName}: ${getCurrency()}`;
+                                    creditIndicator.updateCurrency(getCurrency());
                                 } else {
                                     // Play purchase error sound
                                     playPurchaseError();
@@ -348,32 +384,36 @@ export function setupShopScene(k) {
                     unlockItems.push(buttonBg, buttonText);
                 }
                 
-                unlockItems.push(cardBg, nameText, descText, statusLabel);
+                // Push all items (only push statusLabel if it exists)
+                unlockItems.push(cardBg, nameText, descText);
+                if (statusLabel) {
+                    unlockItems.push(statusLabel);
+                }
             });
         }
         
         // Initial refresh
         refreshShop();
         
-        // Back button
+        // Back button (standardized, centered like other menus)
         const backButton = k.add([
             k.rect(120, 35),
-            k.pos(20, k.height() - 40),
-            k.anchor('topleft'),
-            k.color(80, 80, 100),
-            k.outline(2, k.rgb(150, 150, 150)),
+            k.pos(k.width() / 2, k.height() - 40),
+            k.anchor('center'),
+            k.color(...UI_COLORS.NEUTRAL),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
-            k.z(1000)
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
         
         const backText = k.add([
-            k.text('Back', { size: 16 }),
-            k.pos(80, k.height() - 22),
+            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
-            k.color(200, 200, 200),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
-            k.z(1001)
+            k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         
         backButton.onClick(() => {

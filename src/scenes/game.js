@@ -152,6 +152,10 @@ export function setupGameScene(k) {
                 enemiesKilled: 0,
                 bossesKilled: 0
             };
+            // Reset weapon detail saved state
+            if (k.gameData) {
+                k.gameData.weaponDetailSavedState = undefined;
+            }
         }
 
         // Use persistent game state
@@ -693,7 +697,7 @@ export function setupGameScene(k) {
         ]);
 
         const weaponDetailName = k.add([
-            k.text('Basic Pistol', { size: UI_TEXT_SIZES.SMALL }),
+            k.text('Basic Pistol', { size: UI_TEXT_SIZES.SMALL, width: 160 }), // Width constraint to prevent overflow
             k.pos(weaponIconX + 50, weaponIconY - weaponDetailHeight - 10 + 10),
             k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
@@ -732,8 +736,16 @@ export function setupGameScene(k) {
         weaponDetailFireRate.hidden = true;
         weaponDetailDPS.hidden = true;
 
+        // Track weapon detail state (reset to minimized on new game)
+        let weaponDetailState = false; // false = minimized, true = maximized
+        // Reset state on new game
+        if (args?.resetState) {
+            weaponDetailState = false;
+        }
+        
         // Click handler for weapon icon
         weaponIconBg.onClick(() => {
+            weaponDetailState = !weaponDetailState;
             weaponDetailBg.hidden = !weaponDetailBg.hidden;
             weaponDetailIcon.hidden = !weaponDetailIcon.hidden;
             weaponDetailName.hidden = !weaponDetailName.hidden;
@@ -1181,22 +1193,37 @@ export function setupGameScene(k) {
                 weaponIconText.text = weaponDef.icon || '⌐';
                 weaponIconText.color = k.rgb(...weaponDef.color);
 
-                // Update weapon detail popup info
+                // Update weapon detail popup info (always update, even when hidden)
                 weaponDetailIcon.text = weaponDef.icon || '⌐';
                 weaponDetailIcon.color = k.rgb(...weaponDef.color);
                 weaponDetailName.text = weaponDef.name;
+                // Ensure name color is always white/primary (explicitly set to prevent color issues)
+                weaponDetailName.color = k.rgb(...UI_COLORS.TEXT_PRIMARY);
                 weaponDetailDamage.text = `DMG: ${player.projectileDamage}`;
                 weaponDetailFireRate.text = `RATE: ${player.fireRate.toFixed(2)}/s`;
                 weaponDetailDPS.text = `DPS: ${dps}`;
 
-                // Show weapon details when paused
+                // Show weapon details when paused (save state before showing)
                 if (k.paused) {
+                    // Save current state before forcing it visible
+                    if (k.gameData.weaponDetailSavedState === undefined) {
+                        k.gameData.weaponDetailSavedState = weaponDetailState;
+                    }
+                    // Force visible when paused (regardless of saved state)
                     weaponDetailBg.hidden = false;
                     weaponDetailIcon.hidden = false;
                     weaponDetailName.hidden = false;
                     weaponDetailDamage.hidden = false;
                     weaponDetailFireRate.hidden = false;
                     weaponDetailDPS.hidden = false;
+                } else {
+                    // When not paused, respect the weaponDetailState
+                    weaponDetailBg.hidden = !weaponDetailState;
+                    weaponDetailIcon.hidden = !weaponDetailState;
+                    weaponDetailName.hidden = !weaponDetailState;
+                    weaponDetailDamage.hidden = !weaponDetailState;
+                    weaponDetailFireRate.hidden = !weaponDetailState;
+                    weaponDetailDPS.hidden = !weaponDetailState;
                 }
             }
 
@@ -2274,10 +2301,11 @@ export function setupGameScene(k) {
                     applyPowerupWeapon(player, pickup.powerupKey);
 
                     // Visual feedback - flash effect
+                    const powerup = POWERUP_WEAPONS[pickup.powerupKey];
                     const flash = k.add([
-                        k.text(pickup.text(), { size: 32 }),
+                        k.text(powerup.icon, { size: 32 }),
                         k.pos(player.pos.x, player.pos.y - 30),
-                        k.color(...pickup.color.toArray()),
+                        k.color(...powerup.color),
                         k.anchor('center'),
                         k.z(UI_Z_LAYERS.UI_TEXT + 1),
                         k.opacity(1)
@@ -2698,7 +2726,7 @@ export function setupGameScene(k) {
         ]);
 
         const resumeText = k.add([
-            k.text('Resume (ESC)', { size: 18 }),
+            k.text('Resume', { size: 18 }),
             k.pos(k.width() / 2, buttonY - buttonSpacing / 2),
             k.anchor('center'),
             k.color(255, 255, 255),
@@ -2751,6 +2779,17 @@ export function setupGameScene(k) {
             if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
                 k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
                 k.gameData.tooltipSavedState = undefined;
+            }
+            // Restore weapon detail state
+            if (k.gameData && k.gameData.weaponDetailSavedState !== undefined) {
+                weaponDetailState = k.gameData.weaponDetailSavedState;
+                weaponDetailBg.hidden = !weaponDetailState;
+                weaponDetailIcon.hidden = !weaponDetailState;
+                weaponDetailName.hidden = !weaponDetailState;
+                weaponDetailDamage.hidden = !weaponDetailState;
+                weaponDetailFireRate.hidden = !weaponDetailState;
+                weaponDetailDPS.hidden = !weaponDetailState;
+                k.gameData.weaponDetailSavedState = undefined;
             }
             playUnpause();
             pauseOverlay.hidden = true;
@@ -2806,6 +2845,10 @@ export function setupGameScene(k) {
                         k.gameData.minimap.update();
                     }
                 }
+                // Save weapon detail state before showing it
+                if (k.gameData.weaponDetailSavedState === undefined) {
+                    k.gameData.weaponDetailSavedState = weaponDetailState;
+                }
             } else {
                 playUnpause();
                 // Restore minimap mode
@@ -2818,6 +2861,17 @@ export function setupGameScene(k) {
                 if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
                     k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
                     k.gameData.tooltipSavedState = undefined;
+                }
+                // Restore weapon detail state
+                if (k.gameData && k.gameData.weaponDetailSavedState !== undefined) {
+                    weaponDetailState = k.gameData.weaponDetailSavedState;
+                    weaponDetailBg.hidden = !weaponDetailState;
+                    weaponDetailIcon.hidden = !weaponDetailState;
+                    weaponDetailName.hidden = !weaponDetailState;
+                    weaponDetailDamage.hidden = !weaponDetailState;
+                    weaponDetailFireRate.hidden = !weaponDetailState;
+                    weaponDetailDPS.hidden = !weaponDetailState;
+                    k.gameData.weaponDetailSavedState = undefined;
                 }
             }
 

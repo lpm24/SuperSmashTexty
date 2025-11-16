@@ -212,3 +212,91 @@ export const UI_ANIMATIONS = {
     PULSE_SPEED: 2,
     WAVE_SPEED: 1
 };
+
+// =============================================================================
+// CURRENCY SYMBOLS (for rotating display)
+// =============================================================================
+
+export const CURRENCY_SYMBOLS = ['$', '₤', '€', '₿', '¥', '£', '¢', '₹'];
+
+/**
+ * Create a standardized credit indicator with rotating currency symbols
+ * @param {Object} k - Kaplay instance
+ * @param {number} currency - Current currency amount
+ * @param {string} currencyName - Name of currency (e.g., "Credits")
+ * @returns {Object} - Object with panel, icon, and text elements for updates
+ */
+export function createCreditIndicator(k, currency, currencyName) {
+    // Currency symbols rotate with random duration between 2-5 seconds
+    const getRandomInterval = () => 2.0 + Math.random() * 3.0; // Random between 2-5 seconds
+    
+    // Create measurement text to calculate panel width (with symbol placeholder, no currency name)
+    const measurementText = k.add([
+        k.text(`${CURRENCY_SYMBOLS[0]}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
+        k.pos(0, 0),
+        k.opacity(0),
+        k.fixed()
+    ]);
+    
+    const panelWidth = measurementText.width + 30;
+    const panelHeight = 40;
+    
+    k.destroy(measurementText);
+    
+    // Panel background
+    const panel = k.add([
+        k.rect(panelWidth, panelHeight),
+        k.pos(k.width() - 20, 20),
+        k.anchor('topright'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.UI_BACKGROUND)
+    ]);
+    
+    // Currency text with rotating symbol only (no currency name)
+    const text = k.add([
+        k.text(`${CURRENCY_SYMBOLS[0]}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
+        k.pos(k.width() - 20 - panelWidth / 2, 40),
+        k.anchor('center'),
+        k.color(...UI_COLORS.GOLD),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.UI_TEXT)
+    ]);
+    
+    // Store rotation state and current currency on text
+    text.symbolIndex = 0;
+    text.timeSinceLastChange = 0;
+    text.currentCurrency = currency;
+    text.symbolChangeInterval = getRandomInterval(); // Initialize with random interval
+    
+    // Update currency amount
+    const updateCurrency = (newCurrency) => {
+        text.currentCurrency = newCurrency;
+        text.text = `${CURRENCY_SYMBOLS[text.symbolIndex]}: ${newCurrency}`;
+        // Recalculate panel width if needed
+        const newWidth = text.width + 30;
+        if (Math.abs(newWidth - panelWidth) > 10) {
+            panel.width = newWidth;
+            text.pos.x = k.width() - 20 - newWidth / 2;
+        }
+    };
+    
+    // Add update handler for rotating symbols
+    text.onUpdate(() => {
+        text.timeSinceLastChange += k.dt();
+        if (text.timeSinceLastChange >= text.symbolChangeInterval) {
+            text.timeSinceLastChange = 0;
+            text.symbolIndex = (text.symbolIndex + 1) % CURRENCY_SYMBOLS.length;
+            text.text = `${CURRENCY_SYMBOLS[text.symbolIndex]}: ${text.currentCurrency}`;
+            // Get new random interval for next rotation
+            text.symbolChangeInterval = getRandomInterval();
+        }
+    });
+    
+    return {
+        panel,
+        text,
+        updateCurrency
+    };
+}

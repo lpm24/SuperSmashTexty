@@ -789,23 +789,23 @@ export function setupSettingsScene(k) {
         // Initial refresh
         refreshSettings();
         
-        // Back button (centered, above reset button)
+        // Back button (standardized, above reset button)
         const backButton = k.add([
             k.rect(120, 35),
             k.pos(k.width() / 2, k.height() - 125),
             k.anchor('center'),
-            k.color(80, 80, 100),
-            k.outline(2, k.rgb(150, 150, 150)),
+            k.color(...UI_COLORS.NEUTRAL),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
         
         const backText = k.add([
-            k.text('Back', { size: 14 }),
+            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 125),
             k.anchor('center'),
-            k.color(200, 200, 200),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);

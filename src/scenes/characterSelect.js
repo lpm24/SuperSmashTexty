@@ -8,7 +8,8 @@ import {
     UI_Z_LAYERS,
     UI_TERMS,
     formatButtonText,
-    formatStatLabel
+    formatStatLabel,
+    createCreditIndicator
 } from '../config/uiConfig.js';
 
 export function setupCharacterSelectScene(k) {
@@ -17,19 +18,12 @@ export function setupCharacterSelectScene(k) {
         const currencyName = getCurrencyName();
         const selectedChar = getSelectedCharacter();
         
-        // Currency display (top right)
-        k.add([
-            k.text(`${currencyName}: ${currency}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() - 20, 20),
-            k.anchor('topright'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        // Currency display (standardized)
+        const creditIndicator = createCreditIndicator(k, currency, currencyName);
 
         // Title
         k.add([
-            k.text('Select Character', { size: UI_TEXT_SIZES.TITLE }),
+            k.text('Character Select', { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 60),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
