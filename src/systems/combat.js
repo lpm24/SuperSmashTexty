@@ -286,7 +286,38 @@ export function setupCombatSystem(k, player) {
         }
         // If no obstacle piercing, projectile passes through cover (cover behavior)
     });
-    
+
+    // Collision: Projectile hits Obstacle (check obstacle piercing)
+    k.onCollide('projectile', 'obstacle', (projectile, obstacle) => {
+        if (k.paused) return;
+
+        // Explosive projectiles are handled separately
+        if (projectile.isExplosive) {
+            return;
+        }
+
+        // Check if projectile has already hit this obstacle (for obstacle piercing)
+        if (projectile.piercedObstacles && projectile.piercedObstacles.has(obstacle)) {
+            return; // Already hit this obstacle
+        }
+
+        // Check if projectile can pierce obstacles
+        if (projectile.obstaclePiercing > 0) {
+            // Track this obstacle for piercing
+            if (projectile.piercedObstacles) {
+                projectile.piercedObstacles.add(obstacle);
+            }
+
+            // Destroy projectile if it can't pierce anymore obstacles
+            if (projectile.piercedObstacles.size > (projectile.obstaclePiercing || 0)) {
+                k.destroy(projectile);
+            }
+        } else {
+            // No obstacle piercing - destroy projectile
+            k.destroy(projectile);
+        }
+    });
+
     // Collision: Projectile hits Enemy
     k.onCollide('projectile', 'enemy', (projectile, enemy) => {
         if (k.paused) return;

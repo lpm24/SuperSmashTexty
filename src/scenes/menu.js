@@ -324,6 +324,9 @@ function showJoinPartyDialog(k, joinPartyBtn) {
         30,
         UI_TEXT_SIZES.SMALL - 2
     );
+    cancelButton.z = UI_Z_LAYERS.OVERLAY + 2; // Ensure button is above dialog
+    cancelButton.labels.forEach(lbl => lbl.z = UI_Z_LAYERS.OVERLAY + 3); // Text above button
+    cancelButton.tags.push('joinDialog');
 
     // Join button
     const joinButton = createMenuButton(
@@ -335,6 +338,9 @@ function showJoinPartyDialog(k, joinPartyBtn) {
         30,
         UI_TEXT_SIZES.SMALL - 2
     );
+    joinButton.z = UI_Z_LAYERS.OVERLAY + 2; // Ensure button is above dialog
+    joinButton.labels.forEach(lbl => lbl.z = UI_Z_LAYERS.OVERLAY + 3); // Text above button
+    joinButton.tags.push('joinDialog');
 
     // Initially disable Join button until code is entered
     joinButton.setDisabled(true);

@@ -180,7 +180,7 @@ export function formatHealth(current, max) {
  * Format XP display
  */
 export function formatXP(current, max) {
-    return `${UI_TERMS.XP}: ${current}/${max}`;
+    return `${current}/${max}`;
 }
 
 // =============================================================================

@@ -1,18 +1,25 @@
 {
   "permissions": {
     "allow": [
-      "Bash(dir /a /s \"C:\\Users\\junk7\\SuperSmashTexty\")",
-      "WebFetch(domain:github.com)",
-      "Bash(git clone:*)",
-      "Bash(rm:*)",
-      "Bash(find:*)",
+      "Bash(git push:*)",
       "Bash(npm run dev:*)",
-      "Bash(npm install)",
-      "Bash(git fetch:*)",
-      "Bash(findstr:*)",
+      "Bash(cat:*)",
+      "Bash(timeout 3 echo:*)",
+      "Bash(timeout 3 sleep:*)",
       "Bash(npm run build:*)",
-      "Bash(timeout:*)",
-      "Bash(git add:*)"
+      "Bash(nul)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(wmic process:*)",
+      "Bash(timeout 2 sleep:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git reset:*)",
+      "Bash(git restore:*)",
+      "Bash(git subtree push:*)",
+      "Bash(git init:*)",
+      "Bash(git branch:*)",
+      "Bash(git remote add:*)"
     ],
     "deny": [],
     "ask": []
