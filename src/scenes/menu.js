@@ -347,8 +347,8 @@ export function setupMenuScene(k) {
 
         const inviteCode = getInviteCode();
 
-        // Invite code display
-        k.add([
+        // Invite code display (updates when code becomes available)
+        const inviteCodeDisplay = k.add([
             k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
             k.anchor('right'),
@@ -356,6 +356,19 @@ export function setupMenuScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
+
+        // Keep checking for code until we get a valid one
+        let hasValidCode = inviteCode !== 'OFFLINE';
+        inviteCodeDisplay.onUpdate(() => {
+            if (!hasValidCode) {
+                const currentCode = getInviteCode();
+                if (currentCode && currentCode !== 'OFFLINE') {
+                    inviteCodeDisplay.text = currentCode;
+                    inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD);
+                    hasValidCode = true; // Stop checking once we have a valid code
+                }
+            }
+        });
 
         // Join Party button (moved up since we removed a line)
         const joinButtonY = inviteCodeY + 25;
