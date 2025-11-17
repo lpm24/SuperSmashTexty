@@ -469,7 +469,10 @@ function isUpgradeValidForPlayer(upgrade, player) {
 }
 
 // Get random upgrades for draft (weapon-aware)
-export function getRandomUpgrades(count = 3, player = null) {
+// @param {number} count - Number of upgrades to return
+// @param {Object} player - Player object to filter valid upgrades
+// @param {SeededRandom} rng - Optional seeded RNG for multiplayer synchronization
+export function getRandomUpgrades(count = 3, player = null, rng = null) {
     const upgradeKeys = Object.keys(UPGRADES);
 
     // Map upgrade keys to full upgrade objects
@@ -490,7 +493,10 @@ export function getRandomUpgrades(count = 3, player = null) {
     const used = new Set();
 
     while (selected.length < count && selected.length < validOptions.length) {
-        const randomIndex = Math.floor(Math.random() * validOptions.length);
+        // Use seeded RNG if provided (for multiplayer sync), otherwise Math.random()
+        const randomIndex = rng
+            ? rng.range(0, validOptions.length)
+            : Math.floor(Math.random() * validOptions.length);
         const option = validOptions[randomIndex];
         if (!used.has(option.key)) {
             used.add(option.key);

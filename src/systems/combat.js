@@ -201,7 +201,7 @@ export function setupCombatSystem(k, player) {
                             // Explosive launcher - create explosive projectile
                             const projectile = createExplosiveProjectile(k, player.pos.x, player.pos.y, direction,
                                 player.projectileSpeed, finalDamage,
-                                player.explosionRadius, player.explosionDamage, weaponRange);
+                                player.explosionRadius, player.explosionDamage, weaponRange, isCrit);
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
@@ -209,7 +209,7 @@ export function setupCombatSystem(k, player) {
                             // Chain lightning - create chaining projectile
                             const projectile = createChainProjectile(k, player.pos.x, player.pos.y, direction,
                                 player.projectileSpeed, finalDamage,
-                                player.chainRange, player.maxJumps, player.chainDamageReduction, weaponRange);
+                                player.chainRange, player.maxJumps, player.chainDamageReduction, weaponRange, isCrit);
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
@@ -949,25 +949,25 @@ function updateOrbitalWeapons(k, player) {
 }
 
 // Create explosive projectile
-function createExplosiveProjectile(k, x, y, direction, speed, damage, explosionRadius, explosionDamage, maxRange) {
-    const projectile = createProjectile(k, x, y, direction, speed, damage, 0, 0, false, maxRange);
+function createExplosiveProjectile(k, x, y, direction, speed, damage, explosionRadius, explosionDamage, maxRange, isCrit = false) {
+    const projectile = createProjectile(k, x, y, direction, speed, damage, 0, 0, isCrit, maxRange);
     projectile.isExplosive = true;
     projectile.explosionRadius = explosionRadius || 50;
     projectile.explosionDamage = explosionDamage || 15;
-    
+
     return projectile;
 }
 
 // Create chain lightning projectile
-function createChainProjectile(k, x, y, direction, speed, damage, chainRange, maxJumps, damageReduction, maxRange) {
-    const projectile = createProjectile(k, x, y, direction, speed, damage, 0, 0, false, maxRange);
+function createChainProjectile(k, x, y, direction, speed, damage, chainRange, maxJumps, damageReduction, maxRange, isCrit = false) {
+    const projectile = createProjectile(k, x, y, direction, speed, damage, 0, 0, isCrit, maxRange);
     projectile.isChainLightning = true;
     projectile.chainRange = chainRange || 70;
     projectile.maxJumps = maxJumps || 3;
     projectile.chainDamageReduction = damageReduction || 0.15;
     projectile.chainJumps = 0;
     projectile.chainedEnemies = new Set(); // Track which enemies have been hit
-    
+
     return projectile;
 }
 

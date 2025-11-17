@@ -17,7 +17,7 @@ import { createProjectile } from './projectile.js';
 // Data imports
 import { getBossDefinition } from '../data/bosses.js';
 
-export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
+export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) {
     const baseConfig = getBossDefinition(type);
     
     // Scale stats based on floor
@@ -65,6 +65,7 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
     boss.type = type;
     boss.floor = floor;
     boss.textSize = config.size; // Store text size for later use
+    boss.rng = rng; // Store seeded RNG for multiplayer synchronization
     
     // Store boss-specific stats
     if (baseConfig.meleeDamage) boss.meleeDamage = baseConfig.meleeDamage;
@@ -248,19 +249,25 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
     // Spawn minions function
     boss.spawnMinions = function() {
         if (!boss.exists()) return;
-        
+
         const phase = boss.getPhase();
         const minionCount = phase === 1 ? 2 : phase === 2 ? 3 : 3; // 2-3 minions
-        
+
         for (let i = 0; i < minionCount; i++) {
             // Spawn minions around boss in a circle
-            const angle = (Math.PI * 2 / minionCount) * i + Math.random() * 0.5;
-            const spawnDistance = 40 + Math.random() * 20;
+            // Use seeded RNG if available (multiplayer), otherwise Math.random()
+            const angleVariation = boss.rng ? boss.rng.next() * 0.5 : Math.random() * 0.5;
+            const angle = (Math.PI * 2 / minionCount) * i + angleVariation;
+
+            const distanceVariation = boss.rng ? boss.rng.next() * 20 : Math.random() * 20;
+            const spawnDistance = 40 + distanceVariation;
+
             const spawnX = boss.pos.x + Math.cos(angle) * spawnDistance;
             const spawnY = boss.pos.y + Math.sin(angle) * spawnDistance;
-            
+
             // Randomly choose rusher or basic (as proxy for shooter)
-            const minionType = Math.random() < 0.5 ? 'rusher' : 'basic';
+            const minionTypeRoll = boss.rng ? boss.rng.next() : Math.random();
+            const minionType = minionTypeRoll < 0.5 ? 'rusher' : 'basic';
             const minion = createEnemy(k, spawnX, spawnY, minionType, floor);
             minion.isBossMinion = true; // Mark as boss minion
             boss.spawnedMinions.push(minion);
@@ -916,12 +923,12 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1) {
 }
 
 // Spawn twin guardians as separate entities from opposite doors
-export function createTwinGuardians(k, door1, door2, floor = 1) {
+export function createTwinGuardians(k, door1, door2, floor = 1, rng = null) {
     // Spawn melee guardian from first door
-    const meleeGuardian = createBoss(k, door1.pos.x, door1.pos.y, 'twinGuardianMelee', floor);
-    
+    const meleeGuardian = createBoss(k, door1.pos.x, door1.pos.y, 'twinGuardianMelee', floor, rng);
+
     // Spawn ranged guardian from second door
-    const rangedGuardian = createBoss(k, door2.pos.x, door2.pos.y, 'twinGuardianRanged', floor);
+    const rangedGuardian = createBoss(k, door2.pos.x, door2.pos.y, 'twinGuardianRanged', floor, rng);
     
     // Link them together for enrage system
     meleeGuardian.twinPartner = rangedGuardian;

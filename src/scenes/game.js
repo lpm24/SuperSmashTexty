@@ -1779,7 +1779,10 @@ export function setupGameScene(k) {
                 if (!bossSpawned) {
                     bossSpawned = true;
                     const bossType = getBossTypeForFloor(currentFloor);
-                    
+
+                    // Use seeded RNG for boss spawn position in multiplayer
+                    const bossRng = partySize > 1 ? getRoomRNG() : null;
+
                     // Special handling for Twin Guardians - spawn from opposite doors
                     if (bossType === 'twinGuardian') {
                         // Strategy: Spawn guardians from opposite sides for dramatic entrance
@@ -1789,7 +1792,12 @@ export function setupGameScene(k) {
 
                         if (availableDoors.length >= 2) {
                             // Step 1: Randomize available doors
-                            const shuffled = [...availableDoors].sort(() => Math.random() - 0.5);
+                            // Use Fisher-Yates shuffle with seeded RNG if in multiplayer
+                            const shuffled = [...availableDoors];
+                            for (let i = shuffled.length - 1; i > 0; i--) {
+                                const j = bossRng ? bossRng.range(0, i + 1) : Math.floor(Math.random() * (i + 1));
+                                [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+                            }
                             door1 = shuffled[0];
 
                             // Step 2: Find the door directly opposite to door1 for maximum dramatic effect
@@ -1808,8 +1816,8 @@ export function setupGameScene(k) {
                             door1 = spawnDoors[0];
                             door2 = spawnDoors[spawnDoors.length > 1 ? 1 : 0];
                         }
-                        
-                        createTwinGuardians(k, door1, door2, currentFloor);
+
+                        createTwinGuardians(k, door1, door2, currentFloor, bossRng);
 
                         // Play boss spawn sound
                         playBossSpawn();
@@ -1827,9 +1835,6 @@ export function setupGameScene(k) {
                         });
                     } else {
                         // Regular boss spawning
-                        // Use seeded RNG for boss spawn position in multiplayer
-                        const bossRng = partySize > 1 ? getRoomRNG() : null;
-
                         // Spawn boss at a door (prefer top door, or random door)
                         // Avoid spawning at entrance door if player entered from one
                         let bossSpawnDoor = spawnDoors.find(d => d.direction === 'north');
@@ -1852,7 +1857,7 @@ export function setupGameScene(k) {
 
                         const bossX = bossSpawnDoor ? bossSpawnDoor.pos.x : k.width() / 2;
                         const bossY = bossSpawnDoor ? bossSpawnDoor.pos.y : k.height() / 2;
-                        createBoss(k, bossX, bossY, bossType, currentFloor);
+                        createBoss(k, bossX, bossY, bossType, currentFloor, bossRng);
 
                         // Play boss spawn sound
                         playBossSpawn();

@@ -2,6 +2,7 @@
 import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
 import { playUpgradeSelect } from '../systems/sounds.js';
+import { isMultiplayerActive, getUpgradeRNG } from '../systems/multiplayerGame.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -36,9 +37,16 @@ export function showUpgradeDraft(k, player, onSelect) {
             k.gameData.minimap.update();
         }
     }
-    
+
     // Get 3 random upgrades (weapon-aware)
-    const upgrades = getRandomUpgrades(3, player);
+    // In multiplayer, use seeded RNG for deterministic upgrade generation
+    let upgradeRng = null;
+    if (isMultiplayerActive()) {
+        const playerIndex = player.playerIndex !== undefined ? player.playerIndex : 0;
+        const playerLevel = player.level || 1;
+        upgradeRng = getUpgradeRNG(playerIndex, playerLevel);
+    }
+    const upgrades = getRandomUpgrades(3, player, upgradeRng);
     
     // Debug: Log that we're creating the draft
     console.log('Creating upgrade draft with', upgrades.length, 'upgrades');

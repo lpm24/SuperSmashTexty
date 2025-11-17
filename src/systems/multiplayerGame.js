@@ -870,6 +870,18 @@ export function getFloorRNG() {
 }
 
 /**
+ * Get a seeded RNG for upgrade selection
+ * Creates a deterministic RNG based on player index and level
+ * @param {number} playerIndex - Player index (0 for host, 1+ for clients)
+ * @param {number} playerLevel - Current player level
+ * @returns {SeededRandom} Seeded random number generator for this upgrade draft
+ */
+export function getUpgradeRNG(playerIndex, playerLevel) {
+    const seed = createSeed(mpGame.gameSeed, playerIndex, playerLevel);
+    return new SeededRandom(seed);
+}
+
+/**
  * Broadcast game seed to all clients (host only)
  * Called when game starts to sync RNG
  */

@@ -18,7 +18,7 @@ import { PROGRESSION_CONFIG } from '../config/constants.js';
 // Sound system imports
 import { playLevelUp } from './sounds.js';
 
-export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null) {
+export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null, isMultiplayer = false) {
     let levelUpInProgress = false;
 
     // Add XP to player
@@ -47,7 +47,7 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
     // Handle level up
     function handleLevelUp(k, player, level) {
         // Don't show if already paused (prevents double prompts)
-        if (k.paused) {
+        if (k.paused && !isMultiplayer) {
             levelUpInProgress = false;
             return;
         }
@@ -66,17 +66,27 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             k.pos(k.width() / 2, PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_Y),
             k.anchor('center'),
             k.color(255, 255, 100),
-            k.fixed()
+            k.fixed(),
+            k.z(1000) // High z-index to show above other UI
         ]);
 
-        k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
-            k.destroy(notification);
-            // Show upgrade draft
-            showUpgradeDraft(k, player, () => {
-                // Callback when upgrade is selected
+        // In multiplayer, don't show upgrade draft - just show notification and continue
+        if (isMultiplayer) {
+            k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION * 2, () => {
+                if (notification.exists()) k.destroy(notification);
                 levelUpInProgress = false;
             });
-        });
+        } else {
+            // Single player: show upgrade draft after notification
+            k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
+                k.destroy(notification);
+                // Show upgrade draft
+                showUpgradeDraft(k, player, () => {
+                    // Callback when upgrade is selected
+                    levelUpInProgress = false;
+                });
+            });
+        }
     }
 }
 
