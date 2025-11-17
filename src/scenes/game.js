@@ -41,7 +41,8 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion } from '../systems/multiplayerGame.js';
+import { onMessage } from '../systems/networkSystem.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -322,6 +323,10 @@ export function setupGameScene(k) {
                     // Setup combat system for remote player (uses network input)
                     setupCombatSystem(k, remotePlayer);
 
+                    // Setup progression system for remote player (for XP/level ups)
+                    // Note: reviveAllPlayers callback is passed as null here, will be handled globally
+                    setupProgressionSystem(k, remotePlayer, null, true);
+
                     // Register remote player
                     registerPlayer(index, remotePlayer);
                     players.push(remotePlayer);
@@ -404,6 +409,23 @@ export function setupGameScene(k) {
             });
 
             console.log('[Multiplayer] Spawned', players.length, 'players');
+
+            // Listen for room completion from host (client only)
+            if (!isHost()) {
+                onMessage('room_completed', () => {
+                    console.log('[Multiplayer] Received room completion from host');
+                    roomCompleted = true;
+
+                    // Update doors to show they're open
+                    spawnDoors.forEach(door => {
+                        if (door.exists() && !door.blocked) {
+                            door.open = true;
+                            door.isSpawnDoor = false;
+                            door.updateVisual();
+                        }
+                    });
+                });
+            }
         }
 
         // ==========================================
@@ -1299,7 +1321,7 @@ export function setupGameScene(k) {
             const healthPercent = player.maxHealth > 0 ? currentHP / player.maxHealth : 1;
 
             // Update level text (just show the number)
-            levelText.text = `${player.level}`;
+            levelText.text = `${player.level || 1}`;
 
             // Update XP bar
             const xpProgress = player.xpToNext > 0 ? player.xp / player.xpToNext : 0;
@@ -1872,8 +1894,8 @@ export function setupGameScene(k) {
             
             // Boss room logic
             if (isBossRoom) {
-                // Spawn boss if not already spawned
-                if (!bossSpawned) {
+                // Spawn boss if not already spawned (only host spawns in multiplayer)
+                if (!bossSpawned && (!isMultiplayerActive() || isHost())) {
                     bossSpawned = true;
                     const bossType = getBossTypeForFloor(currentFloor);
 
@@ -1914,7 +1936,20 @@ export function setupGameScene(k) {
                             door2 = spawnDoors[spawnDoors.length > 1 ? 1 : 0];
                         }
 
-                        createTwinGuardians(k, door1, door2, currentFloor, bossRng);
+                        const twinGuardians = createTwinGuardians(k, door1, door2, currentFloor, bossRng);
+
+                        // Register bosses for multiplayer
+                        if (isMultiplayerActive() && isHost()) {
+                            // Twin Guardians returns an array of both guardians
+                            if (Array.isArray(twinGuardians)) {
+                                twinGuardians.forEach(guardian => {
+                                    registerEnemy(guardian, { type: 'twinGuardian', floor: currentFloor });
+                                });
+                            } else if (twinGuardians) {
+                                // Fallback if it returns a single entity
+                                registerEnemy(twinGuardians, { type: 'twinGuardian', floor: currentFloor });
+                            }
+                        }
 
                         // Play boss spawn sound
                         playBossSpawn();
@@ -1954,7 +1989,12 @@ export function setupGameScene(k) {
 
                         const bossX = bossSpawnDoor ? bossSpawnDoor.pos.x : k.width() / 2;
                         const bossY = bossSpawnDoor ? bossSpawnDoor.pos.y : k.height() / 2;
-                        createBoss(k, bossX, bossY, bossType, currentFloor, bossRng);
+                        const boss = createBoss(k, bossX, bossY, bossType, currentFloor, bossRng);
+
+                        // Register boss for multiplayer
+                        if (isMultiplayerActive() && isHost()) {
+                            registerEnemy(boss, { type: bossType, floor: currentFloor });
+                        }
 
                         // Play boss spawn sound
                         playBossSpawn();
@@ -1976,11 +2016,13 @@ export function setupGameScene(k) {
                     }
                 }
                 
-                // Check if boss is defeated
-                const bosses = k.get('boss');
-                if (bosses.length === 0 && !roomCompleted) {
-                    roomCompleted = true;
-                    handleRoomCompletion();
+                // Check if boss is defeated (only host checks in multiplayer)
+                if (!isMultiplayerActive() || isHost()) {
+                    const bosses = k.get('boss');
+                    if (bosses.length === 0 && !roomCompleted) {
+                        roomCompleted = true;
+                        handleRoomCompletion();
+                    }
                 }
                 return; // Skip regular enemy spawning in boss rooms
             }
@@ -2040,8 +2082,9 @@ export function setupGameScene(k) {
             const currentMinibosses = k.get('miniboss').length;
             const allEnemiesSpawned = enemiesSpawned >= enemiesToSpawn;
             const allDefeated = allEnemiesSpawned && currentEnemies === 0 && currentMinibosses === 0;
-            
-            if (allDefeated && !roomCompleted) {
+
+            // Only host checks for room completion in multiplayer
+            if (allDefeated && !roomCompleted && (!isMultiplayerActive() || isHost())) {
                 roomCompleted = true;
                 handleRoomCompletion();
             }
@@ -2431,7 +2474,13 @@ export function setupGameScene(k) {
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
+                // In multiplayer, only the host handles pickup collection to ensure all players get rewards
                 if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    // In multiplayer, only host collects pickups
+                    if (isMultiplayerActive() && !isHost()) {
+                        return; // Skip on clients - host will handle collection
+                    }
+
                     pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playXPPickup();
 
@@ -2526,9 +2575,18 @@ export function setupGameScene(k) {
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
+                // In multiplayer, only the host handles pickup collection
                 if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    // In multiplayer, only host collects pickups
+                    if (isMultiplayerActive() && !isHost()) {
+                        return; // Skip on clients - host will handle collection
+                    }
+
                     pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playCurrencyPickup(); // Coin/cash pickup sound
+
+                    // In multiplayer, currency is shared (everyone gets it)
+                    // Currency is persistent across the run, so just add once
                     addCurrency(pickup.value); // Add currency to persistent storage
 
                     // Animate pickup flying to credit counter
@@ -2781,6 +2839,11 @@ export function setupGameScene(k) {
                 cleared: state.roomCleared
             });
 
+            // Broadcast room completion to clients in multiplayer
+            if (isMultiplayerActive() && isHost()) {
+                broadcastRoomCompletion();
+            }
+
             // Revive all dead players in multiplayer
             if (partySize > 1) {
                 reviveAllPlayers();
@@ -2811,8 +2874,10 @@ export function setupGameScene(k) {
                 gameState.minimap.update();
             }
 
-            // Spawn reward pickups!
-            spawnRoomClearRewards();
+            // Spawn reward pickups (only host spawns in multiplayer)!
+            if (!isMultiplayerActive() || isHost()) {
+                spawnRoomClearRewards();
+            }
 
             // Show completion message (different for boss rooms)
             const completionText = isBossRoom 
