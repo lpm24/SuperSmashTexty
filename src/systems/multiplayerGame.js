@@ -108,6 +108,22 @@ function setupClientHandlers() {
                         if (playerState.hp !== undefined && player.setHP) {
                             player.setHP(playerState.hp);
                         }
+
+                        // Update weapon/upgrade state
+                        if (playerState.weapons) {
+                            player.weapons = playerState.weapons;
+                        }
+                        if (playerState.passiveUpgrades) {
+                            player.passiveUpgrades = playerState.passiveUpgrades;
+                        }
+                        if (playerState.upgradeStacks) {
+                            player.upgradeStacks = playerState.upgradeStacks;
+                        }
+
+                        // Update stats
+                        if (playerState.speed !== undefined) player.speed = playerState.speed;
+                        if (playerState.damage !== undefined) player.damage = playerState.damage;
+                        if (playerState.pickupRadius !== undefined) player.pickupRadius = playerState.pickupRadius;
                     }
                 }
             });
@@ -320,6 +336,33 @@ function setupClientHandlers() {
 
         console.log(`Damage: ${payload.damage}${payload.isCrit ? ' CRIT!' : ''} to ${payload.targetType} ${payload.targetId}`);
     });
+
+    // Handle entity death events
+    onMessage('entity_destroyed', (payload) => {
+        if (!mpGame.k) return; // Need kaplay instance
+
+        console.log(`Entity destroyed: ${payload.entityType} ${payload.entityId} at (${payload.x}, ${payload.y})`);
+
+        // Remove the entity from tracking and destroy it
+        const entity = mpGame.enemies.get(payload.entityId) || mpGame.players.get(payload.entityId);
+        if (entity && entity.exists()) {
+            // Trigger death animation/effects if available
+            if (entity.onDeath && typeof entity.onDeath === 'function') {
+                entity.onDeath();
+            }
+
+            // Destroy the entity
+            mpGame.k.destroy(entity);
+        }
+
+        // Clean up from tracking maps
+        mpGame.enemies.delete(payload.entityId);
+        mpGame.projectiles.delete(payload.entityId);
+        mpGame.pickups.delete(payload.entityId);
+
+        // Note: XP/currency drops are handled by spawn_entity events from host
+        // The host will spawn pickups and broadcast them separately
+    });
 }
 
 /**
@@ -377,7 +420,15 @@ function collectGameState() {
                 angle: Number(player.angle || 0),
                 hp: Number(player.hp || player.maxHealth),
                 level: Number(player.level || 1),
-                xp: Number(player.xp || 0)
+                xp: Number(player.xp || 0),
+                // Weapon and upgrade state
+                weapons: player.weapons || [],
+                passiveUpgrades: player.passiveUpgrades || [],
+                upgradeStacks: player.upgradeStacks || {},
+                // Stats that affect gameplay
+                speed: Number(player.speed || 0),
+                damage: Number(player.damage || 0),
+                pickupRadius: Number(player.pickupRadius || 0)
             });
         }
     });
@@ -648,5 +699,28 @@ export function broadcastDamageEvent(params) {
         attackerId: params.attackerId !== undefined ? Number(params.attackerId) : null,
         x: Number(params.x),
         y: Number(params.y)
+    });
+}
+
+/**
+ * Broadcast an entity death event to all clients (host only)
+ * @param {Object} params - Death event parameters
+ * @param {string|number} params.entityId - Entity ID that died
+ * @param {string} params.entityType - Type of entity ('enemy', 'player', 'boss', 'miniboss')
+ * @param {number} params.x - X position
+ * @param {number} params.y - Y position
+ * @param {number} params.xpDropped - Amount of XP dropped (optional)
+ * @param {number} params.currencyDropped - Amount of currency dropped (optional)
+ */
+export function broadcastDeathEvent(params) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('entity_destroyed', {
+        entityId: Number(params.entityId),
+        entityType: String(params.entityType),
+        x: Number(params.x),
+        y: Number(params.y),
+        xpDropped: params.xpDropped !== undefined ? Number(params.xpDropped) : 0,
+        currencyDropped: params.currencyDropped !== undefined ? Number(params.currencyDropped) : 0
     });
 }

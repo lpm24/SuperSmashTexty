@@ -29,7 +29,7 @@ import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies } from '../systems/synergies.js';
-import { UPGRADES } from '../systems/upgrades.js';
+import { UPGRADES, recalculateAllUpgrades } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive } from './upgradeDraft.js';
@@ -235,10 +235,14 @@ export function setupGameScene(k) {
             if (gameState.playerStats.activeSynergies) {
                 player.activeSynergies = new Set(gameState.playerStats.activeSynergies);
             }
+            // CRITICAL: Recalculate all upgrades to ensure they're properly applied
+            if (player.upgradeStacks && Object.keys(player.upgradeStacks).length > 0) {
+                recalculateAllUpgrades(player);
+            }
         } else {
             // New game - create fresh player
             player = createPlayer(k, playerSpawnX, playerSpawnY);
-            
+
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);
         }
@@ -2500,10 +2504,21 @@ export function setupGameScene(k) {
                 critDamage: player.critDamage || 2.0,
                 spreadAngle: player.spreadAngle || 0,
                 defense: player.defense || 0,
+                weaponRange: player.weaponRange || 600,
+                // Upgrades (CRITICAL: preserve between rooms)
+                weapons: player.weapons || [],
+                passiveUpgrades: player.passiveUpgrades || [],
+                upgradeStacks: player.upgradeStacks || {},
                 // Synergy tracking
                 selectedUpgrades: player.selectedUpgrades ? Array.from(player.selectedUpgrades) : [],
                 activeSynergies: player.activeSynergies ? Array.from(player.activeSynergies) : [],
-                piercingDamageBonus: player.piercingDamageBonus || 1.0
+                piercingDamageBonus: player.piercingDamageBonus || 1.0,
+                // Character data (needed for recalculating upgrades)
+                characterData: player.characterData,
+                weaponDef: player.weaponDef,
+                baseProjectileDamage: player.baseProjectileDamage,
+                baseFireRate: player.baseFireRate,
+                baseProjectileSpeed: player.baseProjectileSpeed
             };
 
             // Calculate entry direction for next room (opposite of exit direction)

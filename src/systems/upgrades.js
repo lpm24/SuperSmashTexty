@@ -525,7 +525,7 @@ export function applyUpgrade(player, upgradeKey) {
 }
 
 // Recalculate all upgrades from base values
-function recalculateAllUpgrades(player) {
+export function recalculateAllUpgrades(player) {
     // Apply all upgrades in order
     Object.keys(UPGRADES).forEach(key => {
         if (player.upgradeStacks && player.upgradeStacks[key] > 0) {
