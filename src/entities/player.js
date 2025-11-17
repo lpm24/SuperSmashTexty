@@ -157,6 +157,10 @@ export function createPlayer(k, x, y, characterKey = null) {
         player.fireDotMultiplier = CHARACTER_ABILITIES.PYRO_FIRE_DOT_MULTIPLIER;
     }
 
+    // Control flags
+    player.canMove = true; // Can the player move? (set to false on death)
+    player.canShoot = true; // Can the player shoot? (set to false on death)
+
     // Movement
     let moveDir = k.vec2(0, 0);
 
@@ -245,6 +249,11 @@ export function createPlayer(k, x, y, characterKey = null) {
             }
         }
         
+        // Don't allow movement if canMove is false (e.g., player is dead)
+        if (player.canMove === false) {
+            return;
+        }
+
         if (moveDir.len() > 0) {
             const len = moveDir.len();
             const normalized = moveDir.scale(1 / len);

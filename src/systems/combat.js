@@ -102,13 +102,18 @@ export function setupCombatSystem(k, player) {
     // Autofire system
     k.onUpdate(() => {
         if (k.paused) return;
-        
+
+        // Don't allow shooting if canShoot is false (e.g., player is dead)
+        if (player.canShoot === false) {
+            return;
+        }
+
         // Handle orbital weapons (passive, no firing needed)
         if (player.weaponKey === 'orbital') {
             updateOrbitalWeapons(k, player);
             return; // Orbital weapons don't fire projectiles
         }
-        
+
         const mousePos = k.mousePos();
         const time = k.time();
         
