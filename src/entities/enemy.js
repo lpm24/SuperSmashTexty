@@ -571,9 +571,31 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             }
         }
 
-        const player = k.get('player')[0];
-        if (!player || !player.exists()) return;
-        
+        // Find nearest alive player (support multiplayer)
+        const allPlayers = k.get('player');
+        const alivePlayers = allPlayers.filter(p => p.exists() && !p.isDead && p.hp() > 0);
+
+        if (alivePlayers.length === 0) return; // No alive players to target
+
+        // Find closest alive player
+        let player = alivePlayers[0];
+        let minDistance = Math.sqrt(
+            Math.pow(player.pos.x - enemy.pos.x, 2) +
+            Math.pow(player.pos.y - enemy.pos.y, 2)
+        );
+
+        for (let i = 1; i < alivePlayers.length; i++) {
+            const p = alivePlayers[i];
+            const d = Math.sqrt(
+                Math.pow(p.pos.x - enemy.pos.x, 2) +
+                Math.pow(p.pos.y - enemy.pos.y, 2)
+            );
+            if (d < minDistance) {
+                minDistance = d;
+                player = p;
+            }
+        }
+
         const dir = k.vec2(
             player.pos.x - enemy.pos.x,
             player.pos.y - enemy.pos.y

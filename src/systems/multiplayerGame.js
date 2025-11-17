@@ -132,6 +132,23 @@ function setupClientHandlers() {
                             player.setHP(playerState.hp);
                         }
 
+                        // Update death state
+                        if (playerState.isDead !== undefined) {
+                            player.isDead = playerState.isDead;
+                            // Disable shooting and movement for dead players
+                            if (player.isDead) {
+                                player.canShoot = false;
+                                player.canMove = false;
+                                player.isShooting = false;
+                            } else {
+                                // Re-enable for alive players (if not remote controlled)
+                                if (!player.isRemote) {
+                                    player.canShoot = true;
+                                    player.canMove = true;
+                                }
+                            }
+                        }
+
                         // Update weapon/upgrade state
                         if (playerState.weapons) {
                             player.weapons = playerState.weapons;
@@ -335,6 +352,7 @@ function setupClientHandlers() {
             mpGame.k.pos(payload.x, payload.y),
             mpGame.k.anchor('center'),
             mpGame.k.color(payload.isCrit ? 255 : 255, payload.isCrit ? 200 : 255, payload.isCrit ? 0 : 255),
+            mpGame.k.opacity(1), // Required for lifespan component
             mpGame.k.lifespan(0.8),
             mpGame.k.z(1000)
         ]);
@@ -496,6 +514,13 @@ function collectGameState() {
     // Collect player states
     mpGame.players.forEach((player, slotIndex) => {
         if (player.exists()) {
+            // Ensure weapons and upgrades are serializable (convert to plain arrays/objects)
+            const weaponsArray = Array.isArray(player.weapons) ? [...player.weapons] : [];
+            const upgradesArray = Array.isArray(player.passiveUpgrades) ? [...player.passiveUpgrades] : [];
+            const stacksObj = player.upgradeStacks && typeof player.upgradeStacks === 'object'
+                ? { ...player.upgradeStacks }
+                : {};
+
             playerStates.push({
                 slotIndex: Number(slotIndex),
                 x: Number(player.pos.x),
@@ -504,10 +529,11 @@ function collectGameState() {
                 hp: Number(player.hp || player.maxHealth),
                 level: Number(player.level || 1),
                 xp: Number(player.xp || 0),
-                // Weapon and upgrade state
-                weapons: player.weapons || [],
-                passiveUpgrades: player.passiveUpgrades || [],
-                upgradeStacks: player.upgradeStacks || {},
+                isDead: Boolean(player.isDead || false), // Track death state
+                // Weapon and upgrade state (ensure plain data)
+                weapons: weaponsArray,
+                passiveUpgrades: upgradesArray,
+                upgradeStacks: stacksObj,
                 // Stats that affect gameplay
                 speed: Number(player.speed || 0),
                 damage: Number(player.damage || 0),

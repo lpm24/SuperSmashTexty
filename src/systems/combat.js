@@ -579,7 +579,10 @@ export function setupCombatSystem(k, player) {
     // Collision: Enemy hits Player
     k.onCollide('enemy', 'player', (enemy, player) => {
         if (k.paused) return;
-        
+
+        // Don't damage dead players
+        if (player.isDead || player.hp() <= 0) return;
+
         // Check if player is invulnerable (immunity frames)
         if (player.invulnerable) return;
         
@@ -635,7 +638,10 @@ export function setupCombatSystem(k, player) {
     // Collision: Miniboss hits Player
     k.onCollide('miniboss', 'player', (miniboss, player) => {
         if (k.paused) return;
-        
+
+        // Don't damage dead players
+        if (player.isDead || player.hp() <= 0) return;
+
         // Check if player is invulnerable (immunity frames)
         if (player.invulnerable) return;
 
@@ -681,7 +687,10 @@ export function setupCombatSystem(k, player) {
     // Collision: Boss hits Player
     k.onCollide('boss', 'player', (boss, player) => {
         if (k.paused) return;
-        
+
+        // Don't damage dead players
+        if (player.isDead || player.hp() <= 0) return;
+
         // Check if player is invulnerable (immunity frames)
         if (player.invulnerable) return;
         
@@ -733,10 +742,13 @@ export function setupCombatSystem(k, player) {
     // Collision: Enemy/Boss Projectile hits Player
     k.onCollide('projectile', 'player', (projectile, player) => {
         if (k.paused) return;
-        
+
         // Only enemy/boss projectiles can hit player (player projectiles are handled separately)
         if (!projectile.isBossProjectile && !projectile.isEnemyProjectile) return;
-        
+
+        // Don't damage dead players
+        if (player.isDead || player.hp() <= 0) return;
+
         // Check if player is invulnerable (immunity frames)
         if (player.invulnerable) return;
         
