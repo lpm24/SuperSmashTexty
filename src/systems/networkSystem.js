@@ -30,20 +30,6 @@ export function initNetwork(inviteCode, isHost = true) {
             return;
         }
 
-        // Detect multiple tabs - check if there's already a PeerJS connection in another tab
-        const tabId = `smash-tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-        const existingTabKey = 'smash_active_network_tab';
-        const existingTab = sessionStorage.getItem(existingTabKey);
-
-        if (existingTab && existingTab !== tabId) {
-            console.warn('Another tab already has an active network connection. Multiplayer disabled in this tab.');
-            reject(new Error('Multiple tabs detected - only one tab can host multiplayer'));
-            return;
-        }
-
-        // Mark this tab as the active network tab
-        sessionStorage.setItem(existingTabKey, tabId);
-
         // Clean up on page unload
         window.addEventListener('beforeunload', () => {
             disconnect();
