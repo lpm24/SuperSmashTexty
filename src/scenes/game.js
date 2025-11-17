@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent } from '../systems/multiplayerGame.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -142,6 +142,7 @@ export function setupGameScene(k) {
             gameState.currentFloor = 1;
             gameState.currentRoom = 1;
             gameState.playerStats = null;
+            gameState.allPlayerStats = null; // Clear multiplayer stats
             gameState.entryDirection = null;
             gameState.floorMap = null; // Clear old floor map
             resetRoomTemplateHistory(); // Reset room template variation
@@ -292,8 +293,31 @@ export function setupGameScene(k) {
                     remotePlayer.isRemote = true;
                     remotePlayer.playerName = slot.playerName;
 
-                    // Apply permanent upgrades to remote player too
-                    applyPermanentUpgrades(k, remotePlayer);
+                    // Restore remote player stats if available
+                    if (gameState.allPlayerStats && gameState.allPlayerStats.length > 0) {
+                        const savedStats = gameState.allPlayerStats.find(stats => stats.slotIndex === index);
+                        if (savedStats) {
+                            console.log('[Multiplayer] Restoring stats for remote player at slot', index);
+                            Object.assign(remotePlayer, savedStats);
+                            remotePlayer.setHP(savedStats.currentHP || remotePlayer.maxHealth);
+
+                            // Restore synergy tracking
+                            if (savedStats.selectedUpgrades) {
+                                remotePlayer.selectedUpgrades = new Set(savedStats.selectedUpgrades);
+                            }
+                            if (savedStats.activeSynergies) {
+                                remotePlayer.activeSynergies = new Set(savedStats.activeSynergies);
+                            }
+
+                            // Recalculate upgrades
+                            if (remotePlayer.upgradeStacks && Object.keys(remotePlayer.upgradeStacks).length > 0) {
+                                recalculateAllUpgrades(remotePlayer);
+                            }
+                        }
+                    } else {
+                        // No saved stats - apply permanent upgrades to new remote player
+                        applyPermanentUpgrades(k, remotePlayer);
+                    }
 
                     // Setup combat system for remote player (uses network input)
                     setupCombatSystem(k, remotePlayer);
@@ -461,6 +485,7 @@ export function setupGameScene(k) {
                         k.pos(p.pos.x, p.pos.y - 40),
                         k.anchor('center'),
                         k.color(100, 255, 100),
+                        k.opacity(1), // Required for lifespan component
                         k.lifespan(2),
                         k.z(1000)
                     ]);
@@ -1748,27 +1773,32 @@ export function setupGameScene(k) {
         
         // Determine if this room should have a miniboss (random chance, not in boss rooms)
         // 15% chance for miniboss room, increases with floor
+        // Use seeded RNG for multiplayer consistency
+        const roomRng = partySize > 1 ? getRoomRNG() : null;
         if (!isBossRoom && currentRoom !== 1) { // Don't spawn miniboss in first room or boss room
             const minibossChance = 0.15 + (currentFloor - 1) * 0.05; // 15% base, +5% per floor
-            isMinibossRoom = Math.random() < minibossChance;
+            isMinibossRoom = (roomRng ? roomRng.next() : Math.random()) < minibossChance;
         }
-        
+
         // If miniboss room, reduce normal enemy count
         if (isMinibossRoom) {
             enemiesToSpawn = Math.floor(enemiesToSpawn * 0.5); // Half normal enemies
         }
-        
+
         // Get random miniboss type for floor
-        function getRandomMinibossType(floor) {
+        // Use seeded RNG for multiplayer consistency
+        function getRandomMinibossType(floor, rng = null) {
             const minibossTypes = ['brute', 'sentinel', 'berserker', 'guardian', 'warlock'];
             // Weight certain types by floor
             if (floor >= 3) {
                 // Higher floors get more variety
-                return minibossTypes[Math.floor(Math.random() * minibossTypes.length)];
+                const index = rng ? rng.range(0, minibossTypes.length) : Math.floor(Math.random() * minibossTypes.length);
+                return minibossTypes[index];
             } else {
                 // Lower floors get simpler types
                 const simpleTypes = ['brute', 'berserker', 'guardian'];
-                return simpleTypes[Math.floor(Math.random() * simpleTypes.length)];
+                const index = rng ? rng.range(0, simpleTypes.length) : Math.floor(Math.random() * simpleTypes.length);
+                return simpleTypes[index];
             }
         }
         
@@ -1956,11 +1986,12 @@ export function setupGameScene(k) {
             }
             
             // Miniboss room logic
-            if (isMinibossRoom && !minibossSpawned) {
+            // Only host spawns miniboss (clients receive via spawn_entity messages)
+            if (isMinibossRoom && !minibossSpawned && (!isMultiplayerActive() || isHost())) {
                 // Spawn miniboss after a short delay
                 if (k.time() - roomStartTime >= 1.0) {
                     minibossSpawned = true;
-                    const minibossType = getRandomMinibossType(currentFloor);
+                    const minibossType = getRandomMinibossType(currentFloor, roomRng);
 
                     // Use seeded RNG for miniboss spawn position in multiplayer
                     const minibossRng = partySize > 1 ? getRoomRNG() : null;
@@ -1975,8 +2006,13 @@ export function setupGameScene(k) {
 
                     const minibossX = randomDoor.pos.x;
                     const minibossY = randomDoor.pos.y;
-                    createMiniboss(k, minibossX, minibossY, minibossType, currentFloor);
-                    
+                    const miniboss = createMiniboss(k, minibossX, minibossY, minibossType, currentFloor);
+
+                    // Register miniboss for multiplayer sync (only if host)
+                    if (isMultiplayerActive() && isHost()) {
+                        registerEnemy(miniboss, { type: minibossType, floor: currentFloor });
+                    }
+
                     // Show miniboss announcement
                     const minibossNames = {
                         'brute': 'MINIBOSS: BRUTE',
@@ -2011,7 +2047,8 @@ export function setupGameScene(k) {
             }
             
             // Spawn enemies if we haven't reached the limit
-            if (enemiesSpawned < enemiesToSpawn) {
+            // Only host spawns enemies (clients receive via spawn_entity messages)
+            if (enemiesSpawned < enemiesToSpawn && (!isMultiplayerActive() || isHost())) {
                 enemySpawnTimer += k.dt();
                 
                 // Initial delay before first spawn
@@ -2066,8 +2103,14 @@ export function setupGameScene(k) {
                         const offsetY = spawnY + (spawnRng ? (spawnRng.next() - 0.5) : (Math.random() - 0.5)) * offset;
 
                         // Spawn random enemy type based on floor (host will broadcast this)
-                        const enemyType = getRandomEnemyType(currentFloor);
-                        createEnemy(k, offsetX, offsetY, enemyType, currentFloor);
+                        // Use seeded RNG in multiplayer to ensure consistent enemy types
+                        const enemyType = getRandomEnemyType(currentFloor, spawnRng);
+                        const enemy = createEnemy(k, offsetX, offsetY, enemyType, currentFloor);
+
+                        // Register enemy for multiplayer sync (only if host)
+                        if (isMultiplayerActive() && isHost()) {
+                            registerEnemy(enemy, { type: enemyType, floor: currentFloor });
+                        }
                     } else {
                         // Fallback to edge spawning if no doors (shouldn't happen)
                         // Use seeded RNG in multiplayer
@@ -2093,8 +2136,14 @@ export function setupGameScene(k) {
                                 break;
                         }
 
-                        const enemyType = getRandomEnemyType(currentFloor);
-                        createEnemy(k, x, y, enemyType, currentFloor);
+                        // Use seeded RNG in multiplayer to ensure consistent enemy types
+                        const enemyType = getRandomEnemyType(currentFloor, spawnRng);
+                        const enemy = createEnemy(k, x, y, enemyType, currentFloor);
+
+                        // Register enemy for multiplayer sync (only if host)
+                        if (isMultiplayerActive() && isHost()) {
+                            registerEnemy(enemy, { type: enemyType, floor: currentFloor });
+                        }
                     }
                 }
             }
@@ -2185,6 +2234,16 @@ export function setupGameScene(k) {
                         enemy.cleanupHealthBars();
                     }
 
+                    // Broadcast enemy death to clients (if host)
+                    if (isMultiplayerActive() && isHost() && enemy.mpEntityId) {
+                        broadcastDeathEvent({
+                            entityId: enemy.mpEntityId,
+                            entityType: 'enemy',
+                            x: posX,
+                            y: posY
+                        });
+                    }
+
                     k.destroy(enemy);
 
                     // Play enemy death sound
@@ -2200,7 +2259,12 @@ export function setupGameScene(k) {
                         const lootRng = partySize > 1 ? getRoomRNG() : null;
 
                         // Spawn XP pickup at enemy position
-                        createXPPickup(k, posX, posY, xpValue);
+                        const xpPickup = createXPPickup(k, posX, posY, xpValue);
+
+                        // Register pickup for multiplayer sync
+                        if (isMultiplayerActive() && isHost()) {
+                            registerPickup(xpPickup, { type: 'xpPickup', value: xpValue });
+                        }
 
                         // Spawn currency drops (1-3 coins with random currency icons)
                         const currencyDropCount = lootRng ? lootRng.range(1, 4) : Math.floor(Math.random() * 3) + 1;
@@ -2209,7 +2273,13 @@ export function setupGameScene(k) {
                             // Spread drops slightly
                             const offsetX = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
                             const offsetY = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
-                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue);
+                            const icon = getRandomCurrencyIcon();
+                            const currencyPickup = createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue, icon);
+
+                            // Register pickup for multiplayer sync
+                            if (isMultiplayerActive() && isHost()) {
+                                registerPickup(currencyPickup, { type: 'currencyPickup', value: currencyValue, icon: icon });
+                            }
                         }
 
                         // Check for powerup weapon drop
@@ -2218,7 +2288,12 @@ export function setupGameScene(k) {
                             // Offset slightly to avoid overlap with other pickups
                             const offsetX = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
                             const offsetY = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
-                            createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
+                            const powerupPickup = createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
+
+                            // Register pickup for multiplayer sync
+                            if (isMultiplayerActive() && isHost()) {
+                                registerPickup(powerupPickup, { type: 'powerupPickup', value: powerupDrop });
+                            }
                         }
                     }
                 }
@@ -2416,6 +2491,16 @@ export function setupGameScene(k) {
                         }
                     });
 
+                    // Broadcast pickup collection to clients (if host)
+                    if (isMultiplayerActive() && isHost() && pickup.mpEntityId) {
+                        broadcastDeathEvent({
+                            entityId: pickup.mpEntityId,
+                            entityType: 'pickup',
+                            x: pickup.pos.x,
+                            y: pickup.pos.y
+                        });
+                    }
+
                     k.destroy(pickup);
                 }
             });
@@ -2488,6 +2573,16 @@ export function setupGameScene(k) {
                             });
                         }
                     });
+
+                    // Broadcast pickup collection to clients (if host)
+                    if (isMultiplayerActive() && isHost() && pickup.mpEntityId) {
+                        broadcastDeathEvent({
+                            entityId: pickup.mpEntityId,
+                            entityType: 'pickup',
+                            x: pickup.pos.x,
+                            y: pickup.pos.y
+                        });
+                    }
 
                     k.destroy(pickup);
                 }
@@ -2612,43 +2707,62 @@ export function setupGameScene(k) {
             const numXPPickups = Math.floor((baseXP + floorBonus) * xpMultiplier);
             const numCurrencyPickups = Math.floor((baseCurrency + floorBonus) * currencyMultiplier);
 
+            // Use seeded RNG for multiplayer consistency
+            const rewardRng = partySize > 1 ? getRoomRNG() : null;
+
             // Spawn XP pickups in a spread pattern
             for (let i = 0; i < numXPPickups; i++) {
-                const angle = (Math.PI * 2 * i) / numXPPickups + Math.random() * 0.3;
-                const distance = 40 + Math.random() * 60;
+                const angle = (Math.PI * 2 * i) / numXPPickups + (rewardRng ? rewardRng.next() : Math.random()) * 0.3;
+                const distance = 40 + (rewardRng ? rewardRng.next() : Math.random()) * 60;
                 const x = centerX + Math.cos(angle) * distance;
                 const y = centerY + Math.sin(angle) * distance;
 
                 // Each XP pickup is worth more on higher floors
                 const xpValue = Math.floor(1 + currentFloor * 0.5);
-                createXPPickup(k, x, y, xpValue);
+                const xpPickup = createXPPickup(k, x, y, xpValue);
+
+                // Register pickup for multiplayer sync
+                if (isMultiplayerActive() && isHost()) {
+                    registerPickup(xpPickup, { type: 'xpPickup', value: xpValue });
+                }
             }
 
             // Spawn currency pickups in a spread pattern
             for (let i = 0; i < numCurrencyPickups; i++) {
-                const angle = (Math.PI * 2 * i) / numCurrencyPickups + Math.random() * 0.3 + 0.5;
-                const distance = 50 + Math.random() * 70;
+                const angle = (Math.PI * 2 * i) / numCurrencyPickups + (rewardRng ? rewardRng.next() : Math.random()) * 0.3 + 0.5;
+                const distance = 50 + (rewardRng ? rewardRng.next() : Math.random()) * 70;
                 const x = centerX + Math.cos(angle) * distance;
                 const y = centerY + Math.sin(angle) * distance;
 
                 // Each currency pickup is worth more on higher floors
                 const currencyValue = Math.floor(1 + currentFloor * 0.3);
-                createCurrencyPickup(k, x, y, currencyValue);
+                const icon = getRandomCurrencyIcon();
+                const currencyPickup = createCurrencyPickup(k, x, y, currencyValue, icon);
+
+                // Register pickup for multiplayer sync
+                if (isMultiplayerActive() && isHost()) {
+                    registerPickup(currencyPickup, { type: 'currencyPickup', value: currencyValue, icon: icon });
+                }
             }
 
             // Extra bonus for boss rooms - spawn a few powerup weapons
             if (isBossRoom) {
                 const powerupKeys = Object.keys(POWERUP_WEAPONS);
-                const numPowerups = 1 + Math.floor(Math.random() * 2); // 1-2 powerups
+                const numPowerups = 1 + Math.floor((rewardRng ? rewardRng.next() : Math.random()) * 2); // 1-2 powerups
 
                 for (let i = 0; i < numPowerups; i++) {
-                    const angle = Math.random() * Math.PI * 2;
-                    const distance = 80 + Math.random() * 40;
+                    const angle = (rewardRng ? rewardRng.next() : Math.random()) * Math.PI * 2;
+                    const distance = 80 + (rewardRng ? rewardRng.next() : Math.random()) * 40;
                     const x = centerX + Math.cos(angle) * distance;
                     const y = centerY + Math.sin(angle) * distance;
 
-                    const randomPowerup = powerupKeys[Math.floor(Math.random() * powerupKeys.length)];
-                    createPowerupWeaponPickup(k, x, y, randomPowerup);
+                    const randomPowerup = powerupKeys[Math.floor((rewardRng ? rewardRng.next() : Math.random()) * powerupKeys.length)];
+                    const powerupPickup = createPowerupWeaponPickup(k, x, y, randomPowerup);
+
+                    // Register pickup for multiplayer sync
+                    if (isMultiplayerActive() && isHost()) {
+                        registerPickup(powerupPickup, { type: 'powerupPickup', value: randomPowerup });
+                    }
                 }
             }
         }
@@ -2723,43 +2837,57 @@ export function setupGameScene(k) {
         
         // Handle door entry
         function handleDoorEntry(direction) {
-            // Save player stats before transitioning
-            gameState.playerStats = {
-                level: player.level,
-                xp: player.xp,
-                xpToNext: player.xpToNext,
-                maxHealth: player.maxHealth,
-                currentHP: player.hp(),
-                speed: player.speed,
-                fireRate: player.fireRate,
-                projectileSpeed: player.projectileSpeed,
-                projectileDamage: player.projectileDamage,
-                pickupRadius: player.pickupRadius,
-                xpMultiplier: player.xpMultiplier || 1,
-                // Advanced weapon stats
-                projectileCount: player.projectileCount || 1,
-                piercing: player.piercing || 0,
-                obstaclePiercing: player.obstaclePiercing || 0,
-                critChance: player.critChance || 0,
-                critDamage: player.critDamage || 2.0,
-                spreadAngle: player.spreadAngle || 0,
-                defense: player.defense || 0,
-                weaponRange: player.weaponRange || 600,
-                // Upgrades (CRITICAL: preserve between rooms)
-                weapons: player.weapons || [],
-                passiveUpgrades: player.passiveUpgrades || [],
-                upgradeStacks: player.upgradeStacks || {},
-                // Synergy tracking
-                selectedUpgrades: player.selectedUpgrades ? Array.from(player.selectedUpgrades) : [],
-                activeSynergies: player.activeSynergies ? Array.from(player.activeSynergies) : [],
-                piercingDamageBonus: player.piercingDamageBonus || 1.0,
-                // Character data (needed for recalculating upgrades)
-                characterData: player.characterData,
-                weaponDef: player.weaponDef,
-                baseProjectileDamage: player.baseProjectileDamage,
-                baseFireRate: player.baseFireRate,
-                baseProjectileSpeed: player.baseProjectileSpeed
-            };
+            // Save ALL players' stats before transitioning (critical for multiplayer)
+            gameState.allPlayerStats = players.map((p, index) => {
+                if (!p.exists()) return null;
+
+                return {
+                    slotIndex: index, // Track which slot this player belongs to
+                    playerName: p.playerName,
+                    isRemote: p.isRemote || false,
+                    isDead: p.isDead || false,
+                    level: p.level,
+                    xp: p.xp,
+                    xpToNext: p.xpToNext,
+                    maxHealth: p.maxHealth,
+                    currentHP: p.hp(),
+                    speed: p.speed,
+                    fireRate: p.fireRate,
+                    projectileSpeed: p.projectileSpeed,
+                    projectileDamage: p.projectileDamage,
+                    pickupRadius: p.pickupRadius,
+                    xpMultiplier: p.xpMultiplier || 1,
+                    // Advanced weapon stats
+                    projectileCount: p.projectileCount || 1,
+                    piercing: p.piercing || 0,
+                    obstaclePiercing: p.obstaclePiercing || 0,
+                    critChance: p.critChance || 0,
+                    critDamage: p.critDamage || 2.0,
+                    spreadAngle: p.spreadAngle || 0,
+                    defense: p.defense || 0,
+                    weaponRange: p.weaponRange || 600,
+                    // Upgrades (CRITICAL: preserve between rooms)
+                    weapons: p.weapons || [],
+                    passiveUpgrades: p.passiveUpgrades || [],
+                    upgradeStacks: p.upgradeStacks || {},
+                    // Synergy tracking
+                    selectedUpgrades: p.selectedUpgrades ? Array.from(p.selectedUpgrades) : [],
+                    activeSynergies: p.activeSynergies ? Array.from(p.activeSynergies) : [],
+                    piercingDamageBonus: p.piercingDamageBonus || 1.0,
+                    // Character data (needed for recalculating upgrades)
+                    characterData: p.characterData,
+                    weaponDef: p.weaponDef,
+                    baseProjectileDamage: p.baseProjectileDamage,
+                    baseFireRate: p.baseFireRate,
+                    baseProjectileSpeed: p.baseProjectileSpeed
+                };
+            }).filter(stats => stats !== null);
+
+            // Also save local player stats for backward compatibility
+            const localPlayerStats = gameState.allPlayerStats.find(stats => !stats.isRemote);
+            if (localPlayerStats) {
+                gameState.playerStats = localPlayerStats;
+            }
 
             // Calculate entry direction for next room (opposite of exit direction)
             // If player exits north, they enter from south in next room
