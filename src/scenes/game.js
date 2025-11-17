@@ -295,6 +295,9 @@ export function setupGameScene(k) {
                     // Apply permanent upgrades to remote player too
                     applyPermanentUpgrades(k, remotePlayer);
 
+                    // Setup combat system for remote player (uses network input)
+                    setupCombatSystem(k, remotePlayer);
+
                     // Register remote player
                     registerPlayer(index, remotePlayer);
                     players.push(remotePlayer);
@@ -307,12 +310,70 @@ export function setupGameScene(k) {
                         k.z(100)
                     ]);
 
-                    // Make name tag follow player
+                    // Health bar components (shown when player is hurt)
+                    const healthBarWidth = 40;
+                    const healthBarHeight = 4;
+                    const healthBarOffset = -40; // Below name tag
+
+                    const healthBarBg = k.add([
+                        k.rect(healthBarWidth, healthBarHeight),
+                        k.pos(remotePlayer.pos.x, remotePlayer.pos.y + healthBarOffset),
+                        k.anchor('center'),
+                        k.color(50, 50, 50),
+                        k.z(100),
+                        'playerHealthBar'
+                    ]);
+
+                    const healthBar = k.add([
+                        k.rect(healthBarWidth, healthBarHeight),
+                        k.pos(remotePlayer.pos.x, remotePlayer.pos.y + healthBarOffset),
+                        k.anchor('center'),
+                        k.color(100, 255, 100), // Green for friendly players
+                        k.z(101),
+                        'playerHealthBar'
+                    ]);
+
+                    // Link health bars to player
+                    remotePlayer.healthBarBg = healthBarBg;
+                    remotePlayer.healthBar = healthBar;
+
+                    // Initially hide health bars
+                    healthBarBg.hidden = true;
+                    healthBar.hidden = true;
+
+                    // Make name tag and health bars follow player
                     nameTag.onUpdate(() => {
                         if (remotePlayer.exists()) {
                             nameTag.pos = k.vec2(remotePlayer.pos.x, remotePlayer.pos.y - 30);
+
+                            // Update health bar position and visibility
+                            const healthPercent = remotePlayer.hp() / remotePlayer.maxHealth;
+                            const isHurt = healthPercent < 1.0 && healthPercent > 0;
+
+                            if (isHurt) {
+                                // Show and update health bars
+                                healthBarBg.hidden = false;
+                                healthBar.hidden = false;
+
+                                // Update position
+                                healthBarBg.pos.x = remotePlayer.pos.x;
+                                healthBarBg.pos.y = remotePlayer.pos.y + healthBarOffset;
+                                healthBar.pos.x = remotePlayer.pos.x;
+                                healthBar.pos.y = remotePlayer.pos.y + healthBarOffset;
+
+                                // Update health bar width
+                                const barWidth = healthBarWidth * healthPercent;
+                                healthBar.width = Math.max(1, barWidth);
+                                healthBar.pos.x = remotePlayer.pos.x - (healthBarWidth - barWidth) / 2;
+                            } else {
+                                // Hide health bars when at full health
+                                healthBarBg.hidden = true;
+                                healthBar.hidden = true;
+                            }
                         } else {
                             nameTag.destroy();
+                            if (healthBarBg.exists()) healthBarBg.destroy();
+                            if (healthBar.exists()) healthBar.destroy();
                         }
                     });
                 }
@@ -2119,6 +2180,11 @@ export function setupGameScene(k) {
                         }
                     }
 
+                    // Clean up health bars before destroying enemy
+                    if (enemy.cleanupHealthBars && typeof enemy.cleanupHealthBars === 'function') {
+                        enemy.cleanupHealthBars();
+                    }
+
                     k.destroy(enemy);
 
                     // Play enemy death sound
@@ -2481,22 +2547,45 @@ export function setupGameScene(k) {
         let doorEntered = false;
         k.onUpdate(() => {
             if (!player.exists() || k.paused || doorEntered) return;
-            
+
             k.get('door').forEach(door => {
                 // Only interact with exit doors (not spawn doors, not blocked doors)
                 if (!door.open || doorEntered || door.isSpawnDoor || door.blocked) return;
-                
-                // Check if player is near door
-                const distance = k.vec2(
-                    player.pos.x - door.pos.x,
-                    player.pos.y - door.pos.y
-                ).len();
-                
-                // Auto-enter if very close (within 40 pixels)
-                if (distance <= 40) {
-                    doorEntered = true;
-                    playDoorOpen();
-                    handleDoorEntry(door.direction);
+
+                // In multiplayer, check if ALL players are within range of ANY open door
+                if (partySize > 1) {
+                    // Check if all alive players are within range of this door
+                    const allPlayersInRange = players.every(p => {
+                        if (!p.exists()) return true; // Skip non-existent players
+                        if (p.isDead || p.hp() <= 0) return true; // Skip dead players
+
+                        const distance = k.vec2(
+                            p.pos.x - door.pos.x,
+                            p.pos.y - door.pos.y
+                        ).len();
+
+                        return distance <= 40;
+                    });
+
+                    // Only allow transition if all players are in range
+                    if (allPlayersInRange) {
+                        doorEntered = true;
+                        playDoorOpen();
+                        handleDoorEntry(door.direction);
+                    }
+                } else {
+                    // Single player: check if local player is near door
+                    const distance = k.vec2(
+                        player.pos.x - door.pos.x,
+                        player.pos.y - door.pos.y
+                    ).len();
+
+                    // Auto-enter if very close (within 40 pixels)
+                    if (distance <= 40) {
+                        doorEntered = true;
+                        playDoorOpen();
+                        handleDoorEntry(door.direction);
+                    }
                 }
             });
         });
@@ -2577,6 +2666,11 @@ export function setupGameScene(k) {
                 room: state.currentRoom,
                 cleared: state.roomCleared
             });
+
+            // Revive all dead players in multiplayer
+            if (partySize > 1) {
+                reviveAllPlayers();
+            }
 
             // ==========================================
             // LEGACY STATE
