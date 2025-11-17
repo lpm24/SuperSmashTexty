@@ -315,40 +315,73 @@ function showJoinPartyDialog(k, joinPartyBtn) {
 
     let isJoining = false;
 
-    // Cancel button
-    const cancelButton = createMenuButton(
-        k,
-        'Cancel',
-        k.width() / 2 - 60,
-        k.height() / 2 + 70,
-        100,
-        30,
-        UI_TEXT_SIZES.SMALL - 2
-    );
-    cancelButton.z = UI_Z_LAYERS.OVERLAY + 2; // Ensure button is above dialog
-    cancelButton.labels.forEach(lbl => lbl.z = UI_Z_LAYERS.OVERLAY + 3); // Text above button
-    cancelButton.tags.push('joinDialog');
+    // Cancel button - created directly with correct z-layers
+    const cancelButtonBg = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 70),
+        k.anchor('center'),
+        k.color(...UI_COLORS.SECONDARY),
+        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2),
+        'joinDialog'
+    ]);
 
-    // Join button
-    const joinButton = createMenuButton(
-        k,
-        'Join',
-        k.width() / 2 + 60,
-        k.height() / 2 + 70,
-        100,
-        30,
-        UI_TEXT_SIZES.SMALL - 2
-    );
-    joinButton.z = UI_Z_LAYERS.OVERLAY + 2; // Ensure button is above dialog
-    joinButton.labels.forEach(lbl => lbl.z = UI_Z_LAYERS.OVERLAY + 3); // Text above button
-    joinButton.tags.push('joinDialog');
+    const cancelButtonText = k.add([
+        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 70),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3),
+        'joinDialog'
+    ]);
+
+    // Create cancel button object
+    const cancelButton = cancelButtonBg;
+    cancelButton.labels = [cancelButtonText];
+
+    // Join button - created directly with correct z-layers
+    const joinButtonBg = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 70),
+        k.anchor('center'),
+        k.color(...UI_COLORS.SECONDARY),
+        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2),
+        'joinDialog'
+    ]);
+
+    const joinButtonText = k.add([
+        k.text('Join', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 70),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3),
+        'joinDialog'
+    ]);
+
+    // Create join button object with setDisabled method
+    const joinButton = joinButtonBg;
+    joinButton.labels = [joinButtonText];
+    joinButton.setDisabled = (disabled) => {
+        if (disabled) {
+            joinButtonBg.color = k.rgb(80, 80, 90);
+            joinButtonText.color = k.rgb(150, 150, 150);
+            joinButton.disabled = true;
+        } else {
+            joinButtonBg.color = k.rgb(...UI_COLORS.SECONDARY);
+            joinButtonText.color = k.rgb(...UI_COLORS.TEXT_PRIMARY);
+            joinButton.disabled = false;
+        }
+    };
 
     // Initially disable Join button until code is entered
     joinButton.setDisabled(true);
-
-    // Make disabled button more visible - override disabled colors
-    joinButton.color = k.rgb(80, 80, 90); // Lighter than default disabled
-    joinButton.labels.forEach(lbl => lbl.color = k.rgb(150, 150, 150)); // Lighter disabled text
 
     // Store all dialog entities for cleanup
     const dialogEntities = [
@@ -376,12 +409,16 @@ function showJoinPartyDialog(k, joinPartyBtn) {
             inputDisplay.text = display;
             errorMsg.text = '';
 
-            // Enable Join button when 6 digits are entered
+            // Auto-join when 6 digits are entered
             if (inputCode.length === 6) {
                 joinButton.setDisabled(false);
-                // Make sure it's fully visible when enabled
-                joinButton.color = k.rgb(...joinButton.originalColor);
-                joinButton.labels.forEach(lbl => lbl.color = k.rgb(...UI_COLORS.TEXT_PRIMARY));
+                // Wait a tiny bit for the display to update, then auto-join
+                k.wait(0.1, () => {
+                    if (!isJoining && inputCode.length === 6) {
+                        // Trigger join button click
+                        joinButtonBg.click();
+                    }
+                });
             }
         }
     });
@@ -444,7 +481,7 @@ function showJoinPartyDialog(k, joinPartyBtn) {
     });
 
     joinButton.onClick(async () => {
-        if (isJoining) return; // Prevent multiple clicks
+        if (joinButton.disabled || isJoining) return; // Prevent clicks when disabled
 
         // Validate invite code format
         if (inputCode.length === 6) {
