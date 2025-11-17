@@ -333,8 +333,19 @@ function setupClientHandlers() {
 
     // Handle party updates
     onMessage('party_update', (payload) => {
-        console.log('Received party update:', payload);
+        console.log('[PartySystem] Received party update:', payload);
+
+        // Find which slot is local before updating
+        const localSlotIndex = party.slots.findIndex(slot => slot.isLocal);
+
+        // Update slots
         party.slots = payload.slots;
+
+        // Re-mark local slot (preserve isLocal flag)
+        if (localSlotIndex !== -1) {
+            party.slots[localSlotIndex].isLocal = true;
+            console.log(`[PartySystem] Preserved local flag for slot ${localSlotIndex}`);
+        }
     });
 
     // Handle join rejection
