@@ -228,6 +228,18 @@ export async function joinPartyAsClient(hostInviteCode) {
             disconnectNetwork();
             party.networkInitialized = false;
             party.isHost = false;
+
+            // Clear party slots - they'll be repopulated by party_sync from the actual host
+            for (let i = 0; i < party.slots.length; i++) {
+                party.slots[i] = {
+                    playerId: null,
+                    playerName: null,
+                    inviteCode: null,
+                    selectedCharacter: null,
+                    isLocal: false,
+                    peerId: null
+                };
+            }
         }
 
         // Initialize network as client

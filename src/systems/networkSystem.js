@@ -206,11 +206,7 @@ export function connectToHost(hostInviteCode) {
             network.hostConnection = conn;
             network.hostId = hostPeerId;
 
-            // Send join request with our player info
-            sendToHost('join_request', {
-                peerId: network.peerId
-            });
-
+            // Don't send join_request here - partySystem.js will send it with full player info
             resolve();
         });
 
