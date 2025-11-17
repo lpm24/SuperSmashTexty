@@ -51,25 +51,14 @@ export function initNetwork(inviteCode, isHost = true) {
 
         try {
             network.peer = new Peer(peerId, {
-                debug: 0, // Disable verbose logging
+                debug: 2, // Enable debug logging to see connection issues
                 config: {
                     iceServers: [
-                        // Google STUN servers
-                        { urls: 'stun:stun.l.google.com:19302' },
-
-                        // Free TURN server from metered.ca (more reliable than OpenRelay)
-                        {
-                            urls: 'turn:a.relay.metered.ca:80',
-                            username: 'e24516d16b6e8ba61d0ab5fe',
-                            credential: 'RISvE/hSo9hBi6wQ'
-                        },
-                        {
-                            urls: 'turn:a.relay.metered.ca:443',
-                            username: 'e24516d16b6e8ba61d0ab5fe',
-                            credential: 'RISvE/hSo9hBi6wQ'
-                        }
-                    ],
-                    iceTransportPolicy: 'all'
+                        // For localhost testing, minimal ICE config works best
+                        { urls: 'stun:stun.l.google.com:19302' }
+                    ]
+                    // No TURN servers - not needed for localhost
+                    // For production across internet, add reliable TURN servers
                 }
             });
 
@@ -93,17 +82,29 @@ export function initNetwork(inviteCode, isHost = true) {
                 // Handle unavailable-id error (peer ID already taken)
                 if (err.type === 'unavailable-id' && isHost) {
                     console.warn('Peer ID already taken - generating new code and retrying...');
-                    // Destroy the peer and retry with a new code
+
+                    // Fully cleanup the peer
                     if (network.peer) {
-                        network.peer.destroy();
+                        try {
+                            network.peer.destroy();
+                        } catch (e) {
+                            console.warn('Error destroying peer:', e);
+                        }
+                        network.peer = null;
+                        network.peerId = null;
                         network.isInitialized = false;
                     }
+
+                    // Wait a bit longer for cleanup to complete
                     setTimeout(() => {
-                        // Generate a new invite code
+                        // Generate a new invite code (just 6 digits, no prefix)
                         const newCode = generateInviteCode();
-                        console.log(`Retrying with new invite code: ${newCode}`);
+                        console.log(`Retrying with new invite code: ${newCode} (without prefix)`);
+
+                        // Recursively call initNetwork with new code
+                        // This will create a NEW peer with `smash-${newCode}` format
                         initNetwork(newCode, isHost).then(resolve).catch(reject);
-                    }, 1000);
+                    }, 2000); // Longer delay to ensure cleanup
                     return;
                 }
 
