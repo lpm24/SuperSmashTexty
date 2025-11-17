@@ -64,7 +64,7 @@ export function setupStatisticsScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Statistics & Achievements'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('Stats & Achievements'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),

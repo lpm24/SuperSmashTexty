@@ -875,7 +875,7 @@ export function setupMenuScene(k) {
 
         // Main buttons
         const playButton = createMenuButton(
-            k, 'Start Game', centerX, buttonStartY,
+            k, 'Start', centerX, buttonStartY,
             350, 55, UI_TEXT_SIZES.HEADER
         );
         playButton.onClick(() => {
@@ -884,7 +884,7 @@ export function setupMenuScene(k) {
         });
 
         const characterButton = createMenuButton(
-            k, 'Character Select', centerX, buttonStartY + buttonSpacing,
+            k, 'Characters', centerX, buttonStartY + buttonSpacing,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         characterButton.onClick(() => {
@@ -944,7 +944,7 @@ export function setupMenuScene(k) {
         });
 
         const statisticsButton = createMenuButton(
-            k, 'Statistics', centerX, buttonStartY + buttonSpacing * 3,
+            k, 'Stats', centerX, buttonStartY + buttonSpacing * 3,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         statisticsButton.onClick(() => {
@@ -1212,9 +1212,24 @@ export function setupMenuScene(k) {
         // Spawn golden enemies occasionally
         k.loop(10, () => {
             if (Math.random() < 0.15) { // 15% chance every 10 seconds
-                const startY = 100 + Math.random() * (k.height() - 200);
-                const direction = Math.random() < 0.5 ? 1 : -1;
-                const startX = direction > 0 ? -50 : k.width() + 50;
+                // Vary spawn angle and direction
+                const spawnAngle = Math.random() * Math.PI * 2; // Random angle
+                const spawnDistance = 100; // Distance from screen edge
+                const centerX = k.width() / 2;
+                const centerY = k.height() / 2;
+                
+                // Calculate spawn position based on angle
+                const startX = centerX + Math.cos(spawnAngle) * (k.width() / 2 + spawnDistance);
+                const startY = centerY + Math.sin(spawnAngle) * (k.height() / 2 + spawnDistance);
+                
+                // Direction towards center (with some variation)
+                const targetX = centerX + (Math.random() - 0.5) * 200;
+                const targetY = centerY + (Math.random() - 0.5) * 200;
+                const dx = targetX - startX;
+                const dy = targetY - startY;
+                const distance = Math.sqrt(dx * dx + dy * dy);
+                const directionX = dx / distance;
+                const directionY = dy / distance;
 
                 const goldenEnemy = k.add([
                     k.text('$', { size: 24 }),
@@ -1227,7 +1242,8 @@ export function setupMenuScene(k) {
                 ]);
 
                 goldenEnemy.speed = 150 + Math.random() * 100;
-                goldenEnemy.direction = direction;
+                goldenEnemy.directionX = directionX;
+                goldenEnemy.directionY = directionY;
                 goldenEnemy.pulseTime = 0;
 
                 // Click handler
@@ -1237,27 +1253,32 @@ export function setupMenuScene(k) {
                     // Add currency
                     addCurrency(1);
 
-                    // Explosion effect
-                    for (let i = 0; i < 12; i++) {
-                        const angle = (Math.PI * 2 * i) / 12;
+                    // Enhanced explosion effect - more particles, longer duration
+                    const particleCount = 24; // Increased from 12
+                    for (let i = 0; i < particleCount; i++) {
+                        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3; // Add variation
                         const particle = k.add([
-                            k.text(['$', '¢', '€', '¥'][Math.floor(Math.random() * 4)], { size: 14 }),
+                            k.text(['$', '¢', '€', '¥', '★', '✨'][Math.floor(Math.random() * 6)], { size: 16 + Math.random() * 8 }),
                             k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                             k.color(...UI_COLORS.GOLD),
                             k.z(UI_Z_LAYERS.PARTICLES + 2)
                         ]);
 
-                        const speed = 100 + Math.random() * 100;
+                        const speed = 150 + Math.random() * 150; // Increased speed range
                         particle.velocity = k.vec2(
                             Math.cos(angle) * speed,
                             Math.sin(angle) * speed
                         );
-                        particle.life = 1;
+                        particle.life = 2.5; // Increased from 1 to 2.5 seconds
+                        particle.rotation = Math.random() * 360;
+                        particle.rotationSpeed = (Math.random() - 0.5) * 360; // Rotation
 
                         particle.onUpdate(() => {
                             particle.pos = particle.pos.add(particle.velocity.scale(k.dt()));
+                            particle.velocity = particle.velocity.scale(0.98); // Slight deceleration
                             particle.life -= k.dt();
-                            particle.opacity = particle.life;
+                            particle.opacity = particle.life / 2.5;
+                            particle.angle += particle.rotationSpeed * k.dt();
 
                             if (particle.life <= 0) {
                                 k.destroy(particle);
@@ -1265,20 +1286,21 @@ export function setupMenuScene(k) {
                         });
                     }
 
-                    // Show "+$1" text
+                    // Enhanced "+$1" text with larger size and longer duration
                     const rewardText = k.add([
-                        k.text('+$1', { size: 20 }),
+                        k.text('+$1', { size: 32 }), // Increased from 20
                         k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
 
-                    rewardText.life = 1.5;
+                    rewardText.life = 2.5; // Increased from 1.5
                     rewardText.onUpdate(() => {
-                        rewardText.pos.y -= 50 * k.dt();
+                        rewardText.pos.y -= 60 * k.dt(); // Slightly faster
                         rewardText.life -= k.dt();
-                        rewardText.opacity = rewardText.life / 1.5;
+                        rewardText.opacity = rewardText.life / 2.5;
+                        rewardText.scale = k.vec2(1 + (2.5 - rewardText.life) * 0.2); // Scale up effect
 
                         if (rewardText.life <= 0) {
                             k.destroy(rewardText);
@@ -1294,7 +1316,8 @@ export function setupMenuScene(k) {
 
                 // Update movement
                 goldenEnemy.onUpdate(() => {
-                    goldenEnemy.pos.x += goldenEnemy.speed * goldenEnemy.direction * k.dt();
+                    goldenEnemy.pos.x += goldenEnemy.speed * goldenEnemy.directionX * k.dt();
+                    goldenEnemy.pos.y += goldenEnemy.speed * goldenEnemy.directionY * k.dt();
 
                     // Pulse effect
                     goldenEnemy.pulseTime += k.dt();
@@ -1302,8 +1325,8 @@ export function setupMenuScene(k) {
                     goldenEnemy.scale = k.vec2(1 + pulse, 1 + pulse);
 
                     // Remove when off screen
-                    if ((goldenEnemy.direction > 0 && goldenEnemy.pos.x > k.width() + 100) ||
-                        (goldenEnemy.direction < 0 && goldenEnemy.pos.x < -100)) {
+                    if (goldenEnemy.pos.x < -100 || goldenEnemy.pos.x > k.width() + 100 ||
+                        goldenEnemy.pos.y < -100 || goldenEnemy.pos.y > k.height() + 100) {
                         k.destroy(goldenEnemy);
                     }
                 });

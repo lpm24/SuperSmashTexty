@@ -37,7 +37,7 @@ export function setupCharacterSelectScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Character Select'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('Characters'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -338,7 +338,7 @@ export function setupCharacterSelectScene(k) {
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
-            k.outline(2, k.rgb(...UI_COLORS.NEUTRAL)),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)

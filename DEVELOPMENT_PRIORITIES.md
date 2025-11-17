@@ -64,6 +64,15 @@
 - ✅ **Statistics Menu**: Added padding between Statistics and Achievements tab buttons
 - ✅ **Character Select Menu**: Updated to match formatting of other menus (background color, title font/size/position)
 - ✅ **Background Particle Effects**: Applied to all menu pages and tabs
+- ✅ **Menu Button Text Simplification**: Updated main menu buttons to single-word phrasing ("Start Game" → "Start", "Character Select" → "Characters", "Statistics" → "Stats")
+- ✅ **Options Menu Improvements**: 
+  - Changed "Settings" menu title to "Options" to match main menu terminology
+  - Added confirmation dialog for "Reset to Defaults" button to prevent accidental clicks
+  - Standardized Back button positioning to match other menus
+- ✅ **Enhanced Golden Enemy Easter Egg**: 
+  - Increased explosion particle count (12 → 24) and duration (1s → 2.5s)
+  - Added particle rotation and varied spawn angles/directions
+  - Enhanced visual effects with more symbols and improved animations
 
 ## 🎯 Current Focus Areas
 

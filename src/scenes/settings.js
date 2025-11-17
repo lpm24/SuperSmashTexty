@@ -11,6 +11,126 @@ import {
 } from '../config/uiConfig.js';
 
 /**
+ * Show reset confirmation dialog
+ */
+function showResetConfirmationDialog(k, onConfirm) {
+    // Overlay
+    const overlay = k.add([
+        k.rect(k.width(), k.height()),
+        k.pos(0, 0),
+        k.color(0, 0, 0),
+        k.opacity(0.7),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY)
+    ]);
+
+    // Dialog box
+    const dialogWidth = 400;
+    const dialogHeight = 180;
+    const dialogBg = k.add([
+        k.rect(dialogWidth, dialogHeight),
+        k.pos(k.width() / 2, k.height() / 2),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(3, k.rgb(...UI_COLORS.BORDER)),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 1)
+    ]);
+
+
+    // Store dialog entities for cleanup
+    const dialogEntities = [];
+
+    // Close function
+    function closeDialog() {
+        dialogEntities.forEach(entity => {
+            if (entity && entity.exists && entity.exists()) {
+                k.destroy(entity);
+            }
+        });
+    }
+
+    // Cancel button
+    const cancelButton = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 50),
+        k.anchor('center'),
+        k.color(...UI_COLORS.BG_MEDIUM),
+        k.outline(2, k.rgb(...UI_COLORS.TEXT_PRIMARY)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    const cancelText = k.add([
+        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 - 60, k.height() / 2 + 50),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3)
+    ]);
+
+    cancelButton.onClick(() => {
+        closeDialog();
+    });
+    dialogEntities.push(overlay, dialogBg, cancelButton, cancelText);
+
+    // Confirm button
+    const confirmButton = k.add([
+        k.rect(100, 30),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 50),
+        k.anchor('center'),
+        k.color(100, 50, 50),
+        k.outline(2, k.rgb(150, 100, 100)),
+        k.area(),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+
+    const confirmText = k.add([
+        k.text('Reset', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.pos(k.width() / 2 + 60, k.height() / 2 + 50),
+        k.anchor('center'),
+        k.color(255, 200, 200),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 3)
+    ]);
+
+    confirmButton.onClick(() => {
+        closeDialog();
+        onConfirm();
+    });
+    dialogEntities.push(confirmButton, confirmText);
+
+    // Add title and message to cleanup list
+    const titleText = k.add([
+        k.text('Reset to Defaults?', { size: UI_TEXT_SIZES.LABEL }),
+        k.pos(k.width() / 2, k.height() / 2 - 50),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_PRIMARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+    dialogEntities.push(titleText);
+
+    const messageText = k.add([
+        k.text('This will reset all settings to their default values.', { size: UI_TEXT_SIZES.SMALL }),
+        k.pos(k.width() / 2, k.height() / 2 - 10),
+        k.anchor('center'),
+        k.color(...UI_COLORS.TEXT_SECONDARY),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.OVERLAY + 2)
+    ]);
+    dialogEntities.push(messageText);
+
+    const escapeHandler = k.onKeyPress('escape', () => {
+        closeDialog();
+        escapeHandler.cancel();
+    });
+}
+
+/**
  * Show name edit dialog
  */
 function showNameEditDialog(k, currentName, onSave) {
@@ -197,7 +317,7 @@ export function setupSettingsScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Settings'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('Options'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -786,17 +906,20 @@ export function setupSettingsScene(k) {
         ]);
         
         resetButton.onClick(() => {
-            resetSettings();
-            refreshSettings();
+            // Show confirmation dialog
+            showResetConfirmationDialog(k, () => {
+                resetSettings();
+                refreshSettings();
+            });
         });
         
         // Initial refresh
         refreshSettings();
         
-        // Back button (standardized, above reset button)
+        // Back button (standardized, matches other menus)
         const backButton = k.add([
             k.rect(120, 35),
-            k.pos(k.width() / 2, k.height() - 125),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -807,7 +930,7 @@ export function setupSettingsScene(k) {
         
         const backText = k.add([
             k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 125),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
