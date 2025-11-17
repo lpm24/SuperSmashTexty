@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost } from '../systems/multiplayerGame.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -2116,26 +2116,33 @@ export function setupGameScene(k) {
                     // Track enemy kill
                     runStats.enemiesKilled++;
 
-                    // Spawn XP pickup at enemy position
-                    createXPPickup(k, posX, posY, xpValue);
+                    // Only spawn pickups if we're the host (or not in multiplayer)
+                    // Pickups will be broadcast to clients via registerPickup()
+                    if (!isMultiplayerActive() || isHost()) {
+                        // Get loot RNG (seeded for multiplayer to ensure consistent drops)
+                        const lootRng = partySize > 1 ? getRoomRNG() : null;
 
-                    // Spawn currency drops (1-3 coins with random currency icons)
-                    const currencyDropCount = Math.floor(Math.random() * 3) + 1; // 1-3 drops
-                    const currencyValue = 1; // Each coin is worth 1 currency
-                    for (let i = 0; i < currencyDropCount; i++) {
-                        // Spread drops slightly
-                        const offsetX = (Math.random() - 0.5) * 20;
-                        const offsetY = (Math.random() - 0.5) * 20;
-                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue);
-                    }
+                        // Spawn XP pickup at enemy position
+                        createXPPickup(k, posX, posY, xpValue);
 
-                    // Check for powerup weapon drop
-                    const powerupDrop = rollPowerupDrop(enemy.type, currentFloor);
-                    if (powerupDrop) {
-                        // Offset slightly to avoid overlap with other pickups
-                        const offsetX = (Math.random() - 0.5) * 30;
-                        const offsetY = (Math.random() - 0.5) * 30;
-                        createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
+                        // Spawn currency drops (1-3 coins with random currency icons)
+                        const currencyDropCount = lootRng ? lootRng.range(1, 4) : Math.floor(Math.random() * 3) + 1;
+                        const currencyValue = 1; // Each coin is worth 1 currency
+                        for (let i = 0; i < currencyDropCount; i++) {
+                            // Spread drops slightly
+                            const offsetX = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
+                            const offsetY = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
+                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue);
+                        }
+
+                        // Check for powerup weapon drop
+                        const powerupDrop = rollPowerupDrop(enemy.type, currentFloor);
+                        if (powerupDrop) {
+                            // Offset slightly to avoid overlap with other pickups
+                            const offsetX = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
+                            const offsetY = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
+                            createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
+                        }
                     }
                 }
             });
@@ -2159,19 +2166,25 @@ export function setupGameScene(k) {
                     // Track miniboss kill (counts as enemy too)
                     runStats.enemiesKilled++;
 
-                    // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
-                    createXPPickup(k, posX, posY, xpValue);
+                    // Only spawn pickups if we're the host (or not in multiplayer)
+                    if (!isMultiplayerActive() || isHost()) {
+                        // Get loot RNG (seeded for multiplayer)
+                        const lootRng = partySize > 1 ? getRoomRNG() : null;
 
-                    // Spawn currency drops (10-15 coins with random currency icons)
-                    const minibossCurrencyCount = Math.floor(Math.random() * 6) + 10; // 10-15 drops
-                    const minibossCurrencyValue = 1; // Each coin is worth 1 currency
-                    for (let i = 0; i < minibossCurrencyCount; i++) {
-                        // Spread drops in a circle
-                        const angle = (Math.PI * 2 / minibossCurrencyCount) * i;
-                        const radius = 30 + Math.random() * 20;
-                        const offsetX = Math.cos(angle) * radius;
-                        const offsetY = Math.sin(angle) * radius;
-                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, minibossCurrencyValue);
+                        // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
+                        createXPPickup(k, posX, posY, xpValue);
+
+                        // Spawn currency drops (10-15 coins with random currency icons)
+                        const minibossCurrencyCount = lootRng ? lootRng.range(10, 16) : Math.floor(Math.random() * 6) + 10;
+                        const minibossCurrencyValue = 1; // Each coin is worth 1 currency
+                        for (let i = 0; i < minibossCurrencyCount; i++) {
+                            // Spread drops in a circle
+                            const angle = (Math.PI * 2 / minibossCurrencyCount) * i;
+                            const radius = lootRng ? (30 + lootRng.next() * 20) : (30 + Math.random() * 20);
+                            const offsetX = Math.cos(angle) * radius;
+                            const offsetY = Math.sin(angle) * radius;
+                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, minibossCurrencyValue);
+                        }
                     }
 
                     // Miniboss death effects (visual feedback)
@@ -2208,21 +2221,27 @@ export function setupGameScene(k) {
                     runStats.enemiesKilled++;
                     runStats.bossesKilled++;
 
-                    // Spawn XP pickup at boss position (bosses give more XP)
-                    createXPPickup(k, posX, posY, xpValue);
+                    // Only spawn pickups if we're the host (or not in multiplayer)
+                    if (!isMultiplayerActive() || isHost()) {
+                        // Get loot RNG (seeded for multiplayer)
+                        const lootRng = partySize > 1 ? getRoomRNG() : null;
 
-                    // Spawn currency drops (20-30 coins with SAME currency icon)
-                    const bossCurrencyCount = Math.floor(Math.random() * 11) + 20; // 20-30 drops
-                    const bossCurrencyValue = 1; // Each coin is worth 1 currency
-                    const bossCurrencyIcon = getRandomCurrencyIcon(); // Pick ONE icon for all boss drops
-                    for (let i = 0; i < bossCurrencyCount; i++) {
-                        // Spread drops in a large circle
-                        const angle = (Math.PI * 2 / bossCurrencyCount) * i;
-                        const radius = 40 + Math.random() * 30;
-                        const offsetX = Math.cos(angle) * radius;
-                        const offsetY = Math.sin(angle) * radius;
-                        // Use the same icon for all boss drops
-                        createCurrencyPickup(k, posX + offsetX, posY + offsetY, bossCurrencyValue, bossCurrencyIcon);
+                        // Spawn XP pickup at boss position (bosses give more XP)
+                        createXPPickup(k, posX, posY, xpValue);
+
+                        // Spawn currency drops (20-30 coins with SAME currency icon)
+                        const bossCurrencyCount = lootRng ? lootRng.range(20, 31) : Math.floor(Math.random() * 11) + 20;
+                        const bossCurrencyValue = 1; // Each coin is worth 1 currency
+                        const bossCurrencyIcon = getRandomCurrencyIcon(); // Pick ONE icon for all boss drops
+                        for (let i = 0; i < bossCurrencyCount; i++) {
+                            // Spread drops in a large circle
+                            const angle = (Math.PI * 2 / bossCurrencyCount) * i;
+                            const radius = lootRng ? (40 + lootRng.next() * 30) : (40 + Math.random() * 30);
+                            const offsetX = Math.cos(angle) * radius;
+                            const offsetY = Math.sin(angle) * radius;
+                            // Use the same icon for all boss drops
+                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, bossCurrencyValue, bossCurrencyIcon);
+                        }
                     }
 
                     // Boss death effects (visual feedback)
