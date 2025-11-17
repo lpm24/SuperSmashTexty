@@ -54,13 +54,20 @@ export function initNetwork(inviteCode, isHost = true) {
                 debug: 0, // Disable verbose logging
                 config: {
                     iceServers: [
-                        // Use only Google STUN servers - reliable and sufficient for most cases
+                        // Google STUN servers
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
 
-                        // TURN servers removed - they were causing connection failures
-                        // For users behind restrictive NATs, consider adding a reliable TURN server
-                        // such as Twilio or a self-hosted CoTURN server
+                        // Free TURN server from metered.ca (more reliable than OpenRelay)
+                        {
+                            urls: 'turn:a.relay.metered.ca:80',
+                            username: 'e24516d16b6e8ba61d0ab5fe',
+                            credential: 'RISvE/hSo9hBi6wQ'
+                        },
+                        {
+                            urls: 'turn:a.relay.metered.ca:443',
+                            username: 'e24516d16b6e8ba61d0ab5fe',
+                            credential: 'RISvE/hSo9hBi6wQ'
+                        }
                     ],
                     iceTransportPolicy: 'all'
                 }
@@ -364,10 +371,15 @@ export function disconnect() {
  * Get network state info
  */
 export function getNetworkInfo() {
+    // Extract just the 6-digit code from peerId if it has "smash-" prefix
+    const displayCode = network.peerId && network.peerId.startsWith('smash-')
+        ? network.peerId.substring(6)
+        : network.peerId;
+
     return {
         isInitialized: network.isInitialized,
         isHost: network.isHost,
-        peerId: network.peerId,
+        peerId: displayCode, // Return clean code without "smash-" prefix
         hostId: network.hostId,
         connectedPeers: Array.from(network.connections.keys()),
         peerCount: network.connections.size
