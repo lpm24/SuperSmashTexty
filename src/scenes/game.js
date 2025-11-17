@@ -414,7 +414,7 @@ export function setupGameScene(k) {
 
                     revivedCount++;
                     console.log(`[Revival] Player ${index} revived (${p.playerName || 'Local'})`);
-                });
+                }
             });
 
             // Broadcast revival event in multiplayer
@@ -1827,6 +1827,9 @@ export function setupGameScene(k) {
                         });
                     } else {
                         // Regular boss spawning
+                        // Use seeded RNG for boss spawn position in multiplayer
+                        const bossRng = partySize > 1 ? getRoomRNG() : null;
+
                         // Spawn boss at a door (prefer top door, or random door)
                         // Avoid spawning at entrance door if player entered from one
                         let bossSpawnDoor = spawnDoors.find(d => d.direction === 'north');
@@ -1834,13 +1837,19 @@ export function setupGameScene(k) {
                             // If top door is entrance or doesn't exist, pick random non-entrance door
                             const availableDoors = spawnDoors.filter(d => d.direction !== gameState.entryDirection);
                             if (availableDoors.length > 0) {
-                                bossSpawnDoor = availableDoors[Math.floor(Math.random() * availableDoors.length)];
+                                const doorIndex = bossRng
+                                    ? bossRng.range(0, availableDoors.length)
+                                    : Math.floor(Math.random() * availableDoors.length);
+                                bossSpawnDoor = availableDoors[doorIndex];
                             } else {
                                 // Fallback to any door
-                                bossSpawnDoor = spawnDoors[Math.floor(Math.random() * spawnDoors.length)];
+                                const doorIndex = bossRng
+                                    ? bossRng.range(0, spawnDoors.length)
+                                    : Math.floor(Math.random() * spawnDoors.length);
+                                bossSpawnDoor = spawnDoors[doorIndex];
                             }
                         }
-                        
+
                         const bossX = bossSpawnDoor ? bossSpawnDoor.pos.x : k.width() / 2;
                         const bossY = bossSpawnDoor ? bossSpawnDoor.pos.y : k.height() / 2;
                         createBoss(k, bossX, bossY, bossType, currentFloor);
@@ -1880,12 +1889,18 @@ export function setupGameScene(k) {
                 if (k.time() - roomStartTime >= 1.0) {
                     minibossSpawned = true;
                     const minibossType = getRandomMinibossType(currentFloor);
-                    
+
+                    // Use seeded RNG for miniboss spawn position in multiplayer
+                    const minibossRng = partySize > 1 ? getRoomRNG() : null;
+
                     // Spawn miniboss at a random door (avoid entrance door)
                     const availableDoors = spawnDoors.filter(d => d.direction !== gameState.entryDirection);
                     const doorsToUse = availableDoors.length > 0 ? availableDoors : spawnDoors;
-                    const randomDoor = doorsToUse[Math.floor(Math.random() * doorsToUse.length)];
-                    
+                    const doorIndex = minibossRng
+                        ? minibossRng.range(0, doorsToUse.length)
+                        : Math.floor(Math.random() * doorsToUse.length);
+                    const randomDoor = doorsToUse[doorIndex];
+
                     const minibossX = randomDoor.pos.x;
                     const minibossY = randomDoor.pos.y;
                     createMiniboss(k, minibossX, minibossY, minibossType, currentFloor);
@@ -1935,7 +1950,18 @@ export function setupGameScene(k) {
                 if (enemySpawnTimer >= enemySpawnInterval) {
                     enemySpawnTimer = 0;
                     enemiesSpawned++;
-                    
+
+                    // Get spawn RNG (seeded by room + spawn wave number for multiplayer sync)
+                    const spawnRng = partySize > 1 ? getRoomRNG() : null;
+
+                    // Use consistent seed for this specific spawn
+                    if (spawnRng) {
+                        // Advance RNG state based on spawn number for unique but deterministic spawns
+                        for (let i = 0; i < enemiesSpawned - 1; i++) {
+                            spawnRng.next(); // Consume RNG state to make each spawn unique
+                        }
+                    }
+
                     // Spawn enemy from random spawn door
                     // Strategy: Give player breathing room at start by not spawning at entrance
                     if (spawnDoors.length > 0) {
@@ -1953,42 +1979,48 @@ export function setupGameScene(k) {
 
                         // Safety check: If all doors are excluded (shouldn't happen), use all doors
                         const doorsToUse = availableDoors.length > 0 ? availableDoors : spawnDoors;
-                        const randomDoor = doorsToUse[Math.floor(Math.random() * doorsToUse.length)];
+
+                        // Use seeded RNG for door selection in multiplayer
+                        const doorIndex = spawnRng
+                            ? spawnRng.range(0, doorsToUse.length)
+                            : Math.floor(Math.random() * doorsToUse.length);
+                        const randomDoor = doorsToUse[doorIndex];
                         const spawnX = randomDoor.pos.x;
                         const spawnY = randomDoor.pos.y;
-                        
-                        // Add slight random offset to avoid stacking
+
+                        // Add slight random offset to avoid stacking (seeded in multiplayer)
                         const offset = 15;
-                        const offsetX = spawnX + (Math.random() - 0.5) * offset;
-                        const offsetY = spawnY + (Math.random() - 0.5) * offset;
-                        
-                        // Spawn random enemy type based on floor
+                        const offsetX = spawnX + (spawnRng ? (spawnRng.next() - 0.5) : (Math.random() - 0.5)) * offset;
+                        const offsetY = spawnY + (spawnRng ? (spawnRng.next() - 0.5) : (Math.random() - 0.5)) * offset;
+
+                        // Spawn random enemy type based on floor (host will broadcast this)
                         const enemyType = getRandomEnemyType(currentFloor);
                         createEnemy(k, offsetX, offsetY, enemyType, currentFloor);
                     } else {
                         // Fallback to edge spawning if no doors (shouldn't happen)
-                        const side = k.rand(0, 4);
+                        // Use seeded RNG in multiplayer
+                        const side = spawnRng ? spawnRng.range(0, 4) : Math.floor(k.rand(0, 4));
                         let x, y;
-                        
-                        switch (Math.floor(side)) {
+
+                        switch (side) {
                             case 0: // Top
-                                x = k.rand(margin, k.width() - margin);
+                                x = spawnRng ? spawnRng.rangeFloat(margin, k.width() - margin) : k.rand(margin, k.width() - margin);
                                 y = margin;
                                 break;
                             case 1: // Right
                                 x = k.width() - margin;
-                                y = k.rand(margin, k.height() - margin);
+                                y = spawnRng ? spawnRng.rangeFloat(margin, k.height() - margin) : k.rand(margin, k.height() - margin);
                                 break;
                             case 2: // Bottom
-                                x = k.rand(margin, k.width() - margin);
+                                x = spawnRng ? spawnRng.rangeFloat(margin, k.width() - margin) : k.rand(margin, k.width() - margin);
                                 y = k.height() - margin;
                                 break;
                             case 3: // Left
                                 x = margin;
-                                y = k.rand(margin, k.height() - margin);
+                                y = spawnRng ? spawnRng.rangeFloat(margin, k.height() - margin) : k.rand(margin, k.height() - margin);
                                 break;
                         }
-                        
+
                         const enemyType = getRandomEnemyType(currentFloor);
                         createEnemy(k, x, y, enemyType, currentFloor);
                     }
