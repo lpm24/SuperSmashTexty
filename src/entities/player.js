@@ -254,9 +254,15 @@ export function createPlayer(k, x, y, characterKey = null) {
             return;
         }
 
-        if (moveDir.len() > 0) {
-            const len = moveDir.len();
-            const normalized = moveDir.scale(1 / len);
+        // For remote players, use network-provided move input instead of keyboard
+        let effectiveMoveDir = moveDir;
+        if (player.isRemote && player.move) {
+            effectiveMoveDir = k.vec2(player.move.x, player.move.y);
+        }
+
+        if (effectiveMoveDir.len() > 0) {
+            const len = effectiveMoveDir.len();
+            const normalized = effectiveMoveDir.scale(1 / len);
             const moveAmount = normalized.scale(player.speed * k.dt());
             
             // Check collision with obstacles before moving
