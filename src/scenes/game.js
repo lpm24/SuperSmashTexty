@@ -377,7 +377,7 @@ export function setupGameScene(k) {
             let revivedCount = 0;
             players.forEach((p, index) => {
                 // Check if player is dead (hp <= 0 or destroyed)
-                if (p.exists() && p.hp() <= 0 || (p.isDead && p.exists())) {
+                if ((p.exists() && p.hp() <= 0) || (p.exists() && p.isDead)) {
                     // Revive player
                     p.setHP(p.maxHealth);
                     p.isDead = false;
@@ -405,7 +405,7 @@ export function setupGameScene(k) {
                     });
 
                     // Restore visual state
-                    if (p.characterData) {
+                    if (p.characterData && p.characterData.color) {
                         p.color = k.rgb(...p.characterData.color);
                     }
                     if (p.outline && p.outline.exists()) {
@@ -2284,8 +2284,8 @@ export function setupGameScene(k) {
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
-                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
-                    pickup.collected = true;
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playXPPickup();
 
                     // In multiplayer, give XP to all players (shared XP)
@@ -2369,8 +2369,8 @@ export function setupGameScene(k) {
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
-                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
-                    pickup.collected = true;
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playCurrencyPickup(); // Coin/cash pickup sound
                     addCurrency(pickup.value); // Add currency to persistent storage
 
@@ -2437,8 +2437,8 @@ export function setupGameScene(k) {
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
-                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
-                    pickup.collected = true;
+                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playCurrencyPickup(); // Use currency pickup sound for now
 
                     // Apply powerup weapon to player

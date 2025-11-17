@@ -31,13 +31,14 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
 
         player.xp += adjustedAmount;
 
-        // Check for level up
-        while (player.xp >= player.xpToNext && !levelUpInProgress) {
+        // Check for level up (with safety bounds to prevent infinite loops)
+        while (player.xp >= player.xpToNext && !levelUpInProgress && player.xpToNext > 0) {
             levelUpInProgress = true;
             player.xp -= player.xpToNext;
             player.level++;
             const newLevel = player.level;
-            player.xpToNext = Math.floor(player.xpToNext * PROGRESSION_CONFIG.XP_SCALING_FACTOR);
+            // Safety clamp: ensure xpToNext is always at least 1
+            player.xpToNext = Math.max(1, Math.floor(player.xpToNext * PROGRESSION_CONFIG.XP_SCALING_FACTOR));
 
             // Show level up notification and draft directly
             handleLevelUp(k, player, newLevel);

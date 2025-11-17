@@ -184,7 +184,7 @@ function setupClientHandlers() {
             // Remove enemies that no longer exist on host
             mpGame.enemies.forEach((enemy, id) => {
                 if (!receivedIds.has(id) && enemy.exists()) {
-                    enemy.destroy();
+                    mpGame.k.destroy(enemy); // Use Kaplay's destroy method
                     mpGame.enemies.delete(id);
                 }
             });
@@ -211,7 +211,7 @@ function setupClientHandlers() {
             // Clean up projectiles that don't exist anymore
             mpGame.projectiles.forEach((proj, id) => {
                 if (!receivedIds.has(id) && proj.exists()) {
-                    proj.destroy();
+                    mpGame.k.destroy(proj); // Use Kaplay's destroy method
                     mpGame.projectiles.delete(id);
                 }
             });
@@ -235,7 +235,7 @@ function setupClientHandlers() {
             // Remove collected pickups
             mpGame.pickups.forEach((pickup, id) => {
                 if (!receivedIds.has(id) && pickup.exists()) {
-                    pickup.destroy();
+                    mpGame.k.destroy(pickup); // Use Kaplay's destroy method
                     mpGame.pickups.delete(id);
                 }
             });

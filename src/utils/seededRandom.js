@@ -42,6 +42,10 @@ export class SeededRandom {
      * @returns {number} Random integer
      */
     range(min, max) {
+        if (max <= min) {
+            console.warn(`SeededRandom.range: Invalid range [${min}, ${max}). Returning min.`);
+            return min;
+        }
         return Math.floor(min + this.next() * (max - min));
     }
 
