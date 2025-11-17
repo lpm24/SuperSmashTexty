@@ -289,10 +289,25 @@ export function setupMenuScene(k) {
                 ]);
                 elementsForThisSlot.push(slotNum);
 
+                // Character icon (if player is present)
+                if (!slot.isEmpty) {
+                    const charData = CHARACTER_UNLOCKS[slot.selectedCharacter] || CHARACTER_UNLOCKS['survivor'];
+                    const charIcon = k.add([
+                        k.text(charData.char, { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(partyPanelX + 38, slotY + slotHeight / 2),
+                        k.anchor('left'),
+                        k.color(...charData.color),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT),
+                        'partySlotUI'
+                    ]);
+                    elementsForThisSlot.push(charIcon);
+                }
+
                 // Player name or "Empty Slot"
                 const nameText = k.add([
                     k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                    k.pos(partyPanelX + 45, slotY + slotHeight / 2),
+                    k.pos(partyPanelX + (slot.isEmpty ? 45 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
                     k.fixed(),
