@@ -283,6 +283,7 @@ export function setupMenuScene(k) {
                     k.pos(partyPanelX + 20, slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.outline(2, k.rgb(0, 0, 0)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
@@ -297,6 +298,7 @@ export function setupMenuScene(k) {
                         k.pos(partyPanelX + 38, slotY + slotHeight / 2),
                         k.anchor('left'),
                         k.color(...charData.color),
+                        k.outline(2, k.rgb(0, 0, 0)),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT),
                         'partySlotUI'
@@ -310,6 +312,7 @@ export function setupMenuScene(k) {
                     k.pos(partyPanelX + (slot.isEmpty ? 45 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
+                    k.outline(2, k.rgb(0, 0, 0)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
@@ -323,6 +326,7 @@ export function setupMenuScene(k) {
                         k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
                         k.anchor('right'),
                         k.color(...UI_COLORS.GOLD),
+                        k.outline(2, k.rgb(0, 0, 0)),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT),
                         'partySlotUI'
@@ -356,6 +360,7 @@ export function setupMenuScene(k) {
             k.pos(partyPanelX + 10, inviteCodeY),
             k.anchor('left'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.outline(2, k.rgb(0, 0, 0)),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -368,6 +373,7 @@ export function setupMenuScene(k) {
             k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
             k.anchor('right'),
             k.color(inviteCode === 'OFFLINE' ? [...UI_COLORS.TEXT_DISABLED] : [...UI_COLORS.GOLD]),
+            k.outline(2, k.rgb(0, 0, 0)),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
