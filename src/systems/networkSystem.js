@@ -51,14 +51,13 @@ export function initNetwork(inviteCode, isHost = true) {
 
         try {
             network.peer = new Peer(peerId, {
-                debug: 2, // Enable debug logging to see connection issues
+                debug: 3, // Maximum debug logging
+                host: '0.peerjs.com', // Default PeerJS cloud server
+                port: 443,
+                path: '/',
+                secure: true,
                 config: {
-                    iceServers: [
-                        // For localhost testing, minimal ICE config works best
-                        { urls: 'stun:stun.l.google.com:19302' }
-                    ]
-                    // No TURN servers - not needed for localhost
-                    // For production across internet, add reliable TURN servers
+                    iceServers: [] // Empty for localhost - should use direct connection
                 }
             });
 
