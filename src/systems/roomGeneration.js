@@ -134,9 +134,12 @@ export function getFloorColors(k, floor) {
 }
 
 // Get random room template
-export function getRandomRoomTemplate() {
+export function getRandomRoomTemplate(rng = null) {
     const templates = Object.keys(ROOM_TEMPLATES);
-    const randomKey = templates[Math.floor(Math.random() * templates.length)];
+    const randomIndex = rng
+        ? rng.range(0, templates.length)
+        : Math.floor(Math.random() * templates.length);
+    const randomKey = templates[randomIndex];
     return {
         key: randomKey,
         ...ROOM_TEMPLATES[randomKey]
@@ -145,7 +148,9 @@ export function getRandomRoomTemplate() {
 
 // Get weighted random room template (can favor certain templates)
 // Avoids repeating the same template consecutively
-export function getWeightedRoomTemplate(floor) {
+// @param {number} floor - Floor number (for difficulty scaling)
+// @param {SeededRandom} rng - Optional seeded RNG for multiplayer synchronization
+export function getWeightedRoomTemplate(floor, rng = null) {
     const templates = Object.keys(ROOM_TEMPLATES);
 
     // Filter out the last template to avoid repetition
@@ -157,7 +162,10 @@ export function getWeightedRoomTemplate(floor) {
     const templatePool = availableTemplates.length > 0 ? availableTemplates : templates;
 
     // Select random template from pool
-    const randomKey = templatePool[Math.floor(Math.random() * templatePool.length)];
+    const randomIndex = rng
+        ? rng.range(0, templatePool.length)
+        : Math.floor(Math.random() * templatePool.length);
+    const randomKey = templatePool[randomIndex];
 
     // Update last template tracker
     lastRoomTemplate = randomKey;

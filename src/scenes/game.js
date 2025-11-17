@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed } from '../systems/multiplayerGame.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -421,7 +421,7 @@ export function setupGameScene(k) {
 
         // Setup systems
         setupCombatSystem(k, player);
-        setupProgressionSystem(k, player, reviveAllPlayers);
+        setupProgressionSystem(k, player, reviveAllPlayers, partySize > 1);
         
         // Re-apply synergies if loading from saved state
         if (gameState.playerStats && gameState.playerStats.selectedUpgrades) {
@@ -433,9 +433,14 @@ export function setupGameScene(k) {
         
         // Get room template from floor map (or fallback to weighted generation)
         const currentRoomNode = gameState.floorMap.getCurrentRoom();
-        const roomTemplate = currentRoomNode && currentRoomNode.template
-            ? currentRoomNode.template
-            : getWeightedRoomTemplate(currentFloor);
+        let roomTemplate;
+        if (currentRoomNode && currentRoomNode.template) {
+            roomTemplate = currentRoomNode.template;
+        } else {
+            // Use seeded RNG for multiplayer to ensure same room layout on all clients
+            const roomRng = partySize > 1 ? getRoomRNG() : null;
+            roomTemplate = getWeightedRoomTemplate(currentFloor, roomRng);
+        }
         const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
 
@@ -2218,7 +2223,18 @@ export function setupGameScene(k) {
                 if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS) {
                     pickup.collected = true;
                     playXPPickup();
-                    player.addXP(pickup.value);
+
+                    // In multiplayer, give XP to all players (shared XP)
+                    if (partySize > 1) {
+                        players.forEach(p => {
+                            if (p.exists() && !p.isDead && p.addXP) {
+                                p.addXP(pickup.value);
+                            }
+                        });
+                    } else {
+                        // Single player: just give to local player
+                        player.addXP(pickup.value);
+                    }
 
                     // Animate pickup flying to XP bar
                     const flyingPickup = k.add([
@@ -2730,7 +2746,7 @@ export function setupGameScene(k) {
                 player.orbitalOrbs = [];
             }
 
-            // In multiplayer, don't end the game - just mark player as dead
+            // In multiplayer, don't end the game immediately - check if all players are dead
             if (partySize > 1) {
                 player.isDead = true;
                 player.canMove = false;
@@ -2742,8 +2758,20 @@ export function setupGameScene(k) {
                     player.outline.opacity = 0.5;
                 }
 
-                console.log('[Multiplayer] Player died - waiting for revival on level up');
-                return; // Don't go to game over
+                console.log('[Multiplayer] Player died - checking if any players are still alive');
+
+                // Check if any other players are still alive
+                const anyPlayerAlive = players.some(p =>
+                    p.exists() && p.hp() > 0 && !p.isDead
+                );
+
+                if (anyPlayerAlive) {
+                    console.log('[Multiplayer] At least one player is still alive - continuing game');
+                    return; // Don't go to game over - other players are still alive
+                }
+
+                console.log('[Multiplayer] All players are dead - game over');
+                // Fall through to game over sequence if all players are dead
             }
 
             // Single player: game over as normal
