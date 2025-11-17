@@ -514,12 +514,26 @@ function collectGameState() {
     // Collect player states
     mpGame.players.forEach((player, slotIndex) => {
         if (player.exists()) {
-            // Ensure weapons and upgrades are serializable (convert to plain arrays/objects)
-            const weaponsArray = Array.isArray(player.weapons) ? [...player.weapons] : [];
-            const upgradesArray = Array.isArray(player.passiveUpgrades) ? [...player.passiveUpgrades] : [];
-            const stacksObj = player.upgradeStacks && typeof player.upgradeStacks === 'object'
-                ? { ...player.upgradeStacks }
-                : {};
+            // Ensure weapons and upgrades are serializable using JSON round-trip to strip functions
+            let weaponsArray = [];
+            let upgradesArray = [];
+            let stacksObj = {};
+
+            try {
+                // Deep clone to remove functions and non-serializable data
+                if (player.weapons) {
+                    weaponsArray = JSON.parse(JSON.stringify(player.weapons));
+                }
+                if (player.passiveUpgrades) {
+                    upgradesArray = JSON.parse(JSON.stringify(player.passiveUpgrades));
+                }
+                if (player.upgradeStacks) {
+                    stacksObj = JSON.parse(JSON.stringify(player.upgradeStacks));
+                }
+            } catch (e) {
+                console.warn('Failed to serialize player upgrades:', e);
+                // Fallback to empty arrays/objects
+            }
 
             playerStates.push({
                 slotIndex: Number(slotIndex),
