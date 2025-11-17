@@ -1,6 +1,6 @@
 // Main menu scene
-import { getCurrency, getCurrencyName, getPlayerName, getInviteCode, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize } from '../systems/partySystem.js';
+import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import {
@@ -360,7 +360,7 @@ export function setupMenuScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        const inviteCode = getInviteCode();
+        const inviteCode = getDisplayInviteCode();
 
         // Invite code display (updates when code becomes available)
         const inviteCodeDisplay = k.add([
@@ -376,7 +376,7 @@ export function setupMenuScene(k) {
         let hasValidCode = inviteCode !== 'OFFLINE';
         inviteCodeDisplay.onUpdate(() => {
             if (!hasValidCode) {
-                const currentCode = getInviteCode();
+                const currentCode = getDisplayInviteCode();
                 if (currentCode && currentCode !== 'OFFLINE') {
                     inviteCodeDisplay.text = currentCode;
                     inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD);

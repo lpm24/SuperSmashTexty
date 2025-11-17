@@ -29,7 +29,8 @@ const party = {
     maxSlots: 4,
     peerIdToSlot: new Map(), // Map peer IDs to slot indices
     networkInitialized: false,
-    kaplayInstance: null // Reference to kaplay instance for client game start
+    kaplayInstance: null, // Reference to kaplay instance for client game start
+    hostInviteCode: null // The host's invite code (null if we are the host, or the code we joined if we're a client)
 };
 
 /**
@@ -190,6 +191,20 @@ export function isPartyFull() {
 }
 
 /**
+ * Get the invite code to display in UI
+ * Returns the host's code if we're a client, or our own code if we're the host
+ * @returns {string} Invite code to display
+ */
+export function getDisplayInviteCode() {
+    // If we're a client, show the host's code we joined
+    if (!party.isHost && party.hostInviteCode) {
+        return party.hostInviteCode;
+    }
+    // If we're the host, show our own code
+    return getInviteCode();
+}
+
+/**
  * Add player to party (when they join via code) - LEGACY, use joinPartyAsClient
  * @param {string} playerName - Player name
  * @param {string} inviteCode - Player invite code
@@ -266,6 +281,9 @@ export async function joinPartyAsClient(hostInviteCode) {
             party.networkInitialized = true;
             party.isHost = false;
         }
+
+        // Store the host's invite code so we can display it
+        party.hostInviteCode = hostInviteCode;
 
         // Set up client message handlers
         setupClientHandlers();
