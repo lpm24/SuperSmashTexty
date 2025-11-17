@@ -162,6 +162,9 @@ export function setupGameScene(k) {
         let currentFloor = gameState.currentFloor;
         let currentRoom = gameState.currentRoom;
 
+        // Get party size early for multiplayer checks throughout the scene
+        const partySize = getPartySize();
+
         // Generate floor map if starting new floor or no map exists
         if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
             console.log(`[Game] Generating new floor map for floor ${currentFloor}`);
@@ -259,7 +262,6 @@ export function setupGameScene(k) {
         // MULTIPLAYER: Initialize multiplayer game if party has multiple players
         // ==========================================
         const party = getParty();
-        const partySize = getPartySize();
         const networkInfo = getNetworkInfo();
         let players = [player]; // Array of all player entities
 
