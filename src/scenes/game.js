@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed } from '../systems/multiplayerGame.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -165,7 +165,15 @@ export function setupGameScene(k) {
         // Generate floor map if starting new floor or no map exists
         if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
             console.log(`[Game] Generating new floor map for floor ${currentFloor}`);
-            gameState.floorMap = generateFloorMap(currentFloor);
+
+            // Set current floor for seeded RNG in multiplayer
+            if (partySize > 1) {
+                setCurrentFloor(currentFloor);
+            }
+
+            // Use seeded RNG for multiplayer to ensure same floor layout on all clients
+            const floorRng = partySize > 1 ? getFloorRNG() : null;
+            gameState.floorMap = generateFloorMap(currentFloor, floorRng);
 
             // Destroy old minimap if it exists
             if (gameState.minimap) {

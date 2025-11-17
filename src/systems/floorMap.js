@@ -57,7 +57,7 @@ class RoomNode {
  * Floor Map - manages the entire grid of rooms for a floor
  */
 export class FloorMap {
-    constructor(floor, width = 6, height = 3) {
+    constructor(floor, width = 6, height = 3, rng = null) {
         this.floor = floor;
         this.width = width;
         this.height = height;
@@ -67,8 +67,27 @@ export class FloorMap {
         this.bossPosition = null;
         this.currentPosition = null;
         this.visitedRooms = new Set();
+        this.rng = rng; // Seeded RNG for multiplayer synchronization
 
         this.generate();
+    }
+
+    /**
+     * Get a random number (0-1) using seeded RNG if available, otherwise Math.random
+     * @returns {number} Random number between 0 and 1
+     */
+    random() {
+        return this.rng ? this.rng.next() : Math.random();
+    }
+
+    /**
+     * Get a random integer in range [min, max)
+     * @param {number} min - Minimum value (inclusive)
+     * @param {number} max - Maximum value (exclusive)
+     * @returns {number} Random integer
+     */
+    randomRange(min, max) {
+        return this.rng ? this.rng.range(min, max) : Math.floor(Math.random() * (max - min)) + min;
     }
 
     /**
@@ -83,7 +102,7 @@ export class FloorMap {
         this.startPosition = { x: 0, y: midRow };
 
         // Boss can be in any row on the rightmost column
-        const bossRow = this.height === 1 ? 0 : Math.floor(Math.random() * this.height);
+        const bossRow = this.height === 1 ? 0 : this.randomRange(0, this.height);
         this.bossPosition = { x: this.width - 1, y: bossRow };
 
         // Create start room
@@ -143,7 +162,7 @@ export class FloorMap {
             // Prefer moving right
             if (current.x < end.x) {
                 // Occasionally move up/down to reach target row
-                if (current.y !== end.y && Math.random() < 0.3) {
+                if (current.y !== end.y && this.random() < 0.3) {
                     current.y += current.y < end.y ? 1 : -1;
                 } else {
                     current.x += 1;
@@ -175,7 +194,7 @@ export class FloorMap {
 
                 // Check if adjacent to an existing room (to the left)
                 const hasLeftNeighbor = x > 0 && this.getRoom(x - 1, y);
-                if (hasLeftNeighbor && Math.random() < 0.5) {
+                if (hasLeftNeighbor && this.random() < 0.5) {
                     const room = new RoomNode(x, y, 'combat');
                     this.setRoom(x, y, room);
                     branchesAdded++;
@@ -222,12 +241,12 @@ export class FloorMap {
 
                 // Assign template (except boss room which uses special template)
                 if (room.type !== 'boss') {
-                    room.template = getWeightedRoomTemplate(this.floor);
+                    room.template = getWeightedRoomTemplate(this.floor, this.rng);
                 }
 
                 // Assign enemy types for combat rooms
                 if (room.type === 'combat') {
-                    const enemyCount = 3 + Math.floor(Math.random() * 3); // 3-5 enemy types
+                    const enemyCount = this.randomRange(3, 6); // 3-5 enemy types
                     room.enemyTypes = [];
                     for (let i = 0; i < enemyCount; i++) {
                         room.enemyTypes.push(getRandomEnemyType(this.floor));
@@ -495,13 +514,16 @@ export class FloorMap {
 
 /**
  * Helper function to create a floor map for a given floor number
+ * @param {number} floor - Floor number
+ * @param {SeededRandom} rng - Optional seeded RNG for multiplayer synchronization
+ * @returns {FloorMap} Generated floor map
  */
-export function generateFloorMap(floor) {
+export function generateFloorMap(floor, rng = null) {
     // Adjust grid size based on floor for progression
     const width = Math.min(5 + Math.floor(floor / 3), 8); // 5-8 columns
     const height = Math.min(3 + Math.floor(floor / 5), 5); // 3-5 rows
 
-    const floorMap = new FloorMap(floor, width, height);
+    const floorMap = new FloorMap(floor, width, height, rng);
     floorMap.debugPrint();
 
     return floorMap;
