@@ -1,5 +1,6 @@
 // Character selection scene
 import { getCurrency, getCurrencyName, isUnlocked, setSelectedCharacter, getSelectedCharacter } from '../systems/metaProgression.js';
+import { broadcastCharacterChange } from '../systems/partySystem.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import {
@@ -159,6 +160,7 @@ export function setupCharacterSelectScene(k) {
                                 playMenuSelect();
                                 selectedCharacterKey = key;
                                 setSelectedCharacter(key);
+                                broadcastCharacterChange(key); // Sync with party members
                                 refreshDisplay();
                             }
                         });

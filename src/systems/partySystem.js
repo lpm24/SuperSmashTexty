@@ -131,6 +131,16 @@ export function setupNetworkHandlers() {
         }
     });
 
+    // Handle character changes from clients
+    onMessage('character_change', (payload, fromPeerId) => {
+        const slotIndex = party.peerIdToSlot.get(fromPeerId);
+        if (slotIndex !== undefined) {
+            console.log(`[PartySystem] Player in slot ${slotIndex} changed character to:`, payload.selectedCharacter);
+            party.slots[slotIndex].selectedCharacter = payload.selectedCharacter;
+            broadcastPartyUpdate();
+        }
+    });
+
     // Handle connection changes
     onConnectionChange((event, peerId) => {
         if (event === 'leave') {
@@ -416,7 +426,8 @@ export function getPartyDisplayInfo() {
         isEmpty: slot.playerId === null,
         playerName: slot.playerName || 'Empty Slot',
         isLocal: slot.isLocal,
-        inviteCode: slot.inviteCode
+        inviteCode: slot.inviteCode,
+        selectedCharacter: slot.selectedCharacter || 'survivor'
     }));
 }
 
@@ -426,4 +437,27 @@ export function getPartyDisplayInfo() {
  */
 export function isMultiplayerAvailable() {
     return party.networkInitialized;
+}
+
+/**
+ * Broadcast local player's character change to all party members
+ * @param {string} characterKey - The new character key (e.g., 'scout', 'tank')
+ */
+export function broadcastCharacterChange(characterKey) {
+    // Update local slot
+    party.slots[0].selectedCharacter = characterKey;
+
+    if (!party.networkInitialized) {
+        return; // No network, no need to broadcast
+    }
+
+    if (party.isHost) {
+        // Host broadcasts to all clients
+        broadcastPartyUpdate();
+    } else {
+        // Client sends to host
+        sendToHost('character_change', {
+            selectedCharacter: characterKey
+        });
+    }
 }

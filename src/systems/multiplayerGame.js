@@ -295,13 +295,13 @@ function collectGameState() {
     mpGame.players.forEach((player, slotIndex) => {
         if (player.exists()) {
             playerStates.push({
-                slotIndex,
-                x: player.pos.x,
-                y: player.pos.y,
-                angle: player.angle || 0,
-                hp: player.hp || player.maxHealth,
-                level: player.level || 1,
-                xp: player.xp || 0
+                slotIndex: Number(slotIndex),
+                x: Number(player.pos.x),
+                y: Number(player.pos.y),
+                angle: Number(player.angle || 0),
+                hp: Number(player.hp || player.maxHealth),
+                level: Number(player.level || 1),
+                xp: Number(player.xp || 0)
             });
         }
     });
@@ -310,11 +310,11 @@ function collectGameState() {
     mpGame.enemies.forEach((enemy, entityId) => {
         if (enemy.exists()) {
             enemyStates.push({
-                id: entityId,
-                x: enemy.pos.x,
-                y: enemy.pos.y,
-                hp: enemy.hp || 0,
-                type: enemy.enemyType || 'basic'
+                id: Number(entityId),
+                x: Number(enemy.pos.x),
+                y: Number(enemy.pos.y),
+                hp: Number(enemy.hp || 0),
+                type: String(enemy.enemyType || 'basic')
             });
         } else {
             // Enemy destroyed - remove from tracking
@@ -326,10 +326,10 @@ function collectGameState() {
     mpGame.projectiles.forEach((projectile, entityId) => {
         if (projectile.exists()) {
             projectileStates.push({
-                id: entityId,
-                x: projectile.pos.x,
-                y: projectile.pos.y,
-                angle: projectile.angle || 0
+                id: Number(entityId),
+                x: Number(projectile.pos.x),
+                y: Number(projectile.pos.y),
+                angle: Number(projectile.angle || 0)
             });
         } else {
             // Projectile destroyed - remove from tracking
@@ -341,10 +341,10 @@ function collectGameState() {
     mpGame.pickups.forEach((pickup, entityId) => {
         if (pickup.exists()) {
             pickupStates.push({
-                id: entityId,
-                x: pickup.pos.x,
-                y: pickup.pos.y,
-                type: pickup.pickupType || 'xp'
+                id: Number(entityId),
+                x: Number(pickup.pos.x),
+                y: Number(pickup.pos.y),
+                type: String(pickup.pickupType || 'xp')
             });
         } else {
             // Pickup collected - remove from tracking
