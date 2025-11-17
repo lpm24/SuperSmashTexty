@@ -421,6 +421,14 @@ export function getInviteCode() {
     return save.inviteCode || '000000';
 }
 
+// Set invite code
+export function setInviteCode(code) {
+    const save = loadSave();
+    save.inviteCode = code;
+    saveGame(save);
+    return save.inviteCode;
+}
+
 // Reset save (for testing/debugging)
 export function resetSave() {
     localStorage.removeItem(STORAGE_KEY);

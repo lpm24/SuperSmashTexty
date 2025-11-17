@@ -3,7 +3,7 @@
  * Manages multiplayer party state and joining
  */
 
-import { getPlayerName, getInviteCode, getSelectedCharacter } from './metaProgression.js';
+import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode } from './metaProgression.js';
 import {
     initNetwork,
     connectToHost,
@@ -54,7 +54,15 @@ export async function initParty(k = null) {
         try {
             console.log('[PartySystem] Initializing network as host...');
             const inviteCode = getInviteCode();
-            await initNetwork(inviteCode, true);
+            const actualCode = await initNetwork(inviteCode, true);
+
+            // If the code changed (because it was taken), update it
+            if (actualCode !== inviteCode) {
+                console.log(`[PartySystem] Invite code changed: ${inviteCode} -> ${actualCode}`);
+                setInviteCode(actualCode);
+                party.slots[0].inviteCode = actualCode;
+            }
+
             party.networkInitialized = true;
             party.isHost = true;
             setupNetworkHandlers();

@@ -3,6 +3,8 @@
  * Handles connections, message passing, and state synchronization
  */
 
+import { generateInviteCode } from './nameGenerator.js';
+
 // Network state
 const network = {
     peer: null,              // Our Peer instance
@@ -20,13 +22,13 @@ const network = {
  * Initialize the network system
  * @param {string} inviteCode - Our invite code (will be our Peer ID if host)
  * @param {boolean} isHost - Whether we're the host
- * @returns {Promise} Resolves when peer is ready
+ * @returns {Promise<string>} Resolves with the actual invite code used (may differ if ID was taken)
  */
 export function initNetwork(inviteCode, isHost = true) {
     return new Promise((resolve, reject) => {
         if (network.isInitialized) {
             console.warn('Network already initialized');
-            resolve();
+            resolve(inviteCode);
             return;
         }
 
@@ -54,11 +56,14 @@ export function initNetwork(inviteCode, isHost = true) {
                     iceServers: [
                         // STUN servers - help discover public IP addresses
                         { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        { urls: 'stun:stun2.l.google.com:19302' },
 
                         // TURN servers - relay traffic when direct P2P fails (critical for NAT traversal)
-                        // Using free public TURN servers from OpenRelay (Metered)
+                        // Multiple TURN servers for redundancy
                         // NOTE: For production, consider setting up your own TURN server or using a paid service
-                        // Free public servers may have rate limits and reliability issues
+
+                        // OpenRelay (Metered) TURN servers
                         {
                             urls: 'turn:openrelay.metered.ca:80',
                             username: 'openrelayproject',
@@ -68,8 +73,19 @@ export function initNetwork(inviteCode, isHost = true) {
                             urls: 'turn:openrelay.metered.ca:443',
                             username: 'openrelayproject',
                             credential: 'openrelayproject'
-                        }
-                    ]
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+
+                        // Twilio's free STUN server (additional fallback)
+                        { urls: 'stun:global.stun.twilio.com:3478' }
+                    ],
+                    // Increase ICE gathering timeout
+                    iceTransportPolicy: 'all', // Try all connection types
+                    iceCandidatePoolSize: 10 // Pre-gather more candidates
                 }
             });
 
@@ -77,22 +93,32 @@ export function initNetwork(inviteCode, isHost = true) {
                 console.log('Peer initialized with ID:', id);
                 network.peerId = id;
                 network.isInitialized = true;
-                resolve(id);
+
+                // For hosts, extract the 6-digit code from the peer ID (format: "smash-123456")
+                // For clients, just resolve with the full ID
+                const codeToReturn = (isHost && id.startsWith('smash-'))
+                    ? id.substring(6) // Extract "123456" from "smash-123456"
+                    : id;
+
+                resolve(codeToReturn);
             });
 
             network.peer.on('error', (err) => {
                 console.error('Peer error:', err);
 
                 // Handle unavailable-id error (peer ID already taken)
-                if (err.type === 'unavailable-id') {
-                    console.warn('Peer ID already taken - attempting cleanup and retry...');
-                    // Destroy the peer and retry after a short delay
+                if (err.type === 'unavailable-id' && isHost) {
+                    console.warn('Peer ID already taken - generating new code and retrying...');
+                    // Destroy the peer and retry with a new code
                     if (network.peer) {
                         network.peer.destroy();
+                        network.isInitialized = false;
                     }
                     setTimeout(() => {
-                        console.log('Retrying peer initialization...');
-                        initNetwork(inviteCode, isHost).then(resolve).catch(reject);
+                        // Generate a new invite code
+                        const newCode = generateInviteCode();
+                        console.log(`Retrying with new invite code: ${newCode}`);
+                        initNetwork(newCode, isHost).then(resolve).catch(reject);
                     }, 1000);
                     return;
                 }
