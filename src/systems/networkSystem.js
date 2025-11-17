@@ -52,12 +52,21 @@ export function initNetwork(inviteCode, isHost = true) {
         try {
             network.peer = new Peer(peerId, {
                 debug: 3, // Maximum debug logging
-                host: '0.peerjs.com', // Default PeerJS cloud server
-                port: 443,
+                host: 'localhost', // Local PeerJS server
+                port: 9000,
                 path: '/',
-                secure: true,
+                secure: false, // HTTP for localhost
                 config: {
-                    iceServers: [] // Empty for localhost - should use direct connection
+                    // STUN and TURN servers for reliable connection
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        // Public TURN server as fallback relay
+                        {
+                            urls: 'turn:numb.viagenie.ca',
+                            username: 'webrtc@live.com',
+                            credential: 'muazkh'
+                        }
+                    ]
                 }
             });
 
