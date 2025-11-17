@@ -1,6 +1,6 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getInviteCode, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, initNetworkAsHost } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import {
@@ -347,29 +347,15 @@ export function setupMenuScene(k) {
 
         const inviteCode = getInviteCode();
 
-        // Invite code display (updates dynamically when code is received)
-        const inviteCodeDisplay = k.add([
-            k.text('OFFLINE', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        // Invite code display
+        k.add([
+            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
             k.anchor('right'),
-            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.color(inviteCode === 'OFFLINE' ? [...UI_COLORS.TEXT_DISABLED] : [...UI_COLORS.GOLD]),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-
-        // Update invite code display when it becomes available
-        let hasCheckedCode = false;
-        inviteCodeDisplay.onUpdate(() => {
-            if (!hasCheckedCode && isMultiplayerAvailable()) {
-                const currentCode = getInviteCode();
-                if (currentCode && currentCode !== 'OFFLINE') {
-                    inviteCodeDisplay.text = currentCode;
-                    inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD);
-                    inviteCodeDisplay.textSize = UI_TEXT_SIZES.SMALL;
-                    hasCheckedCode = true; // Only update once
-                }
-            }
-        });
 
         // Join Party button (moved up since we removed a line)
         const joinButtonY = inviteCodeY + 25;
@@ -552,16 +538,12 @@ export function setupMenuScene(k) {
             k, 'Start Game', centerX, buttonStartY,
             350, 55, UI_TEXT_SIZES.HEADER
         );
-        playButton.onClick(async () => {
+        playButton.onClick(() => {
             playMenuSelect();
 
-            // Initialize network as host if starting multiplayer game
+            // Broadcast game start to all clients if in multiplayer
             const partySize = getPartySize();
             if (partySize > 1) {
-                // Initialize network as host (lazy initialization)
-                await initNetworkAsHost();
-
-                // Broadcast game start to all clients
                 broadcastGameStart();
             }
 

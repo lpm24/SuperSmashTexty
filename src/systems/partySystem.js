@@ -47,33 +47,23 @@ export async function initParty(k = null) {
     party.slots[0].inviteCode = getInviteCode();
     party.slots[0].selectedCharacter = getSelectedCharacter();
 
-    console.log('[PartySystem] Party initialized (network will initialize on demand)');
-    // Note: Network initialization is now lazy - happens when:
-    // 1. Game starts (as host)
-    // 2. Player joins a party (as client)
-}
-
-/**
- * Initialize network as host for multiplayer game
- * @returns {Promise<boolean>} True if successful
- */
-export async function initNetworkAsHost() {
-    if (party.networkInitialized) {
-        console.log('[PartySystem] Network already initialized');
-        return true;
-    }
-
-    try {
-        const inviteCode = getInviteCode();
-        await initNetwork(inviteCode, true);
-        party.networkInitialized = true;
-        party.isHost = true;
-        setupNetworkHandlers();
-        console.log('[PartySystem] Network initialized as host');
-        return true;
-    } catch (err) {
-        console.error('[PartySystem] Failed to initialize network as host:', err);
-        return false;
+    // Initialize network as host so other players can connect
+    // This is needed because we display the invite code in the UI,
+    // meaning we're always potentially hosting
+    if (!party.networkInitialized) {
+        try {
+            console.log('[PartySystem] Initializing network as host...');
+            const inviteCode = getInviteCode();
+            await initNetwork(inviteCode, true);
+            party.networkInitialized = true;
+            party.isHost = true;
+            setupNetworkHandlers();
+            console.log('[PartySystem] Network initialized as host - ready to accept connections');
+        } catch (err) {
+            console.error('[PartySystem] Failed to initialize network as host:', err);
+            console.log('[PartySystem] Multiplayer disabled - running in single-player mode');
+            // Continue anyway - single-player will still work
+        }
     }
 }
 
@@ -231,6 +221,15 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
  */
 export async function joinPartyAsClient(hostInviteCode) {
     try {
+        // If we were initialized as host, we need to disconnect and re-initialize as client
+        if (party.networkInitialized && party.isHost) {
+            console.log('[PartySystem] Switching from host to client - disconnecting current peer...');
+            const { disconnect: disconnectNetwork } = await import('./networkSystem.js');
+            disconnectNetwork();
+            party.networkInitialized = false;
+            party.isHost = false;
+        }
+
         // Initialize network as client
         if (!party.networkInitialized) {
             await initNetwork('client', false);
