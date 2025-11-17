@@ -279,7 +279,7 @@ export function setupMenuScene(k) {
 
                 // Slot number
                 const slotNum = k.add([
-                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.SMALL }),
+                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.BODY }),
                     k.pos(partyPanelX + 20, slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -293,7 +293,7 @@ export function setupMenuScene(k) {
                 if (!slot.isEmpty) {
                     const charData = CHARACTER_UNLOCKS[slot.selectedCharacter] || CHARACTER_UNLOCKS['survivor'];
                     const charIcon = k.add([
-                        k.text(charData.char, { size: UI_TEXT_SIZES.SMALL }),
+                        k.text(charData.char, { size: UI_TEXT_SIZES.BODY }),
                         k.pos(partyPanelX + 38, slotY + slotHeight / 2),
                         k.anchor('left'),
                         k.color(...charData.color),
@@ -306,7 +306,7 @@ export function setupMenuScene(k) {
 
                 // Player name or "Empty Slot"
                 const nameText = k.add([
-                    k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL }),
                     k.pos(partyPanelX + (slot.isEmpty ? 45 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
@@ -319,7 +319,7 @@ export function setupMenuScene(k) {
                 // "You" indicator for local player
                 if (slot.isLocal) {
                     const youText = k.add([
-                        k.text('(You)', { size: UI_TEXT_SIZES.SMALL - 4 }),
+                        k.text('(You)', { size: UI_TEXT_SIZES.SMALL - 2 }),
                         k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
                         k.anchor('right'),
                         k.color(...UI_COLORS.GOLD),
@@ -352,7 +352,7 @@ export function setupMenuScene(k) {
 
         // Label on the left
         k.add([
-            k.text('Invite Code:', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.text('Invite Code:', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(partyPanelX + 10, inviteCodeY),
             k.anchor('left'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -364,7 +364,7 @@ export function setupMenuScene(k) {
 
         // Invite code display (updates when code becomes available)
         const inviteCodeDisplay = k.add([
-            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL }),
             k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
             k.anchor('right'),
             k.color(inviteCode === 'OFFLINE' ? [...UI_COLORS.TEXT_DISABLED] : [...UI_COLORS.GOLD]),
@@ -394,7 +394,7 @@ export function setupMenuScene(k) {
             joinButtonY,
             120,
             30,
-            UI_TEXT_SIZES.SMALL - 2
+            UI_TEXT_SIZES.SMALL
         );
 
         joinButton.onClick(() => {
