@@ -244,6 +244,82 @@ function setupClientHandlers() {
             console.log(`Spawned currency pickup ${payload.id} with value ${payload.value}`);
         }
     });
+
+    // Handle projectile spawn events
+    onMessage('spawn_projectile', (payload) => {
+        if (!mpGame.k) return; // Need kaplay instance
+
+        // Import createProjectile dynamically to avoid circular dependency
+        import('../entities/projectile.js').then(({ createProjectile }) => {
+            // Reconstruct direction vector
+            const direction = mpGame.k.vec2(payload.directionX, payload.directionY);
+
+            // Create the projectile with all parameters
+            const projectile = createProjectile(
+                mpGame.k,
+                payload.x,
+                payload.y,
+                direction,
+                payload.speed,
+                payload.damage,
+                payload.piercing,
+                payload.obstaclePiercing,
+                payload.isCrit,
+                payload.maxRange
+            );
+
+            // Apply visual customization if provided
+            if (payload.char || payload.color) {
+                projectile.text = payload.char;
+                if (payload.color) {
+                    projectile.color = mpGame.k.rgb(...payload.color);
+                }
+            }
+
+            // Assign network ID and track
+            projectile.mpEntityId = payload.id;
+            mpGame.projectiles.set(payload.id, projectile);
+
+            console.log(`Spawned projectile ${payload.id} at (${payload.x}, ${payload.y})`);
+        });
+    });
+
+    // Handle damage events
+    onMessage('damage_dealt', (payload) => {
+        if (!mpGame.k) return; // Need kaplay instance
+
+        // Show damage number at the hit location
+        const damageText = mpGame.k.add([
+            mpGame.k.text(payload.damage.toString(), {
+                size: payload.isCrit ? 24 : 18
+            }),
+            mpGame.k.pos(payload.x, payload.y),
+            mpGame.k.anchor('center'),
+            mpGame.k.color(payload.isCrit ? 255 : 255, payload.isCrit ? 200 : 255, payload.isCrit ? 0 : 255),
+            mpGame.k.lifespan(0.8),
+            mpGame.k.z(1000)
+        ]);
+
+        // Animate damage number rising and fading
+        damageText.onUpdate(() => {
+            damageText.pos.y -= 50 * mpGame.k.dt();
+            damageText.opacity -= 1.25 * mpGame.k.dt();
+        });
+
+        // Flash the target entity if we have it
+        const target = mpGame.enemies.get(payload.targetId) || mpGame.players.get(payload.targetId);
+        if (target && target.exists()) {
+            const originalColor = target.color;
+            target.color = mpGame.k.rgb(255, 255, 255); // White flash
+            mpGame.k.wait(0.1, () => {
+                if (target.exists()) {
+                    target.color = originalColor;
+                }
+            });
+        }
+
+        console.log(`Damage: ${payload.damage}${payload.isCrit ? ' CRIT!' : ''} to ${payload.targetType} ${payload.targetId}`);
+    });
 }
 
 /**
@@ -478,14 +554,34 @@ export function registerEnemy(enemy, creationParams = {}) {
 /**
  * Register a projectile for multiplayer sync (host only)
  * @param {Object} projectile - Projectile entity
+ * @param {Object} creationParams - Parameters used to create this projectile
  * @returns {number} Entity ID assigned to this projectile
  */
-export function registerProjectile(projectile) {
+export function registerProjectile(projectile, creationParams = {}) {
     if (!mpGame.isHost) return null;
 
     const entityId = mpGame.nextEntityId++;
     projectile.mpEntityId = entityId;
     mpGame.projectiles.set(entityId, projectile);
+
+    // Broadcast projectile spawn to all clients
+    broadcast('spawn_projectile', {
+        id: Number(entityId),
+        x: Number(projectile.pos.x),
+        y: Number(projectile.pos.y),
+        directionX: Number(projectile.direction.x),
+        directionY: Number(projectile.direction.y),
+        speed: Number(projectile.speed),
+        damage: Number(projectile.damage),
+        piercing: Number(projectile.piercing || 0),
+        obstaclePiercing: Number(projectile.obstaclePiercing || 0),
+        isCrit: Boolean(projectile.isCrit),
+        maxRange: Number(projectile.maxRange),
+        angle: Number(projectile.angle || 0),
+        // Visual properties (if available from creation params)
+        char: creationParams.char || '*',
+        color: creationParams.color || [255, 255, 100]
+    });
 
     return entityId;
 }
@@ -528,4 +624,29 @@ export function registerPickup(pickup, creationParams = {}) {
  */
 export function isHost() {
     return mpGame.isHost;
+}
+
+/**
+ * Broadcast a damage event to all clients (host only)
+ * @param {Object} params - Damage event parameters
+ * @param {string|number} params.targetId - Target entity ID
+ * @param {string} params.targetType - Type of target ('enemy', 'player', 'boss', 'miniboss')
+ * @param {number} params.damage - Damage amount
+ * @param {boolean} params.isCrit - Whether this was a critical hit
+ * @param {number} params.attackerId - Attacker player slot index (optional)
+ * @param {number} params.x - X position for visual effects
+ * @param {number} params.y - Y position for visual effects
+ */
+export function broadcastDamageEvent(params) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('damage_dealt', {
+        targetId: Number(params.targetId),
+        targetType: String(params.targetType),
+        damage: Number(params.damage),
+        isCrit: Boolean(params.isCrit || false),
+        attackerId: params.attackerId !== undefined ? Number(params.attackerId) : null,
+        x: Number(params.x),
+        y: Number(params.y)
+    });
 }

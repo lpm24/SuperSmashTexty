@@ -16,6 +16,7 @@ import { createProjectile } from '../entities/projectile.js';
 
 // System imports
 import { decrementPowerupAmmo } from './powerupWeapons.js';
+import { broadcastDamageEvent, isMultiplayerActive, isHost } from './multiplayerGame.js';
 
 // Configuration imports
 import {
@@ -340,6 +341,18 @@ export function setupCombatSystem(k, player) {
             enemy.takeDamage(projectile.damage);
         } else {
             enemy.hurt(projectile.damage);
+        }
+
+        // Broadcast damage event for multiplayer
+        if (isMultiplayerActive() && isHost()) {
+            broadcastDamageEvent({
+                targetId: enemy.mpEntityId,
+                targetType: 'enemy',
+                damage: projectile.damage,
+                isCrit: projectile.isCrit || false,
+                x: enemy.pos.x,
+                y: enemy.pos.y
+            });
         }
 
         // Apply fire DoT if projectile has burn effect
