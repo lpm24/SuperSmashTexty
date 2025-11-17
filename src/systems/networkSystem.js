@@ -54,38 +54,15 @@ export function initNetwork(inviteCode, isHost = true) {
                 debug: 0, // Disable verbose logging
                 config: {
                     iceServers: [
-                        // STUN servers - help discover public IP addresses
+                        // Use only Google STUN servers - reliable and sufficient for most cases
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        { urls: 'stun:stun2.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' }
 
-                        // TURN servers - relay traffic when direct P2P fails (critical for NAT traversal)
-                        // Multiple TURN servers for redundancy
-                        // NOTE: For production, consider setting up your own TURN server or using a paid service
-
-                        // OpenRelay (Metered) TURN servers
-                        {
-                            urls: 'turn:openrelay.metered.ca:80',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-                        {
-                            urls: 'turn:openrelay.metered.ca:443',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-                        {
-                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-
-                        // Twilio's free STUN server (additional fallback)
-                        { urls: 'stun:global.stun.twilio.com:3478' }
+                        // TURN servers removed - they were causing connection failures
+                        // For users behind restrictive NATs, consider adding a reliable TURN server
+                        // such as Twilio or a self-hosted CoTURN server
                     ],
-                    // Increase ICE gathering timeout
-                    iceTransportPolicy: 'all', // Try all connection types
-                    iceCandidatePoolSize: 10 // Pre-gather more candidates
+                    iceTransportPolicy: 'all'
                 }
             });
 
