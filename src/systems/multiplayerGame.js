@@ -363,6 +363,55 @@ function setupClientHandlers() {
         // Note: XP/currency drops are handled by spawn_entity events from host
         // The host will spawn pickups and broadcast them separately
     });
+
+    // Handle player revival events
+    onMessage('players_revived', (payload) => {
+        if (!mpGame.k) return; // Need kaplay instance
+
+        console.log('[Multiplayer] Received player revival event - reviving all dead players');
+
+        // Revive all dead players
+        mpGame.players.forEach((player, slotIndex) => {
+            if (player && player.exists() && (player.hp() <= 0 || player.isDead)) {
+                // Revive player
+                player.setHP(player.maxHealth);
+                player.isDead = false;
+
+                // Re-enable input for local player
+                if (!player.isRemote) {
+                    player.canMove = true;
+                    player.canShoot = true;
+                }
+
+                // Show revival effect
+                const reviveEffect = mpGame.k.add([
+                    mpGame.k.text('★ REVIVED ★', { size: 16 }),
+                    mpGame.k.pos(player.pos.x, player.pos.y - 40),
+                    mpGame.k.anchor('center'),
+                    mpGame.k.color(100, 255, 100),
+                    mpGame.k.lifespan(2),
+                    mpGame.k.z(1000)
+                ]);
+
+                // Animate rising and fading
+                reviveEffect.onUpdate(() => {
+                    reviveEffect.pos.y -= 30 * mpGame.k.dt();
+                    reviveEffect.opacity -= 0.5 * mpGame.k.dt();
+                });
+
+                // Restore visual state
+                player.opacity = 1;
+                if (player.characterData) {
+                    player.color = mpGame.k.rgb(...player.characterData.color);
+                }
+                if (player.outline && player.outline.exists()) {
+                    player.outline.opacity = 1;
+                }
+
+                console.log(`[Revival] Client: Player slot ${slotIndex} revived`);
+            }
+        });
+    });
 }
 
 /**
@@ -723,4 +772,18 @@ export function broadcastDeathEvent(params) {
         xpDropped: params.xpDropped !== undefined ? Number(params.xpDropped) : 0,
         currencyDropped: params.currencyDropped !== undefined ? Number(params.currencyDropped) : 0
     });
+}
+
+/**
+ * Broadcast a player revival event to all clients (host only)
+ * Called when a level up triggers revival of all dead players
+ */
+export function broadcastRevivalEvent() {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('players_revived', {
+        timestamp: Date.now()
+    });
+
+    console.log('[Multiplayer] Broadcasted player revival event');
 }

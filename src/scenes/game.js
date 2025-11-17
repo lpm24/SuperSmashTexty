@@ -359,9 +359,69 @@ export function setupGameScene(k) {
             });
         }
 
+        // ==========================================
+        // MULTIPLAYER: Revival system - revive all dead players on level up
+        // ==========================================
+        const reviveAllPlayers = () => {
+            // Only in multiplayer with multiple players
+            if (partySize <= 1) return;
+
+            let revivedCount = 0;
+            players.forEach((p, index) => {
+                // Check if player is dead (hp <= 0 or destroyed)
+                if (p.exists() && p.hp() <= 0 || (p.isDead && p.exists())) {
+                    // Revive player
+                    p.setHP(p.maxHealth);
+                    p.isDead = false;
+
+                    // Re-enable input for local player
+                    if (!p.isRemote) {
+                        p.canMove = true;
+                        p.canShoot = true;
+                    }
+
+                    // Show revival effect
+                    const reviveEffect = k.add([
+                        k.text('★ REVIVED ★', { size: 16 }),
+                        k.pos(p.pos.x, p.pos.y - 40),
+                        k.anchor('center'),
+                        k.color(100, 255, 100),
+                        k.lifespan(2),
+                        k.z(1000)
+                    ]);
+
+                    // Animate rising and fading
+                    reviveEffect.onUpdate(() => {
+                        reviveEffect.pos.y -= 30 * k.dt();
+                        reviveEffect.opacity -= 0.5 * k.dt();
+                    });
+
+                    // Restore visual state
+                    if (p.characterData) {
+                        p.color = k.rgb(...p.characterData.color);
+                    }
+                    if (p.outline && p.outline.exists()) {
+                        p.outline.opacity = 1;
+                    }
+
+                    revivedCount++;
+                    console.log(`[Revival] Player ${index} revived (${p.playerName || 'Local'})`);
+                });
+            });
+
+            // Broadcast revival event in multiplayer
+            if (revivedCount > 0 && isMultiplayerActive() && isHost()) {
+                import('../systems/multiplayerGame.js').then(({ broadcastRevivalEvent }) => {
+                    if (broadcastRevivalEvent) {
+                        broadcastRevivalEvent();
+                    }
+                });
+            }
+        };
+
         // Setup systems
         setupCombatSystem(k, player);
-        setupProgressionSystem(k, player);
+        setupProgressionSystem(k, player, reviveAllPlayers);
         
         // Re-apply synergies if loading from saved state
         if (gameState.playerStats && gameState.playerStats.selectedUpgrades) {
@@ -2669,20 +2729,38 @@ export function setupGameScene(k) {
                 });
                 player.orbitalOrbs = [];
             }
+
+            // In multiplayer, don't end the game - just mark player as dead
+            if (partySize > 1) {
+                player.isDead = true;
+                player.canMove = false;
+                player.canShoot = false;
+
+                // Visual indication of death (semi-transparent)
+                player.opacity = 0.5;
+                if (player.outline && player.outline.exists()) {
+                    player.outline.opacity = 0.5;
+                }
+
+                console.log('[Multiplayer] Player died - waiting for revival on level up');
+                return; // Don't go to game over
+            }
+
+            // Single player: game over as normal
             // Calculate currency earned
             const currencyEarned = calculateCurrencyEarned(runStats);
-            
+
             // Add level and currency to run stats for achievement checking
             const fullRunStats = {
                 ...runStats,
                 level: player.level,
                 currencyEarned: currencyEarned
             };
-            
+
             // Update persistent stats and add currency
             updateRunStats(fullRunStats);
             addCurrency(currencyEarned);
-            
+
             // Check for achievements
             checkAchievements(k);
 
