@@ -7,6 +7,7 @@ import { getParty, getPartySize, getLocalPlayer } from './partySystem.js';
 import { broadcast, sendToHost, sendToPeer, onMessage, getNetworkInfo } from './networkSystem.js';
 import { createEnemy } from '../entities/enemy.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
+import { SeededRandom, createSeed } from '../utils/seededRandom.js';
 
 // Multiplayer game state
 const mpGame = {
@@ -23,7 +24,13 @@ const mpGame = {
     pickups: new Map(), // Map of entityId -> pickup entity
     nextEntityId: 1, // Auto-incrementing ID for entities
     // Kaplay instance reference
-    k: null
+    k: null,
+    // Seeded RNG for deterministic world generation
+    gameSeed: 0, // Base seed for this game session
+    floorRng: null, // SeededRandom instance for floor generation
+    roomRng: null, // SeededRandom instance for room generation
+    currentFloor: 1, // Track current floor for seed generation
+    currentRoom: { x: 0, y: 0 } // Track current room for seed generation
 };
 
 /**
@@ -31,8 +38,9 @@ const mpGame = {
  * @param {boolean} isHost - Whether this client is the host
  * @param {number} localSlot - Local player's slot index
  * @param {Object} kaplayInstance - Kaplay instance for creating entities
+ * @param {number} gameSeed - Optional seed for deterministic generation (host generates, broadcasts to clients)
  */
-export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null) {
+export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null, gameSeed = null) {
     mpGame.isActive = true;
     mpGame.isHost = isHost;
     mpGame.localPlayerSlot = localSlot;
@@ -47,7 +55,22 @@ export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null
     mpGame.pickups.clear();
     mpGame.nextEntityId = 1;
 
-    console.log(`Multiplayer initialized - isHost: ${isHost}, localSlot: ${localSlot}`);
+    // Initialize seeded RNG
+    if (gameSeed !== null) {
+        // Client: use seed from host
+        mpGame.gameSeed = gameSeed;
+    } else if (isHost) {
+        // Host: generate new game seed
+        mpGame.gameSeed = Math.floor(Math.random() * 0xFFFFFFFF);
+        console.log(`[Multiplayer] Generated game seed: ${mpGame.gameSeed}`);
+    }
+
+    // Initialize floor RNG (will be reset when floor changes)
+    mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
+    mpGame.currentFloor = 1;
+    mpGame.currentRoom = { x: 0, y: 0 };
+
+    console.log(`Multiplayer initialized - isHost: ${isHost}, localSlot: ${localSlot}, seed: ${mpGame.gameSeed}`);
 
     // Set up message handlers
     if (isHost) {
@@ -411,6 +434,17 @@ function setupClientHandlers() {
                 console.log(`[Revival] Client: Player slot ${slotIndex} revived`);
             }
         });
+    });
+
+    // Handle game seed broadcast from host
+    onMessage('game_seed', (payload) => {
+        console.log(`[Multiplayer] Received game seed from host: ${payload.seed}`);
+
+        // Initialize RNG with seed from host
+        mpGame.gameSeed = payload.seed;
+        mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
+
+        console.log('[Multiplayer] Synchronized RNG with host');
     });
 }
 
@@ -786,4 +820,65 @@ export function broadcastRevivalEvent() {
     });
 
     console.log('[Multiplayer] Broadcasted player revival event');
+}
+
+/**
+ * Get the game seed (for synchronized random generation)
+ * @returns {number} Game seed
+ */
+export function getGameSeed() {
+    return mpGame.gameSeed;
+}
+
+/**
+ * Set current floor for seeded RNG
+ * @param {number} floor - Floor number
+ */
+export function setCurrentFloor(floor) {
+    mpGame.currentFloor = floor;
+    // Reset floor RNG with new seed based on floor
+    const floorSeed = createSeed(mpGame.gameSeed, floor);
+    mpGame.floorRng = new SeededRandom(floorSeed);
+    console.log(`[Multiplayer] Set floor ${floor}, seed: ${floorSeed}`);
+}
+
+/**
+ * Set current room for seeded RNG
+ * @param {number} roomX - Room X coordinate
+ * @param {number} roomY - Room Y coordinate
+ */
+export function setCurrentRoom(roomX, roomY) {
+    mpGame.currentRoom = { x: roomX, y: roomY };
+}
+
+/**
+ * Get a seeded RNG for the current room
+ * Creates a deterministic RNG based on floor and room coordinates
+ * @returns {SeededRandom} Seeded random number generator for this room
+ */
+export function getRoomRNG() {
+    const seed = createSeed(mpGame.gameSeed, mpGame.currentFloor, mpGame.currentRoom.x, mpGame.currentRoom.y);
+    return new SeededRandom(seed);
+}
+
+/**
+ * Get the floor RNG (for floor-wide generation like floor maps)
+ * @returns {SeededRandom} Seeded random number generator for this floor
+ */
+export function getFloorRNG() {
+    return mpGame.floorRng;
+}
+
+/**
+ * Broadcast game seed to all clients (host only)
+ * Called when game starts to sync RNG
+ */
+export function broadcastGameSeed() {
+    if (!mpGame.isHost) return;
+
+    broadcast('game_seed', {
+        seed: mpGame.gameSeed
+    });
+
+    console.log(`[Multiplayer] Broadcasted game seed: ${mpGame.gameSeed}`);
 }
