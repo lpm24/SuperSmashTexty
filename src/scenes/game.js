@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest } from '../systems/multiplayerGame.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -2953,6 +2953,62 @@ export function setupGameScene(k) {
         pauseOverlay.hidden = true;
         pauseText.hidden = true;
         k.get('pauseButton').forEach(btn => btn.hidden = true);
+
+        // Helper function to update pause UI (used by both local and network pause)
+        const updatePauseUI = (paused) => {
+            if (paused) {
+                playPause();
+                // Save tooltip state and hide it
+                if (k.gameData && k.gameData.saveTooltipState && k.gameData.hideTooltip) {
+                    k.gameData.tooltipSavedState = k.gameData.saveTooltipState();
+                    k.gameData.hideTooltip();
+                }
+                // Save current minimap mode and expand it
+                if (k.gameData && k.gameData.minimap) {
+                    k.gameData.minimapSavedMode = k.gameData.minimap.mode;
+                    if (k.gameData.minimap.mode !== 'maximized') {
+                        k.gameData.minimap.mode = 'maximized';
+                        k.gameData.minimap.update();
+                    }
+                }
+                // Save weapon detail state before showing it
+                if (k.gameData.weaponDetailSavedState === undefined) {
+                    k.gameData.weaponDetailSavedState = weaponDetailState;
+                }
+            } else {
+                playUnpause();
+                // Restore minimap mode
+                if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
+                    k.gameData.minimap.mode = k.gameData.minimapSavedMode;
+                    k.gameData.minimap.update();
+                    k.gameData.minimapSavedMode = undefined;
+                }
+                // Restore tooltip state
+                if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
+                    k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
+                    k.gameData.tooltipSavedState = undefined;
+                }
+                // Restore weapon detail state
+                if (k.gameData && k.gameData.weaponDetailSavedState !== undefined) {
+                    weaponDetailState = k.gameData.weaponDetailSavedState;
+                    weaponDetailBg.hidden = !weaponDetailState;
+                    weaponDetailIcon.hidden = !weaponDetailState;
+                    weaponDetailName.hidden = !weaponDetailState;
+                    weaponDetailDamage.hidden = !weaponDetailState;
+                    weaponDetailFireRate.hidden = !weaponDetailState;
+                    weaponDetailDPS.hidden = !weaponDetailState;
+                    k.gameData.weaponDetailSavedState = undefined;
+                }
+            }
+
+            // Update UI visibility
+            pauseOverlay.hidden = !paused;
+            pauseText.hidden = !paused;
+            k.get('pauseButton').forEach(btn => btn.hidden = !paused);
+        };
+
+        // Register pause UI update callback for network synchronization
+        k.gameData.updatePauseUI = updatePauseUI;
         
         // Button handlers
         resumeButton.onClick(() => {
@@ -3020,55 +3076,19 @@ export function setupGameScene(k) {
 
             k.paused = !k.paused;
 
-            // Play pause or unpause sound
-            if (k.paused) {
-                playPause();
-                // Save tooltip state and hide it
-                if (k.gameData && k.gameData.saveTooltipState && k.gameData.hideTooltip) {
-                    k.gameData.tooltipSavedState = k.gameData.saveTooltipState();
-                    k.gameData.hideTooltip();
-                }
-                // Save current minimap mode and expand it
-                if (k.gameData && k.gameData.minimap) {
-                    k.gameData.minimapSavedMode = k.gameData.minimap.mode;
-                    if (k.gameData.minimap.mode !== 'maximized') {
-                        k.gameData.minimap.mode = 'maximized';
-                        k.gameData.minimap.update();
-                    }
-                }
-                // Save weapon detail state before showing it
-                if (k.gameData.weaponDetailSavedState === undefined) {
-                    k.gameData.weaponDetailSavedState = weaponDetailState;
-                }
-            } else {
-                playUnpause();
-                // Restore minimap mode
-                if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
-                    k.gameData.minimap.mode = k.gameData.minimapSavedMode;
-                    k.gameData.minimap.update();
-                    k.gameData.minimapSavedMode = undefined;
-                }
-                // Restore tooltip state
-                if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {
-                    k.gameData.restoreTooltipState(k.gameData.tooltipSavedState);
-                    k.gameData.tooltipSavedState = undefined;
-                }
-                // Restore weapon detail state
-                if (k.gameData && k.gameData.weaponDetailSavedState !== undefined) {
-                    weaponDetailState = k.gameData.weaponDetailSavedState;
-                    weaponDetailBg.hidden = !weaponDetailState;
-                    weaponDetailIcon.hidden = !weaponDetailState;
-                    weaponDetailName.hidden = !weaponDetailState;
-                    weaponDetailDamage.hidden = !weaponDetailState;
-                    weaponDetailFireRate.hidden = !weaponDetailState;
-                    weaponDetailDPS.hidden = !weaponDetailState;
-                    k.gameData.weaponDetailSavedState = undefined;
+            // Synchronize pause state in multiplayer
+            if (isMultiplayerActive()) {
+                if (isHost()) {
+                    // Host: broadcast pause state to all clients
+                    broadcastPauseState(k.paused);
+                } else {
+                    // Client: send pause request to host
+                    sendPauseRequest(k.paused);
                 }
             }
 
-            pauseOverlay.hidden = !k.paused;
-            pauseText.hidden = !k.paused;
-            k.get('pauseButton').forEach(btn => btn.hidden = !k.paused);
+            // Update pause UI
+            updatePauseUI(k.paused);
         });
     });
 }

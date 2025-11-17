@@ -113,6 +113,26 @@ function setupHostHandlers() {
             console.warn('[Multiplayer] Registered players:', Array.from(mpGame.players.keys()));
         }
     });
+
+    // Handle pause requests from clients
+    onMessage('pause_request', (payload, fromPeerId) => {
+        console.log('[Multiplayer] Pause request from peer:', fromPeerId, 'paused:', payload.paused);
+
+        // Host applies the pause state and broadcasts to all clients
+        if (mpGame.k) {
+            mpGame.k.paused = payload.paused;
+
+            // Update host's pause UI
+            if (mpGame.k.gameData && mpGame.k.gameData.updatePauseUI) {
+                mpGame.k.gameData.updatePauseUI(payload.paused);
+            }
+
+            // Broadcast to all clients (including the requester for confirmation)
+            broadcast('pause_state', { paused: payload.paused });
+
+            console.log('[Multiplayer] Host set pause state to:', payload.paused);
+        }
+    });
 }
 
 /**
@@ -470,6 +490,23 @@ function setupClientHandlers() {
         mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
 
         console.log('[Multiplayer] Synchronized RNG with host');
+    });
+
+    // Receive pause state updates from host
+    onMessage('pause_state', (payload) => {
+        console.log('[Multiplayer] Received pause state from host:', payload.paused);
+
+        // Apply pause state locally
+        if (mpGame.k) {
+            mpGame.k.paused = payload.paused;
+
+            // Update pause UI if callback is registered
+            if (mpGame.k.gameData && mpGame.k.gameData.updatePauseUI) {
+                mpGame.k.gameData.updatePauseUI(payload.paused);
+            }
+
+            console.log('[Multiplayer] Client set pause state to:', payload.paused);
+        }
     });
 }
 
@@ -945,4 +982,28 @@ export function broadcastGameSeed() {
     });
 
     console.log(`[Multiplayer] Broadcasted game seed: ${mpGame.gameSeed}`);
+}
+
+/**
+ * Broadcast pause state to all clients (host only)
+ * @param {boolean} paused - Whether the game should be paused
+ */
+export function broadcastPauseState(paused) {
+    if (!mpGame.isHost) return;
+
+    broadcast('pause_state', { paused });
+
+    console.log(`[Multiplayer] Broadcasted pause state: ${paused}`);
+}
+
+/**
+ * Send pause request to host (client only)
+ * @param {boolean} paused - Whether the game should be paused
+ */
+export function sendPauseRequest(paused) {
+    if (mpGame.isHost) return; // Host doesn't send requests to itself
+
+    sendToHost('pause_request', { paused });
+
+    console.log(`[Multiplayer] Sent pause request to host: ${paused}`);
 }
