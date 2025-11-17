@@ -639,11 +639,16 @@ function sendInputState() {
     const localPlayer = mpGame.players.get(mpGame.localPlayerSlot);
     if (!localPlayer || !localPlayer.exists()) return;
 
+    // Extract move as plain object (Vec2 has functions that can't be serialized)
+    const move = localPlayer.move
+        ? { x: Number(localPlayer.move.x || 0), y: Number(localPlayer.move.y || 0) }
+        : { x: 0, y: 0 };
+
     sendToHost('player_input', {
-        slotIndex: mpGame.localPlayerSlot,
-        move: localPlayer.move || { x: 0, y: 0 },
-        shoot: localPlayer.isShooting || false,
-        aimAngle: localPlayer.aimAngle || 0
+        slotIndex: Number(mpGame.localPlayerSlot),
+        move: move,
+        shoot: Boolean(localPlayer.isShooting || false),
+        aimAngle: Number(localPlayer.aimAngle || 0)
     });
 }
 
