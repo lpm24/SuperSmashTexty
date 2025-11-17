@@ -44,6 +44,11 @@ export function initNetwork(inviteCode, isHost = true) {
         // Mark this tab as the active network tab
         sessionStorage.setItem(existingTabKey, tabId);
 
+        // Clean up on page unload
+        window.addEventListener('beforeunload', () => {
+            disconnect();
+        });
+
         // Check if PeerJS is available
         if (typeof Peer === 'undefined') {
             console.error('PeerJS library not loaded');
@@ -63,7 +68,6 @@ export function initNetwork(inviteCode, isHost = true) {
                     iceServers: [
                         // STUN servers - help discover public IP addresses
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
 
                         // TURN servers - relay traffic when direct P2P fails (critical for NAT traversal)
                         // Using free public TURN servers from OpenRelay (Metered)
@@ -76,11 +80,6 @@ export function initNetwork(inviteCode, isHost = true) {
                         },
                         {
                             urls: 'turn:openrelay.metered.ca:443',
-                            username: 'openrelayproject',
-                            credential: 'openrelayproject'
-                        },
-                        {
-                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
                             username: 'openrelayproject',
                             credential: 'openrelayproject'
                         }
@@ -97,6 +96,20 @@ export function initNetwork(inviteCode, isHost = true) {
 
             network.peer.on('error', (err) => {
                 console.error('Peer error:', err);
+
+                // Handle unavailable-id error (peer ID already taken)
+                if (err.type === 'unavailable-id') {
+                    console.warn('Peer ID already taken - attempting cleanup and retry...');
+                    // Destroy the peer and retry after a short delay
+                    if (network.peer) {
+                        network.peer.destroy();
+                    }
+                    setTimeout(() => {
+                        console.log('Retrying peer initialization...');
+                        initNetwork(inviteCode, isHost).then(resolve).catch(reject);
+                    }, 1000);
+                    return;
+                }
 
                 // Provide user-friendly error messages
                 if (err.type === 'network') {

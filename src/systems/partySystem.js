@@ -47,29 +47,40 @@ export async function initParty(k = null) {
     party.slots[0].inviteCode = getInviteCode();
     party.slots[0].selectedCharacter = getSelectedCharacter();
 
-    // Initialize network as host
-    if (!party.networkInitialized) {
-        try {
-            const inviteCode = getInviteCode();
-            await initNetwork(inviteCode, true);
-            party.networkInitialized = true;
-            console.log('Party network initialized as host');
+    console.log('[PartySystem] Party initialized (network will initialize on demand)');
+    // Note: Network initialization is now lazy - happens when:
+    // 1. Game starts (as host)
+    // 2. Player joins a party (as client)
+}
 
-            // Set up network message handlers
-            setupNetworkHandlers();
-        } catch (err) {
-            console.error('Failed to initialize party network:', err);
-            console.warn('Multiplayer disabled - running in single-player mode');
-            // Gracefully degrade to single-player mode
-            // User can still play the game, just without multiplayer features
-        }
+/**
+ * Initialize network as host for multiplayer game
+ * @returns {Promise<boolean>} True if successful
+ */
+export async function initNetworkAsHost() {
+    if (party.networkInitialized) {
+        console.log('[PartySystem] Network already initialized');
+        return true;
+    }
+
+    try {
+        const inviteCode = getInviteCode();
+        await initNetwork(inviteCode, true);
+        party.networkInitialized = true;
+        party.isHost = true;
+        setupNetworkHandlers();
+        console.log('[PartySystem] Network initialized as host');
+        return true;
+    } catch (err) {
+        console.error('[PartySystem] Failed to initialize network as host:', err);
+        return false;
     }
 }
 
 /**
- * Set up network message handlers
+ * Set up network message handlers (for host)
  */
-function setupNetworkHandlers() {
+export function setupNetworkHandlers() {
     // Handle join requests from clients
     onMessage('join_request', (payload, fromPeerId) => {
         console.log('[PartySystem] Join request from:', fromPeerId);

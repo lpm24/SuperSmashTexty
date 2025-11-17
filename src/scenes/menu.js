@@ -1,6 +1,6 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getInviteCode, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, initNetworkAsHost } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import {
@@ -552,12 +552,16 @@ export function setupMenuScene(k) {
             k, 'Start Game', centerX, buttonStartY,
             350, 55, UI_TEXT_SIZES.HEADER
         );
-        playButton.onClick(() => {
+        playButton.onClick(async () => {
             playMenuSelect();
 
-            // Broadcast game start to all clients if in multiplayer
+            // Initialize network as host if starting multiplayer game
             const partySize = getPartySize();
             if (partySize > 1) {
+                // Initialize network as host (lazy initialization)
+                await initNetworkAsHost();
+
+                // Broadcast game start to all clients
                 broadcastGameStart();
             }
 

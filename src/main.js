@@ -6,6 +6,7 @@ import { setupShopScene } from './scenes/shop.js';
 import { setupSettingsScene } from './scenes/settings.js';
 import { setupStatisticsScene } from './scenes/statistics.js';
 import { setupCharacterSelectScene } from './scenes/characterSelect.js';
+import { initJoinPartyScene } from './scenes/joinParty.js';
 import { GAME_CONFIG } from './config/constants.js';
 
 // Initialize KAPLAY
@@ -26,6 +27,7 @@ setupShopScene(k);
 setupSettingsScene(k);
 setupStatisticsScene(k);
 setupCharacterSelectScene(k);
+initJoinPartyScene(k);
 
 // Start with menu
 k.go('menu');

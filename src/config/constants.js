@@ -176,7 +176,7 @@ export const PICKUP_CONFIG = {
     XP_LIFETIME: 10, // Seconds before XP despawns
     XP_PULSE_SPEED: 5, // Speed of pulse animation
     XP_PULSE_AMOUNT: 0.2, // Amount of pulse scaling (0.2 = 20% scale change)
-    XP_COLOR: [100, 255, 100], // Green
+    XP_COLOR: [100, 200, 255], // Light blue
 
     // Currency Pickups
     CURRENCY_LIFETIME: 15, // Seconds before currency despawns (longer than XP)
