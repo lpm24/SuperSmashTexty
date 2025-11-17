@@ -91,6 +91,8 @@ function setupHostHandlers() {
         const party = getParty();
         const slotIndex = party.slots.findIndex(slot => slot.peerId === fromPeerId);
 
+        console.log('[Multiplayer] Received input from peer:', fromPeerId, 'slot:', slotIndex, 'payload:', payload);
+
         if (slotIndex !== -1 && mpGame.players.has(slotIndex)) {
             const player = mpGame.players.get(slotIndex);
 
@@ -104,6 +106,11 @@ function setupHostHandlers() {
             if (payload.aimAngle !== undefined) {
                 player.aimAngle = payload.aimAngle;
             }
+            console.log('[Multiplayer] Applied input to player at slot', slotIndex);
+        } else {
+            console.warn('[Multiplayer] Could not find player for peer:', fromPeerId, 'slot:', slotIndex);
+            console.warn('[Multiplayer] Party slots:', party.slots);
+            console.warn('[Multiplayer] Registered players:', Array.from(mpGame.players.keys()));
         }
     });
 }

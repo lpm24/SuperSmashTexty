@@ -254,25 +254,26 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
  */
 export async function joinPartyAsClient(hostInviteCode) {
     try {
-        // If we were initialized as host, we need to disconnect and re-initialize as client
+        // Always clear party slots when joining as client - they'll be repopulated by party_sync
+        console.log('[PartySystem] Joining as client - clearing all party slots');
+        for (let i = 0; i < party.slots.length; i++) {
+            party.slots[i] = {
+                playerId: null,
+                playerName: null,
+                inviteCode: null,
+                selectedCharacter: null,
+                isLocal: false,
+                peerId: null
+            };
+        }
+
+        // If we were initialized as host, disconnect and re-initialize as client
         if (party.networkInitialized && party.isHost) {
             console.log('[PartySystem] Switching from host to client - disconnecting current peer...');
             const { disconnect: disconnectNetwork } = await import('./networkSystem.js');
             disconnectNetwork();
             party.networkInitialized = false;
             party.isHost = false;
-
-            // Clear party slots - they'll be repopulated by party_sync from the actual host
-            for (let i = 0; i < party.slots.length; i++) {
-                party.slots[i] = {
-                    playerId: null,
-                    playerName: null,
-                    inviteCode: null,
-                    selectedCharacter: null,
-                    isLocal: false,
-                    peerId: null
-                };
-            }
         }
 
         // Initialize network as client
@@ -311,7 +312,7 @@ export async function joinPartyAsClient(hostInviteCode) {
 function setupClientHandlers() {
     // Receive party state from host
     onMessage('party_sync', (payload) => {
-        console.log('Received party sync:', payload);
+        console.log('[PartySystem] Received party sync:', payload);
 
         // Update our party state
         party.slots = payload.slots;
@@ -319,10 +320,15 @@ function setupClientHandlers() {
         // Mark our own slot as local
         if (payload.yourSlotIndex !== undefined) {
             party.slots[payload.yourSlotIndex].isLocal = true;
+            console.log(`[PartySystem] Marked slot ${payload.yourSlotIndex} as local`);
         }
 
         // Mark host's slot (slot 0) with host name
         party.slots[0].isLocal = false;
+
+        // Debug: log party size after sync
+        const partySize = party.slots.filter(s => s.playerId !== null).length;
+        console.log(`[PartySystem] Party size after sync: ${partySize}`, party.slots);
     });
 
     // Handle party updates

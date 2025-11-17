@@ -267,19 +267,23 @@ export function setupGameScene(k) {
 
         if (partySize > 1 && networkInfo.isInitialized) {
             console.log('[Multiplayer] Initializing multiplayer game with', partySize, 'players');
+            console.log('[Multiplayer] Party slots:', party.slots);
 
             // Find local player slot
             const localSlot = party.slots.findIndex(slot => slot.isLocal);
+            console.log('[Multiplayer] Local player slot:', localSlot);
 
             // Initialize multiplayer system with kaplay instance
             initMultiplayerGame(party.isHost, localSlot, k);
 
             // Register local player
             registerPlayer(localSlot, player);
+            console.log('[Multiplayer] Registered local player at slot', localSlot);
 
             // Spawn additional players for other party members
             party.slots.forEach((slot, index) => {
                 if (index !== localSlot && slot.playerId !== null) {
+                    console.log('[Multiplayer] Creating remote player for slot', index, ':', slot);
                     // Spawn remote player with their selected character
                     const offsetX = (index - localSlot) * 30; // Small offset
                     const remotePlayer = createPlayer(k, playerSpawnX + offsetX, playerSpawnY, slot.selectedCharacter);
