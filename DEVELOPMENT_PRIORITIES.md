@@ -1,7 +1,7 @@
 # Development Priorities & Next Steps
 
 **Last Updated:** 2025-01-15
-**Status:** Post-Architecture Refactor - Menu Polish Complete
+**Status:** Post-Architecture Refactor - Menu Polish & Shop Updates
 
 ---
 
@@ -56,9 +56,14 @@
   - Escalating upgrade prices (Level 1=$50, Level 2=$65, Level 3=$90, Level 4=$115, Level 5=$160)
   - Price display with $ prefix
   - Green border for unlocked characters (replaces "UNLOCKED" text)
+  - Refund button matches "Reset to Defaults" button formatting from Settings menu
+  - Refund button displays amount in button text: "REFUND: $[Amount]"
+  - Centered tab buttons (Upgrades, Characters, Weapons)
 - ✅ **Pause Menu**: Fixed spacing and removed "(ESC)" text from Resume button
 - ✅ **Weapon Detail State**: Properly saves and restores minimized/maximized state when pausing/unpausing
 - ✅ **Statistics Menu**: Added padding between Statistics and Achievements tab buttons
+- ✅ **Character Select Menu**: Updated to match formatting of other menus (background color, title font/size/position)
+- ✅ **Background Particle Effects**: Applied to all menu pages and tabs
 
 ## 🎯 Current Focus Areas
 
@@ -114,6 +119,9 @@
 ### Minor Issues
 - **Enemy pathfinding**: Enemies can get stuck on obstacles (low priority, gameplay still works)
 - **Visual effects**: No particle system yet (polish item)
+
+### Shop Issues
+- ⚠️ **Upgrade purchasing bug**: One click purchases as many upgrade levels as the player can afford, instead of purchasing one level per click. Needs investigation and fix.
 
 ### No Critical Bugs! 🎉
 All major gameplay bugs have been fixed!

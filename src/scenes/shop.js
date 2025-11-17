@@ -1,5 +1,5 @@
 // Shop scene - allows players to purchase unlocks
-import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
 import {
@@ -7,7 +7,8 @@ import {
     UI_COLORS,
     UI_Z_LAYERS,
     formatButtonText,
-    createCreditIndicator
+    createCreditIndicator,
+    createMenuParticles
 } from '../config/uiConfig.js';
 
 export function setupShopScene(k) {
@@ -27,6 +28,9 @@ export function setupShopScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
+
+        // Background particle effects
+        createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
         // Title
         k.add([
@@ -53,9 +57,13 @@ export function setupShopScene(k) {
             { key: 'weapons', label: 'Weapons' }
         ];
         
+        // Calculate centered positions for tabs (same as Statistics and Settings menus)
+        const totalTabWidth = (categories.length - 1) * tabSpacing;
+        const firstTabX = k.width() / 2 - totalTabWidth / 2;
+        
         const tabButtons = [];
         categories.forEach((cat, index) => {
-            const tabX = k.width() / 2 - (categories.length * tabSpacing) / 2 + index * tabSpacing;
+            const tabX = firstTabX + index * tabSpacing;
             const isActive = currentCategory === cat.key;
             
             const tabBg = k.add([
@@ -92,8 +100,15 @@ export function setupShopScene(k) {
         const contentHeight = k.height() - contentY - 60;
         let unlockItems = [];
         
+        // Flag to prevent multiple simultaneous purchases
+        let isPurchasing = false;
+        
         // Refresh shop display
         function refreshShop() {
+            // Update currency display
+            const currentCurrency = getCurrency();
+            creditIndicator.updateCurrency(currentCurrency);
+            
             // Update tab visuals
             tabButtons.forEach(tab => {
                 const isActive = currentCategory === tab.category;
@@ -108,6 +123,9 @@ export function setupShopScene(k) {
                     isActive ? 255 : 150
                 );
             });
+            
+            // Update refund button visibility
+            updateRefundButton();
             
             // Clear existing items
             unlockItems.forEach(item => {
@@ -286,6 +304,10 @@ export function setupShopScene(k) {
                     
                     if (canPurchase) {
                         buttonBg.onClick(() => {
+                            // Prevent multiple simultaneous purchases
+                            if (isPurchasing) return;
+                            isPurchasing = true;
+                            
                             let result;
                             if (currentCategory === 'permanentUpgrades') {
                                 result = purchasePermanentUpgrade(key, purchaseCost, unlock.maxLevel);
@@ -313,10 +335,9 @@ export function setupShopScene(k) {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
 
-                                    // Refresh shop
+                                    // Refresh shop and reset purchasing flag
                                     refreshShop();
-                                    // Update currency display
-                                    creditIndicator.updateCurrency(getCurrency());
+                                    isPurchasing = false;
                                 } else if (result && result.reason === 'insufficientCurrency') {
                                     // Play purchase error sound
                                     playPurchaseError();
@@ -334,6 +355,12 @@ export function setupShopScene(k) {
                                     k.wait(0.5, () => {
                                         if (errorMsg.exists()) k.destroy(errorMsg);
                                     });
+                                    
+                                    // Reset purchasing flag
+                                    isPurchasing = false;
+                                } else {
+                                    // Reset purchasing flag on any other error
+                                    isPurchasing = false;
                                 }
                             } else {
                                 // Regular unlock (returns boolean)
@@ -355,10 +382,9 @@ export function setupShopScene(k) {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
 
-                                    // Refresh shop
+                                    // Refresh shop and reset purchasing flag
                                     refreshShop();
-                                    // Update currency display
-                                    creditIndicator.updateCurrency(getCurrency());
+                                    isPurchasing = false;
                                 } else {
                                     // Play purchase error sound
                                     playPurchaseError();
@@ -372,10 +398,13 @@ export function setupShopScene(k) {
                                         k.fixed(),
                                         k.z(2000)
                                     ]);
-                                    
+
                                     k.wait(0.5, () => {
                                         if (errorMsg.exists()) k.destroy(errorMsg);
                                     });
+                                    
+                                    // Reset purchasing flag
+                                    isPurchasing = false;
                                 }
                             }
                         });
@@ -392,7 +421,62 @@ export function setupShopScene(k) {
             });
         }
         
-        // Initial refresh
+        // Refund button (only shown on permanent upgrades tab)
+        // Matches "Reset to Defaults" button formatting from Settings menu
+        let refundButton = null;
+        let refundText = null;
+        
+        function updateRefundButton() {
+            const refundableAmount = getTotalRefundableCredits();
+            const showRefund = currentCategory === 'permanentUpgrades' && refundableAmount > 0;
+            
+            if (showRefund) {
+                if (!refundButton) {
+                    refundButton = k.add([
+                        k.rect(200, 30),
+                        k.pos(k.width() / 2, k.height() - 80),
+                        k.anchor('center'),
+                        k.color(100, 50, 50),
+                        k.outline(2, k.rgb(150, 100, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                    ]);
+                    
+                    refundText = k.add([
+                        k.text(`REFUND: $${refundableAmount}`, { size: 14 }),
+                        k.pos(k.width() / 2, k.height() - 80),
+                        k.anchor('center'),
+                        k.color(255, 200, 200),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+                    
+                    refundButton.onClick(() => {
+                        const result = refundAllPermanentUpgrades();
+                        if (result.success) {
+                            playPurchaseSuccess();
+                            // Refresh shop to update display
+                            refreshShop();
+                        } else {
+                            playPurchaseError();
+                        }
+                    });
+                } else {
+                    // Update refund amount in button text
+                    refundText.text = `REFUND: $${refundableAmount}`;
+                    refundButton.hidden = false;
+                    refundText.hidden = false;
+                }
+            } else {
+                if (refundButton) {
+                    refundButton.hidden = true;
+                    if (refundText) refundText.hidden = true;
+                }
+            }
+        }
+        
+        // Initial refresh (after refund button function is defined)
         refreshShop();
         
         // Back button (standardized, centered like other menus)

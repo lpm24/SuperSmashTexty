@@ -6,7 +6,8 @@ import {
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
-    formatButtonText
+    formatButtonText,
+    createMenuParticles
 } from '../config/uiConfig.js';
 
 /**
@@ -190,6 +191,9 @@ export function setupSettingsScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
+
+        // Background particle effects
+        createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
         // Title
         k.add([

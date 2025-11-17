@@ -18,6 +18,7 @@ const DEFAULT_SAVE = {
         permanentUpgrades: [] // Array of unlock keys
     },
     permanentUpgradeLevels: {}, // Track levels for permanent upgrades: { upgradeKey: level }
+    permanentUpgradePurchaseHistory: {}, // Track purchase costs: { upgradeKey: [cost1, cost2, ...] }
     stats: {
         totalRuns: 0,
         totalFloorsReached: 0,
@@ -178,6 +179,17 @@ export function purchaseUnlock(category, item, cost) {
     return false;
 }
 
+// Calculate escalating price for permanent upgrades (same as shop.js)
+function getUpgradePrice(level) {
+    // Level 1 = $50, Level 2 = $65, Level 3 = $90, Level 4 = $115, Level 5 = $160
+    const prices = [50, 65, 90, 115, 160];
+    if (level < prices.length) {
+        return prices[level];
+    }
+    // For levels beyond 5, increase by 50 each level
+    return 160 + (level - 4) * 50;
+}
+
 // Purchase a permanent upgrade (handles level tracking)
 export function purchasePermanentUpgrade(upgradeKey, cost, maxLevel) {
     const save = loadSave();
@@ -200,6 +212,15 @@ export function purchasePermanentUpgrade(upgradeKey, cost, maxLevel) {
     }
     save.permanentUpgradeLevels[upgradeKey] = (currentLevel || 0) + 1;
     
+    // Track purchase cost for refund purposes
+    if (!save.permanentUpgradePurchaseHistory) {
+        save.permanentUpgradePurchaseHistory = {};
+    }
+    if (!save.permanentUpgradePurchaseHistory[upgradeKey]) {
+        save.permanentUpgradePurchaseHistory[upgradeKey] = [];
+    }
+    save.permanentUpgradePurchaseHistory[upgradeKey].push(cost);
+    
     // Also add to unlocks if first purchase
     if (!save.unlocks.permanentUpgrades) {
         save.unlocks.permanentUpgrades = [];
@@ -210,6 +231,67 @@ export function purchasePermanentUpgrade(upgradeKey, cost, maxLevel) {
     
     saveGame(save);
     return { success: true, newLevel: save.permanentUpgradeLevels[upgradeKey] };
+}
+
+// Calculate total refundable credits for all permanent upgrades
+export function getTotalRefundableCredits() {
+    const save = loadSave();
+    
+    // If purchase history exists, use it (most accurate)
+    if (save.permanentUpgradePurchaseHistory && Object.keys(save.permanentUpgradePurchaseHistory).length > 0) {
+        let total = 0;
+        Object.keys(save.permanentUpgradePurchaseHistory).forEach(upgradeKey => {
+            const purchaseHistory = save.permanentUpgradePurchaseHistory[upgradeKey];
+            if (purchaseHistory && Array.isArray(purchaseHistory)) {
+                purchaseHistory.forEach(cost => {
+                    total += cost;
+                });
+            }
+        });
+        return total;
+    }
+    
+    // Fallback: Calculate retroactively from current levels (for existing saves)
+    if (save.permanentUpgradeLevels && Object.keys(save.permanentUpgradeLevels).length > 0) {
+        let total = 0;
+        Object.keys(save.permanentUpgradeLevels).forEach(upgradeKey => {
+            const level = save.permanentUpgradeLevels[upgradeKey] || 0;
+            // Calculate what was paid for each level (0 to level-1)
+            for (let i = 0; i < level; i++) {
+                total += getUpgradePrice(i);
+            }
+        });
+        return total;
+    }
+    
+    return 0;
+}
+
+// Refund all permanent upgrades (returns credits and resets levels)
+export function refundAllPermanentUpgrades() {
+    const save = loadSave();
+    const refundAmount = getTotalRefundableCredits();
+    
+    if (refundAmount === 0) {
+        return { success: false, reason: 'noUpgrades' };
+    }
+    
+    // Return credits
+    save.currency += refundAmount;
+    
+    // Reset upgrade levels
+    save.permanentUpgradeLevels = {};
+    
+    // Clear purchase history
+    save.permanentUpgradePurchaseHistory = {};
+    
+    // Remove from unlocks (but keep the array structure)
+    if (save.unlocks.permanentUpgrades) {
+        save.unlocks.permanentUpgrades = [];
+    }
+    
+    saveGame(save);
+    return { success: true, refundAmount };
 }
 
 // Update run statistics

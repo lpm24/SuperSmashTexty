@@ -9,7 +9,8 @@ import {
     UI_TERMS,
     formatButtonText,
     formatStatLabel,
-    createCreditIndicator
+    createCreditIndicator,
+    createMenuParticles
 } from '../config/uiConfig.js';
 
 export function setupCharacterSelectScene(k) {
@@ -18,15 +19,29 @@ export function setupCharacterSelectScene(k) {
         const currencyName = getCurrencyName();
         const selectedChar = getSelectedCharacter();
         
+        // Background
+        k.add([
+            k.rect(k.width(), k.height()),
+            k.pos(0, 0),
+            k.anchor('topleft'),
+            k.color(...UI_COLORS.BG_DARK),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.BACKGROUND)
+        ]);
+
+        // Background particle effects
+        createMenuParticles(k, { patternCount: 10, particleCount: 15 });
+
         // Currency display (standardized)
         const creditIndicator = createCreditIndicator(k, currency, currencyName);
 
         // Title
         k.add([
-            k.text('Character Select', { size: UI_TEXT_SIZES.TITLE }),
-            k.pos(k.width() / 2, 60),
+            k.text(formatButtonText('Character Select'), { size: UI_TEXT_SIZES.TITLE }),
+            k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
         

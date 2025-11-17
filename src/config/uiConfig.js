@@ -220,6 +220,111 @@ export const UI_ANIMATIONS = {
 export const CURRENCY_SYMBOLS = ['$', '₤', '€', '₿', '¥', '£', '¢', '₹'];
 
 /**
+ * Create background particle effects for menu scenes
+ * @param {Object} k - Kaplay instance
+ * @param {Object} options - Configuration options
+ * @param {number} options.patternCount - Number of pulsing patterns (default: 12)
+ * @param {number} options.particleCount - Number of falling particles (default: 20)
+ * @param {boolean} options.includeCursorFollowers - Include cursor-following ships (default: false)
+ */
+export function createMenuParticles(k, options = {}) {
+    const {
+        patternCount = 12,
+        particleCount = 20,
+        includeCursorFollowers = false
+    } = options;
+
+    // Pulsing geometric ASCII patterns
+    const patterns = ['◇', '◆', '○', '●', '□', '■', '△', '▲'];
+    for (let i = 0; i < patternCount; i++) {
+        const pattern = k.add([
+            k.text(patterns[Math.floor(Math.random() * patterns.length)], { size: 20 }),
+            k.pos(Math.random() * k.width(), Math.random() * k.height()),
+            k.color(...UI_COLORS.BG_LIGHT),
+            k.opacity(0.15),
+            k.z(UI_Z_LAYERS.PARTICLES)
+        ]);
+
+        pattern.pulseTime = Math.random() * Math.PI * 2;
+        pattern.pulseSpeed = 1 + Math.random() * 2;
+
+        pattern.onUpdate(() => {
+            pattern.pulseTime += k.dt() * pattern.pulseSpeed;
+            const scale = 0.8 + Math.sin(pattern.pulseTime) * 0.3;
+            pattern.scale = k.vec2(scale, scale);
+            pattern.opacity = 0.1 + Math.abs(Math.sin(pattern.pulseTime)) * 0.15;
+        });
+    }
+
+    // Falling particles
+    for (let i = 0; i < particleCount; i++) {
+        const particle = k.add([
+            k.text(['*', '+', '·', '˙'][Math.floor(Math.random() * 4)], { size: 12 }),
+            k.pos(Math.random() * k.width(), Math.random() * k.height()),
+            k.color(...UI_COLORS.BG_LIGHT),
+            k.opacity(0.3 + Math.random() * 0.3),
+            k.z(UI_Z_LAYERS.PARTICLES)
+        ]);
+
+        particle.speed = 10 + Math.random() * 20;
+        particle.onUpdate(() => {
+            particle.pos.y += particle.speed * k.dt();
+            if (particle.pos.y > k.height()) {
+                particle.pos.y = 0;
+                particle.pos.x = Math.random() * k.width();
+            }
+        });
+    }
+
+    // Cursor-following ships/asteroids (optional easter egg)
+    if (includeCursorFollowers) {
+        const cursorFollowers = [];
+        k.loop(5, () => {
+            if (cursorFollowers.length < 3 && Math.random() < 0.3) {
+                const shipChars = ['◄', '►', '▲', '▼', '◆', '●', '★'];
+                const ship = k.add([
+                    k.text(shipChars[Math.floor(Math.random() * shipChars.length)], { size: 16 }),
+                    k.pos(Math.random() * k.width(), Math.random() * k.height()),
+                    k.color(100 + Math.random() * 100, 100 + Math.random() * 100, 200 + Math.random() * 55),
+                    k.opacity(0.4 + Math.random() * 0.2),
+                    k.rotate(Math.random() * 360),
+                    k.z(UI_Z_LAYERS.PARTICLES)
+                ]);
+
+                ship.followSpeed = 20 + Math.random() * 30;
+                ship.rotationSpeed = 50 + Math.random() * 100;
+                ship.lifetime = 15 + Math.random() * 10;
+
+                ship.onUpdate(() => {
+                    // Follow mouse cursor
+                    const mousePos = k.mousePos();
+                    const dir = mousePos.sub(ship.pos);
+                    const dist = dir.len();
+
+                    if (dist > 5) {
+                        const normalized = dir.scale(1 / dist);
+                        ship.pos = ship.pos.add(normalized.scale(ship.followSpeed * k.dt()));
+                    }
+
+                    // Rotate slowly
+                    ship.angle += ship.rotationSpeed * k.dt();
+
+                    // Fade out over lifetime
+                    ship.lifetime -= k.dt();
+                    if (ship.lifetime <= 0) {
+                        k.destroy(ship);
+                        const index = cursorFollowers.indexOf(ship);
+                        if (index > -1) cursorFollowers.splice(index, 1);
+                    }
+                });
+
+                cursorFollowers.push(ship);
+            }
+        });
+    }
+}
+
+/**
  * Create a standardized credit indicator with rotating currency symbols
  * @param {Object} k - Kaplay instance
  * @param {number} currency - Current currency amount
