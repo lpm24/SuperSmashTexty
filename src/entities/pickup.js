@@ -23,6 +23,13 @@ export function createXPPickup(k, x, y, value) {
     pickup.magnetizeSpeed = 0; // Current magnetization speed (for acceleration)
     pickup.targetPlayer = null; // Reference to player being magnetized to
 
+    // Bounce physics
+    pickup.velocityY = -150 - Math.random() * 100; // Initial upward velocity (randomized)
+    pickup.gravity = 600; // Gravity acceleration
+    pickup.groundY = y; // Ground level (spawn position)
+    pickup.bounceDamping = 0.5; // Energy loss per bounce
+    pickup.bouncing = true; // Whether still bouncing
+
     // Visual effect - slight pulsing
     let pulseDir = 1;
     pickup.onUpdate(() => {
@@ -39,8 +46,29 @@ export function createXPPickup(k, x, y, value) {
         const pulse = Math.sin(pickup.age * PICKUP_CONFIG.XP_PULSE_SPEED) * PICKUP_CONFIG.XP_PULSE_AMOUNT;
         pickup.scale = k.vec2(1 + pulse);
 
+        // Bounce physics (only when not magnetizing)
+        if (!pickup.magnetizing && pickup.bouncing) {
+            // Apply gravity
+            pickup.velocityY += pickup.gravity * k.dt();
+            pickup.pos.y += pickup.velocityY * k.dt();
+
+            // Check for ground collision
+            if (pickup.pos.y >= pickup.groundY) {
+                pickup.pos.y = pickup.groundY;
+                pickup.velocityY = -pickup.velocityY * pickup.bounceDamping;
+
+                // Stop bouncing if velocity is very small
+                if (Math.abs(pickup.velocityY) < 20) {
+                    pickup.bouncing = false;
+                    pickup.velocityY = 0;
+                }
+            }
+        }
+
         // Magnetization movement - once magnetizing starts, it never stops
         if (pickup.magnetizing && pickup.targetPlayer && pickup.targetPlayer.exists()) {
+            pickup.bouncing = false; // Stop bouncing when magnetizing
+
             // Calculate direction to player
             const dirToPlayer = k.vec2(
                 pickup.targetPlayer.pos.x - pickup.pos.x,
@@ -72,7 +100,7 @@ export function createXPPickup(k, x, y, value) {
     // Multiplayer: Register pickup for network sync if host
     pickup.pickupType = 'xp'; // Mark type for sync
     if (isMultiplayerActive() && isHost()) {
-        registerPickup(pickup);
+        registerPickup(pickup, { type: 'xpPickup', value });
     }
 
     return pickup;
@@ -110,6 +138,13 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
     pickup.magnetizeSpeed = 0;
     pickup.targetPlayer = null;
 
+    // Bounce physics
+    pickup.velocityY = -150 - Math.random() * 100; // Initial upward velocity (randomized)
+    pickup.gravity = 600; // Gravity acceleration
+    pickup.groundY = y; // Ground level (spawn position)
+    pickup.bounceDamping = 0.5; // Energy loss per bounce
+    pickup.bouncing = true; // Whether still bouncing
+
     // Visual effect - slight pulsing with rotation
     pickup.onUpdate(() => {
         if (k.paused) {
@@ -125,8 +160,29 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
         const pulse = Math.sin(pickup.age * PICKUP_CONFIG.CURRENCY_PULSE_SPEED) * PICKUP_CONFIG.CURRENCY_PULSE_AMOUNT;
         pickup.scale = k.vec2(1 + pulse);
 
+        // Bounce physics (only when not magnetizing)
+        if (!pickup.magnetizing && pickup.bouncing) {
+            // Apply gravity
+            pickup.velocityY += pickup.gravity * k.dt();
+            pickup.pos.y += pickup.velocityY * k.dt();
+
+            // Check for ground collision
+            if (pickup.pos.y >= pickup.groundY) {
+                pickup.pos.y = pickup.groundY;
+                pickup.velocityY = -pickup.velocityY * pickup.bounceDamping;
+
+                // Stop bouncing if velocity is very small
+                if (Math.abs(pickup.velocityY) < 20) {
+                    pickup.bouncing = false;
+                    pickup.velocityY = 0;
+                }
+            }
+        }
+
         // Magnetization movement - once magnetizing starts, it never stops
         if (pickup.magnetizing && pickup.targetPlayer && pickup.targetPlayer.exists()) {
+            pickup.bouncing = false; // Stop bouncing when magnetizing
+
             // Calculate direction to player
             const dirToPlayer = k.vec2(
                 pickup.targetPlayer.pos.x - pickup.pos.x,
@@ -158,7 +214,7 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
     // Multiplayer: Register pickup for network sync if host
     pickup.pickupType = 'currency'; // Mark type for sync
     if (isMultiplayerActive() && isHost()) {
-        registerPickup(pickup);
+        registerPickup(pickup, { type: 'currencyPickup', value, icon: currencyIcon });
     }
 
     return pickup;
@@ -188,6 +244,13 @@ export function createPowerupWeaponPickup(k, x, y, powerupKey) {
     pickup.magnetizeSpeed = 0;
     pickup.targetPlayer = null;
 
+    // Bounce physics
+    pickup.velocityY = -150 - Math.random() * 100; // Initial upward velocity (randomized)
+    pickup.gravity = 600; // Gravity acceleration
+    pickup.groundY = y; // Ground level (spawn position)
+    pickup.bounceDamping = 0.5; // Energy loss per bounce
+    pickup.bouncing = true; // Whether still bouncing
+
     // Visual effect - pulsing and rotating
     pickup.onUpdate(() => {
         if (k.paused) {
@@ -207,8 +270,29 @@ export function createPowerupWeaponPickup(k, x, y, powerupKey) {
         // Gentle rotation
         pickup.angle = Math.sin(pickup.age * 2) * 10;
 
+        // Bounce physics (only when not magnetizing)
+        if (!pickup.magnetizing && pickup.bouncing) {
+            // Apply gravity
+            pickup.velocityY += pickup.gravity * k.dt();
+            pickup.pos.y += pickup.velocityY * k.dt();
+
+            // Check for ground collision
+            if (pickup.pos.y >= pickup.groundY) {
+                pickup.pos.y = pickup.groundY;
+                pickup.velocityY = -pickup.velocityY * pickup.bounceDamping;
+
+                // Stop bouncing if velocity is very small
+                if (Math.abs(pickup.velocityY) < 20) {
+                    pickup.bouncing = false;
+                    pickup.velocityY = 0;
+                }
+            }
+        }
+
         // Magnetization movement - once magnetizing starts, it never stops
         if (pickup.magnetizing && pickup.targetPlayer && pickup.targetPlayer.exists()) {
+            pickup.bouncing = false; // Stop bouncing when magnetizing
+
             // Calculate direction to player
             const dirToPlayer = k.vec2(
                 pickup.targetPlayer.pos.x - pickup.pos.x,

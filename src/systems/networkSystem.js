@@ -47,8 +47,29 @@ export function initNetwork(inviteCode, isHost = true) {
                 debug: 0, // Disable verbose logging
                 config: {
                     iceServers: [
+                        // STUN servers - help discover public IP addresses
                         { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' }
+                        { urls: 'stun:stun1.l.google.com:19302' },
+
+                        // TURN servers - relay traffic when direct P2P fails (critical for NAT traversal)
+                        // Using free public TURN servers from OpenRelay (Metered)
+                        // NOTE: For production, consider setting up your own TURN server or using a paid service
+                        // Free public servers may have rate limits and reliability issues
+                        {
+                            urls: 'turn:openrelay.metered.ca:80',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        },
+                        {
+                            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                            username: 'openrelayproject',
+                            credential: 'openrelayproject'
+                        }
                     ]
                 }
             });

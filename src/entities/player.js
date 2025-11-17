@@ -24,11 +24,22 @@ import {
     CHARACTER_ABILITIES
 } from '../config/constants.js';
 
-export function createPlayer(k, x, y) {
-    // Get selected character
-    const selectedCharKey = getSelectedCharacter();
+export function createPlayer(k, x, y, characterKey = null) {
+    // Get selected character (use provided characterKey for remote players, or get local selection)
+    const selectedCharKey = characterKey || getSelectedCharacter();
     const charData = CHARACTER_UNLOCKS[selectedCharKey] || CHARACTER_UNLOCKS.survivor;
     
+    // Create outline (larger, dark version behind player)
+    const outline = k.add([
+        k.text(charData.char, { size: 24 }),
+        k.pos(x, y),
+        k.anchor('center'),
+        k.color(0, 0, 0), // Black outline
+        k.scale(1.15), // Slightly larger
+        k.z(-1), // Behind the player
+        'playerOutline'
+    ]);
+
     const player = k.add([
         k.text(charData.char, { size: 24 }),
         k.pos(x, y),
@@ -38,6 +49,9 @@ export function createPlayer(k, x, y) {
         k.health(charData.stats.health),
         'player'
     ]);
+
+    // Link outline to player
+    player.outline = outline;
 
     // Store character info
     player.characterKey = selectedCharKey;
@@ -196,22 +210,37 @@ export function createPlayer(k, x, y) {
 
     // Update movement and immunity frames
     player.onUpdate(() => {
+        // Sync outline position with player
+        if (player.outline && player.outline.exists()) {
+            player.outline.pos = player.pos.clone();
+        }
+
         if (k.paused) return;
-        
+
         // Update immunity frames
         if (player.invulnerable) {
             player.invulnerableTime -= k.dt();
             if (player.invulnerableTime <= 0) {
                 player.invulnerable = false;
                 player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR);
+                // Reset outline visibility
+                if (player.outline && player.outline.exists()) {
+                    player.outline.opacity = 1;
+                }
             } else {
                 // Flash effect during immunity
                 const flashRate = PLAYER_CONFIG.IMMUNITY_FLASH_RATE;
                 const shouldShow = Math.floor(player.invulnerableTime * flashRate) % 2 === 0;
                 if (shouldShow) {
                     player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR);
+                    if (player.outline && player.outline.exists()) {
+                        player.outline.opacity = 1;
+                    }
                 } else {
                     player.color = k.rgb(...PLAYER_CONFIG.NORMAL_COLOR, PLAYER_CONFIG.IMMUNITY_ALPHA);
+                    if (player.outline && player.outline.exists()) {
+                        player.outline.opacity = PLAYER_CONFIG.IMMUNITY_ALPHA;
+                    }
                 }
             }
         }

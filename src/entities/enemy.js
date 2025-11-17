@@ -1100,7 +1100,7 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
 
     // Multiplayer: Register enemy for network sync if host
     if (isMultiplayerActive() && isHost()) {
-        registerEnemy(enemy);
+        registerEnemy(enemy, { type, floor });
         enemy.enemyType = type; // Store type for sync
     }
 

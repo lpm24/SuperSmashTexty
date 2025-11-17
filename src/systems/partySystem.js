@@ -3,7 +3,7 @@
  * Manages multiplayer party state and joining
  */
 
-import { getPlayerName, getInviteCode } from './metaProgression.js';
+import { getPlayerName, getInviteCode, getSelectedCharacter } from './metaProgression.js';
 import {
     initNetwork,
     connectToHost,
@@ -20,24 +20,32 @@ import { sendInitialGameState } from './multiplayerGame.js';
 // Party state
 const party = {
     slots: [
-        { playerId: 'local', playerName: null, inviteCode: null, isLocal: true, peerId: null }, // Slot 1: Local player
-        { playerId: null, playerName: null, inviteCode: null, isLocal: false, peerId: null }, // Slot 2: Empty
-        { playerId: null, playerName: null, inviteCode: null, isLocal: false, peerId: null }, // Slot 3: Empty
-        { playerId: null, playerName: null, inviteCode: null, isLocal: false, peerId: null }  // Slot 4: Empty
+        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, isLocal: true, peerId: null }, // Slot 1: Local player
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }, // Slot 2: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }, // Slot 3: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }  // Slot 4: Empty
     ],
     isHost: true, // Local player is always the host for now
     maxSlots: 4,
     peerIdToSlot: new Map(), // Map peer IDs to slot indices
-    networkInitialized: false
+    networkInitialized: false,
+    kaplayInstance: null // Reference to kaplay instance for client game start
 };
 
 /**
  * Initialize party system
+ * @param {Object} k - Kaplay instance (optional, used for client game start)
  */
-export async function initParty() {
+export async function initParty(k = null) {
+    // Store kaplay instance for client game start
+    if (k) {
+        party.kaplayInstance = k;
+    }
+
     // Set local player info in slot 1
     party.slots[0].playerName = getPlayerName();
     party.slots[0].inviteCode = getInviteCode();
+    party.slots[0].selectedCharacter = getSelectedCharacter();
 
     // Initialize network as host
     if (!party.networkInitialized) {
@@ -70,6 +78,7 @@ function setupNetworkHandlers() {
         const slotIndex = addPlayerToPartyFromNetwork(
             payload.playerName || 'Player',
             payload.inviteCode || '000000',
+            payload.selectedCharacter || 'survivor',
             fromPeerId
         );
 
@@ -80,6 +89,7 @@ function setupNetworkHandlers() {
                     playerId: slot.playerId,
                     playerName: slot.playerName,
                     inviteCode: slot.inviteCode,
+                    selectedCharacter: slot.selectedCharacter,
                     isLocal: false // All remote for the client
                 })),
                 yourSlotIndex: slotIndex
@@ -173,16 +183,18 @@ export function addPlayerToParty(playerName, inviteCode) {
  * Add player to party from network (host only)
  * @param {string} playerName - Player name
  * @param {string} inviteCode - Player invite code
+ * @param {string} selectedCharacter - Player's selected character key
  * @param {string} peerId - Peer ID of the joining player
  * @returns {number|null} Slot index if successful, null if party full
  */
-function addPlayerToPartyFromNetwork(playerName, inviteCode, peerId) {
+function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, peerId) {
     // Find first empty slot
     for (let i = 1; i < party.slots.length; i++) {
         if (party.slots[i].playerId === null) {
             party.slots[i].playerId = `player_${Date.now()}_${i}`;
             party.slots[i].playerName = playerName;
             party.slots[i].inviteCode = inviteCode;
+            party.slots[i].selectedCharacter = selectedCharacter;
             party.slots[i].peerId = peerId;
             party.peerIdToSlot.set(peerId, i);
             return i;
@@ -211,10 +223,11 @@ export async function joinPartyAsClient(hostInviteCode) {
         // Connect to host
         await connectToHost(hostInviteCode);
 
-        // Send our player info
+        // Send our player info including selected character
         sendToHost('join_request', {
             playerName: getPlayerName(),
-            inviteCode: getInviteCode()
+            inviteCode: getInviteCode(),
+            selectedCharacter: getSelectedCharacter()
         });
 
         return true;
@@ -256,6 +269,17 @@ function setupClientHandlers() {
         alert(`Failed to join party: ${payload.reason}`);
     });
 
+    // Handle game start from host
+    onMessage('game_start', (payload) => {
+        console.log('Host started game - joining...');
+        // Automatically join the game when host starts
+        if (party.kaplayInstance) {
+            party.kaplayInstance.go('game', { resetState: true });
+        } else {
+            console.error('Cannot join game: Kaplay instance not available');
+        }
+    });
+
     // Handle host disconnect
     onConnectionChange((event) => {
         if (event === 'host_disconnect') {
@@ -277,9 +301,20 @@ function broadcastPartyUpdate() {
             playerId: slot.playerId,
             playerName: slot.playerName,
             inviteCode: slot.inviteCode,
+            selectedCharacter: slot.selectedCharacter,
             isLocal: false // Always false for remote players
         }))
     });
+}
+
+/**
+ * Broadcast game start to all clients (host only)
+ */
+export function broadcastGameStart() {
+    if (!party.isHost) return;
+
+    console.log('Broadcasting game start to all clients');
+    broadcast('game_start', {});
 }
 
 /**
@@ -313,6 +348,7 @@ export function removePlayerFromParty(slotIndex) {
             playerId: null,
             playerName: null,
             inviteCode: null,
+            selectedCharacter: null,
             isLocal: false,
             peerId: null
         };

@@ -266,9 +266,9 @@ export function setupGameScene(k) {
             // Spawn additional players for other party members
             party.slots.forEach((slot, index) => {
                 if (index !== localSlot && slot.playerId !== null) {
-                    // Spawn remote player
+                    // Spawn remote player with their selected character
                     const offsetX = (index - localSlot) * 30; // Small offset
-                    const remotePlayer = createPlayer(k, playerSpawnX + offsetX, playerSpawnY);
+                    const remotePlayer = createPlayer(k, playerSpawnX + offsetX, playerSpawnY, slot.selectedCharacter);
 
                     // Mark as remote player (disable local input)
                     remotePlayer.isRemote = true;
@@ -583,7 +583,7 @@ export function setupGameScene(k) {
         const xpBarFill = k.add([
             k.rect(0, xpBarHeight - 4),
             k.pos(50, xpBarY + 2), // Start after level badge
-            k.color(100, 255, 100), // Green XP color (matches pickup)
+            k.color(100, 200, 255), // Light blue XP color (matches pickup)
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 1)
         ]);
@@ -607,7 +607,7 @@ export function setupGameScene(k) {
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
             k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(100, 255, 100)), // Green outline to match XP
+            k.outline(2, k.rgb(100, 200, 255)), // Light blue outline to match XP
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 2)
         ]);
@@ -616,7 +616,7 @@ export function setupGameScene(k) {
             k.text('1', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
-            k.color(100, 255, 100), // Green text to match XP
+            k.color(100, 200, 255), // Light blue text to match XP
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -2160,7 +2160,7 @@ export function setupGameScene(k) {
                     const flyingPickup = k.add([
                         k.text('+', { size: 12 }),
                         k.pos(pickup.pos.x, pickup.pos.y),
-                        k.color(100, 255, 100), // Green to match XP pickup color
+                        k.color(100, 200, 255), // Light blue to match XP pickup color
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT + 1)
                     ]);
@@ -2191,10 +2191,10 @@ export function setupGameScene(k) {
                         if (progress >= 1) {
                             k.destroy(flyingPickup);
                             // Pulse XP bar on pickup collection
-                            xpBarFill.color = k.rgb(150, 255, 150); // Bright green pulse
+                            xpBarFill.color = k.rgb(150, 230, 255); // Bright light blue pulse
                             k.wait(0.1, () => {
                                 if (xpBarFill.exists()) {
-                                    xpBarFill.color = k.rgb(100, 255, 100); // Return to normal green
+                                    xpBarFill.color = k.rgb(100, 200, 255); // Return to normal light blue
                                 }
                             });
                         }

@@ -5,6 +5,8 @@
 
 import { getParty, getPartySize, getLocalPlayer } from './partySystem.js';
 import { broadcast, sendToHost, sendToPeer, onMessage, getNetworkInfo } from './networkSystem.js';
+import { createEnemy } from '../entities/enemy.js';
+import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
 
 // Multiplayer game state
 const mpGame = {
@@ -203,11 +205,43 @@ function setupClientHandlers() {
 
     // Handle entity spawn events
     onMessage('spawn_entity', (payload) => {
-        // Host tells clients to spawn a new entity
-        // This allows proper entity creation with full parameters
-        if (payload.type === 'enemy') {
-            // Would need to call createEnemy with proper params
-            // Store in mpGame.enemies with payload.id
+        if (!mpGame.k) return; // Need kaplay instance
+
+        // Host tells clients to spawn a new entity with full creation parameters
+        if (payload.entityType === 'enemy') {
+            const enemy = createEnemy(
+                mpGame.k,
+                payload.x,
+                payload.y,
+                payload.type,
+                payload.floor
+            );
+            enemy.mpEntityId = payload.id;
+            mpGame.enemies.set(payload.id, enemy);
+            console.log(`Spawned enemy ${payload.id} (${payload.type}) at (${payload.x}, ${payload.y})`);
+        } else if (payload.entityType === 'xpPickup') {
+            const pickup = createXPPickup(
+                mpGame.k,
+                payload.x,
+                payload.y,
+                payload.value
+            );
+            pickup.mpEntityId = payload.id;
+            pickup.pickupType = 'xp';
+            mpGame.pickups.set(payload.id, pickup);
+            console.log(`Spawned XP pickup ${payload.id} with value ${payload.value}`);
+        } else if (payload.entityType === 'currencyPickup') {
+            const pickup = createCurrencyPickup(
+                mpGame.k,
+                payload.x,
+                payload.y,
+                payload.value,
+                payload.icon
+            );
+            pickup.mpEntityId = payload.id;
+            pickup.pickupType = 'currency';
+            mpGame.pickups.set(payload.id, pickup);
+            console.log(`Spawned currency pickup ${payload.id} with value ${payload.value}`);
         }
     });
 }
@@ -418,14 +452,25 @@ export function isLocalPlayer(player) {
 /**
  * Register an enemy for multiplayer sync (host only)
  * @param {Object} enemy - Enemy entity
+ * @param {Object} creationParams - Parameters used to create this enemy { type, floor }
  * @returns {number} Entity ID assigned to this enemy
  */
-export function registerEnemy(enemy) {
+export function registerEnemy(enemy, creationParams = {}) {
     if (!mpGame.isHost) return null;
 
     const entityId = mpGame.nextEntityId++;
     enemy.mpEntityId = entityId;
     mpGame.enemies.set(entityId, enemy);
+
+    // Broadcast spawn message to all clients with full creation parameters
+    broadcast('spawn_entity', {
+        id: entityId,
+        entityType: 'enemy',
+        x: enemy.pos.x,
+        y: enemy.pos.y,
+        type: creationParams.type || 'basic',
+        floor: creationParams.floor || 1
+    });
 
     return entityId;
 }
@@ -448,14 +493,31 @@ export function registerProjectile(projectile) {
 /**
  * Register a pickup for multiplayer sync (host only)
  * @param {Object} pickup - Pickup entity
+ * @param {Object} creationParams - Parameters used to create this pickup { type, value, icon }
  * @returns {number} Entity ID assigned to this pickup
  */
-export function registerPickup(pickup) {
+export function registerPickup(pickup, creationParams = {}) {
     if (!mpGame.isHost) return null;
 
     const entityId = mpGame.nextEntityId++;
     pickup.mpEntityId = entityId;
     mpGame.pickups.set(entityId, pickup);
+
+    // Broadcast spawn message to all clients with full creation parameters
+    const spawnData = {
+        id: entityId,
+        entityType: creationParams.type || 'xpPickup',
+        x: pickup.pos.x,
+        y: pickup.pos.y,
+        value: creationParams.value || pickup.value || 1
+    };
+
+    // Add icon for currency pickups
+    if (creationParams.type === 'currencyPickup' && creationParams.icon) {
+        spawnData.icon = creationParams.icon;
+    }
+
+    broadcast('spawn_entity', spawnData);
 
     return entityId;
 }

@@ -1,9 +1,8 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getInviteCode, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, joinPartyAsClient, isMultiplayerAvailable } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
-import { isValidInviteCode } from '../systems/nameGenerator.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -13,9 +12,6 @@ import {
     formatButtonText,
     createCreditIndicator
 } from '../config/uiConfig.js';
-
-// Track if a dialog is currently open (to disable menu hotkeys)
-let isDialogOpen = false;
 
 /**
  * Create an interactive menu button
@@ -190,364 +186,6 @@ function createMenuButton(k, text, x, y, width = UI_BUTTON.WIDTH, height = UI_BU
     return bg;
 }
 
-/**
- * Show join party dialog for entering invite code
- */
-function showJoinPartyDialog(k, joinPartyBtn) {
-    // Set dialog open flag to disable menu hotkeys
-    isDialogOpen = true;
-
-    // Disable the join party button to prevent multiple dialogs
-    if (joinPartyBtn) {
-        joinPartyBtn.setDisabled(true);
-    }
-
-    // Overlay
-    const overlay = k.add([
-        k.rect(k.width(), k.height()),
-        k.pos(0, 0),
-        k.color(0, 0, 0),
-        k.opacity(0.7),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY),
-        'joinDialog'
-    ]);
-
-    // Dialog box
-    const dialogWidth = 400;
-    const dialogHeight = 200;
-    const dialogBg = k.add([
-        k.rect(dialogWidth, dialogHeight),
-        k.pos(k.width() / 2, k.height() / 2),
-        k.anchor('center'),
-        k.color(...UI_COLORS.BG_MEDIUM),
-        k.outline(3, k.rgb(...UI_COLORS.BORDER)),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 1),
-        'joinDialog'
-    ]);
-
-    // Close button (X) in top-right corner of dialog
-    const closeButtonSize = 24;
-    const closeButton = k.add([
-        k.rect(closeButtonSize, closeButtonSize),
-        k.pos(k.width() / 2 + dialogWidth / 2 - 10, k.height() / 2 - dialogHeight / 2 + 10),
-        k.anchor('topright'),
-        k.color(...UI_COLORS.BG_DARK),
-        k.outline(1, k.rgb(...UI_COLORS.BORDER)),
-        k.area(),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    const closeButtonText = k.add([
-        k.text('X', { size: UI_TEXT_SIZES.SMALL }),
-        k.pos(k.width() / 2 + dialogWidth / 2 - 10 - closeButtonSize / 2, k.height() / 2 - dialogHeight / 2 + 10 + closeButtonSize / 2),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3),
-        'joinDialog'
-    ]);
-
-    // Close button hover effect
-    closeButton.onHoverUpdate(() => {
-        closeButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
-        closeButtonText.color = k.rgb(255, 100, 100);
-    });
-
-    closeButton.onHoverEnd(() => {
-        closeButton.color = k.rgb(...UI_COLORS.BG_DARK);
-        closeButtonText.color = k.rgb(...UI_COLORS.TEXT_PRIMARY);
-    });
-
-    closeButton.onClick(() => {
-        if (isJoining) return;
-        playMenuNav();
-        closeDialog();
-    });
-
-    // Title
-    const titleText = k.add([
-        k.text('Join Party', { size: UI_TEXT_SIZES.LABEL }),
-        k.pos(k.width() / 2, k.height() / 2 - 70),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    // Instruction
-    const instructionText = k.add([
-        k.text('Enter 6-digit invite code:', { size: UI_TEXT_SIZES.SMALL }),
-        k.pos(k.width() / 2, k.height() / 2 - 30),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_SECONDARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    // Input display
-    let inputCode = '';
-    const inputDisplay = k.add([
-        k.text('______', { size: UI_TEXT_SIZES.TITLE }),
-        k.pos(k.width() / 2, k.height() / 2 + 10),
-        k.anchor('center'),
-        k.color(...UI_COLORS.GOLD),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    // Error/Status message
-    const errorMsg = k.add([
-        k.text('', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2, k.height() / 2 + 45),
-        k.anchor('center'),
-        k.color(255, 100, 100),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    let isJoining = false;
-
-    // Cancel button - created directly with correct z-layers
-    const cancelButtonBg = k.add([
-        k.rect(100, 30),
-        k.pos(k.width() / 2 - 60, k.height() / 2 + 70),
-        k.anchor('center'),
-        k.color(...UI_COLORS.SECONDARY),
-        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-        k.area(),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    const cancelButtonText = k.add([
-        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2 - 60, k.height() / 2 + 70),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3),
-        'joinDialog'
-    ]);
-
-    // Create cancel button object
-    const cancelButton = cancelButtonBg;
-    cancelButton.labels = [cancelButtonText];
-
-    // Join button - created directly with correct z-layers
-    const joinButtonBg = k.add([
-        k.rect(100, 30),
-        k.pos(k.width() / 2 + 60, k.height() / 2 + 70),
-        k.anchor('center'),
-        k.color(...UI_COLORS.SECONDARY),
-        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-        k.area(),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2),
-        'joinDialog'
-    ]);
-
-    const joinButtonText = k.add([
-        k.text('Join', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2 + 60, k.height() / 2 + 70),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3),
-        'joinDialog'
-    ]);
-
-    // Create join button object with setDisabled method
-    const joinButton = joinButtonBg;
-    joinButton.labels = [joinButtonText];
-    joinButton.setDisabled = (disabled) => {
-        if (disabled) {
-            joinButtonBg.color = k.rgb(80, 80, 90);
-            joinButtonText.color = k.rgb(150, 150, 150);
-            joinButton.disabled = true;
-        } else {
-            joinButtonBg.color = k.rgb(...UI_COLORS.SECONDARY);
-            joinButtonText.color = k.rgb(...UI_COLORS.TEXT_PRIMARY);
-            joinButton.disabled = false;
-        }
-    };
-
-    // Initially disable Join button until code is entered
-    joinButton.setDisabled(true);
-
-    // Store all dialog entities for cleanup
-    const dialogEntities = [
-        overlay,
-        dialogBg,
-        closeButton,
-        closeButtonText,
-        titleText,
-        instructionText,
-        inputDisplay,
-        errorMsg,
-        cancelButton, // bg entity
-        ...cancelButton.labels, // label entities
-        joinButton, // bg entity
-        ...joinButton.labels // label entities
-    ];
-
-    // Event handlers (defined here so they can be referenced in closeDialog)
-    const charInputHandler = k.onCharInput((ch) => {
-        if (isJoining) return;
-        if (ch >= '0' && ch <= '9' && inputCode.length < 6) {
-            inputCode += ch;
-            // Update display with current input + remaining underscores
-            const display = inputCode + '______'.substring(inputCode.length);
-            inputDisplay.text = display;
-            errorMsg.text = '';
-
-            // Auto-join when 6 digits are entered
-            if (inputCode.length === 6) {
-                joinButton.setDisabled(false);
-                // Wait a tiny bit for the display to update, then auto-join
-                k.wait(0.1, () => {
-                    if (!isJoining && inputCode.length === 6) {
-                        // Trigger join button click
-                        joinButtonBg.click();
-                    }
-                });
-            }
-        }
-    });
-
-    const backspaceHandler = k.onKeyPress('backspace', () => {
-        if (isJoining) return;
-        if (inputCode.length > 0) {
-            inputCode = inputCode.slice(0, -1);
-            const display = inputCode + '______'.substring(inputCode.length);
-            inputDisplay.text = display;
-
-            // Disable Join button if less than 6 digits
-            if (inputCode.length < 6) {
-                joinButton.setDisabled(true);
-            }
-        }
-    });
-
-    const escapeHandler = k.onKeyPress('escape', () => {
-        if (isJoining) return;
-        playMenuNav();
-        closeDialog();
-    });
-
-    const enterHandler = k.onKeyPress('enter', async () => {
-        if (isJoining) return;
-        if (inputCode.length === 6) {
-            // Trigger the join button click
-            joinButton.onClick();
-        }
-    });
-
-    // Close function
-    function closeDialog() {
-        // Clear dialog open flag to re-enable menu hotkeys
-        isDialogOpen = false;
-
-        // Destroy all dialog entities
-        dialogEntities.forEach(entity => {
-            if (entity && entity.exists && entity.exists()) {
-                k.destroy(entity);
-            }
-        });
-
-        // Cleanup event handlers
-        charInputHandler.cancel();
-        backspaceHandler.cancel();
-        escapeHandler.cancel();
-        enterHandler.cancel();
-
-        // Re-enable the join party button
-        if (joinPartyBtn) {
-            joinPartyBtn.setDisabled(false);
-        }
-    }
-
-    cancelButton.onClick(() => {
-        playMenuNav();
-        closeDialog();
-    });
-
-    joinButton.onClick(async () => {
-        if (joinButton.disabled || isJoining) return; // Prevent clicks when disabled
-
-        // Validate invite code format
-        if (inputCode.length === 6) {
-            if (!isValidInviteCode(inputCode)) {
-                errorMsg.color = k.rgb(255, 100, 100);
-                errorMsg.text = 'Invalid code format';
-                return;
-            }
-
-            playMenuSelect();
-            isJoining = true;
-            joinButton.setDisabled(true);
-            errorMsg.color = k.rgb(255, 255, 100); // Yellow for status
-            errorMsg.text = 'Connecting...';
-
-            try {
-                console.log('Joining party with code:', inputCode);
-
-                // Create a timeout promise that rejects after 10 seconds
-                const timeoutPromise = new Promise((_, reject) => {
-                    setTimeout(() => reject(new Error('timeout')), 10000);
-                });
-
-                // Race between joining and timeout
-                const success = await Promise.race([
-                    joinPartyAsClient(inputCode),
-                    timeoutPromise
-                ]);
-
-                if (success) {
-                    errorMsg.color = k.rgb(100, 255, 100); // Green for success
-                    errorMsg.text = 'Connected! Joined party.';
-
-                    // Close dialog after brief delay
-                    k.wait(1, () => {
-                        closeDialog();
-                        // Refresh the menu scene to show updated party
-                        k.go('menu');
-                    });
-                } else {
-                    errorMsg.color = k.rgb(255, 100, 100); // Red for error
-                    errorMsg.text = 'Failed to find party';
-                    isJoining = false;
-                    joinButton.setDisabled(false);
-                }
-            } catch (err) {
-                console.error('Join error:', err);
-                errorMsg.color = k.rgb(255, 100, 100);
-
-                // Check if it was a timeout
-                if (err.message === 'timeout') {
-                    errorMsg.text = 'Failed to find party';
-                } else {
-                    errorMsg.text = 'Failed to find party';
-                }
-
-                isJoining = false;
-                joinButton.setDisabled(false);
-            }
-        } else {
-            errorMsg.color = k.rgb(255, 100, 100);
-            errorMsg.text = 'Please enter 6 digits';
-        }
-    });
-}
-
 export function setupMenuScene(k) {
     k.scene('menu', () => {
         // Initialize audio context on first user interaction
@@ -585,7 +223,7 @@ export function setupMenuScene(k) {
         // ==========================================
         // PARTY SYSTEM UI (Top Left)
         // ==========================================
-        initParty(); // Initialize party system (async but fire-and-forget is ok here)
+        initParty(k); // Initialize party system with kaplay instance for game start sync
 
         const partyPanelX = 20;
         const partyPanelY = 20;
@@ -671,30 +309,29 @@ export function setupMenuScene(k) {
 
         const inviteCode = getInviteCode();
 
-        // Check if multiplayer is available
-        const multiplayerAvailable = isMultiplayerAvailable();
+        // Invite code display (updates dynamically when code is received)
+        const inviteCodeDisplay = k.add([
+            k.text('OFFLINE', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
+            k.anchor('right'),
+            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
 
-        // Code/status on the right (same line)
-        if (multiplayerAvailable) {
-            k.add([
-                k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
-                k.anchor('right'),
-                k.color(...UI_COLORS.GOLD),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-        } else {
-            // Show offline status
-            k.add([
-                k.text('OFFLINE', { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
-                k.anchor('right'),
-                k.color(...UI_COLORS.TEXT_DISABLED),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-        }
+        // Update invite code display when it becomes available
+        let hasCheckedCode = false;
+        inviteCodeDisplay.onUpdate(() => {
+            if (!hasCheckedCode && isMultiplayerAvailable()) {
+                const currentCode = getInviteCode();
+                if (currentCode && currentCode !== 'OFFLINE') {
+                    inviteCodeDisplay.text = currentCode;
+                    inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD);
+                    inviteCodeDisplay.textSize = UI_TEXT_SIZES.SMALL;
+                    hasCheckedCode = true; // Only update once
+                }
+            }
+        });
 
         // Join Party button (moved up since we removed a line)
         const joinButtonY = inviteCodeY + 25;
@@ -710,8 +347,7 @@ export function setupMenuScene(k) {
 
         joinButton.onClick(() => {
             playMenuSelect();
-            // Show join party input dialog, passing the button reference
-            showJoinPartyDialog(k, joinButton);
+            k.go('joinParty');
         });
 
         // Currency display (standardized)
@@ -875,16 +511,23 @@ export function setupMenuScene(k) {
 
         // Main buttons
         const playButton = createMenuButton(
-            k, 'Start', centerX, buttonStartY,
+            k, 'Start Game', centerX, buttonStartY,
             350, 55, UI_TEXT_SIZES.HEADER
         );
         playButton.onClick(() => {
             playMenuSelect();
+
+            // Broadcast game start to all clients if in multiplayer
+            const partySize = getPartySize();
+            if (partySize > 1) {
+                broadcastGameStart();
+            }
+
             k.go('game', { resetState: true });
         });
 
         const characterButton = createMenuButton(
-            k, 'Characters', centerX, buttonStartY + buttonSpacing,
+            k, 'Character Select', centerX, buttonStartY + buttonSpacing,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         characterButton.onClick(() => {
@@ -944,7 +587,7 @@ export function setupMenuScene(k) {
         });
 
         const statisticsButton = createMenuButton(
-            k, 'Stats', centerX, buttonStartY + buttonSpacing * 3,
+            k, 'Statistics', centerX, buttonStartY + buttonSpacing * 3,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         statisticsButton.onClick(() => {
@@ -998,33 +641,28 @@ export function setupMenuScene(k) {
             });
         });
 
-        // Keyboard shortcuts (disabled when dialog is open)
+        // Keyboard shortcuts
         const spaceHandler = k.onKeyPress('space', () => {
-            if (isDialogOpen) return;
             playMenuSelect();
             k.go('game', { resetState: true });
         });
 
         const cHandler = k.onKeyPress('c', () => {
-            if (isDialogOpen) return;
             playMenuNav();
             k.go('characterSelect');
         });
 
         const sHandler = k.onKeyPress('s', () => {
-            if (isDialogOpen) return;
             playMenuNav();
             k.go('shop');
         });
 
         const oHandler = k.onKeyPress('o', () => {
-            if (isDialogOpen) return;
             playMenuNav();
             k.go('settings');
         });
 
         const tHandler = k.onKeyPress('t', () => {
-            if (isDialogOpen) return;
             playMenuNav();
             k.go('statistics');
         });
@@ -1212,24 +850,9 @@ export function setupMenuScene(k) {
         // Spawn golden enemies occasionally
         k.loop(10, () => {
             if (Math.random() < 0.15) { // 15% chance every 10 seconds
-                // Vary spawn angle and direction
-                const spawnAngle = Math.random() * Math.PI * 2; // Random angle
-                const spawnDistance = 100; // Distance from screen edge
-                const centerX = k.width() / 2;
-                const centerY = k.height() / 2;
-                
-                // Calculate spawn position based on angle
-                const startX = centerX + Math.cos(spawnAngle) * (k.width() / 2 + spawnDistance);
-                const startY = centerY + Math.sin(spawnAngle) * (k.height() / 2 + spawnDistance);
-                
-                // Direction towards center (with some variation)
-                const targetX = centerX + (Math.random() - 0.5) * 200;
-                const targetY = centerY + (Math.random() - 0.5) * 200;
-                const dx = targetX - startX;
-                const dy = targetY - startY;
-                const distance = Math.sqrt(dx * dx + dy * dy);
-                const directionX = dx / distance;
-                const directionY = dy / distance;
+                const startY = 100 + Math.random() * (k.height() - 200);
+                const direction = Math.random() < 0.5 ? 1 : -1;
+                const startX = direction > 0 ? -50 : k.width() + 50;
 
                 const goldenEnemy = k.add([
                     k.text('$', { size: 24 }),
@@ -1242,8 +865,7 @@ export function setupMenuScene(k) {
                 ]);
 
                 goldenEnemy.speed = 150 + Math.random() * 100;
-                goldenEnemy.directionX = directionX;
-                goldenEnemy.directionY = directionY;
+                goldenEnemy.direction = direction;
                 goldenEnemy.pulseTime = 0;
 
                 // Click handler
@@ -1253,32 +875,27 @@ export function setupMenuScene(k) {
                     // Add currency
                     addCurrency(1);
 
-                    // Enhanced explosion effect - more particles, longer duration
-                    const particleCount = 24; // Increased from 12
-                    for (let i = 0; i < particleCount; i++) {
-                        const angle = (Math.PI * 2 * i) / particleCount + (Math.random() - 0.5) * 0.3; // Add variation
+                    // Explosion effect
+                    for (let i = 0; i < 12; i++) {
+                        const angle = (Math.PI * 2 * i) / 12;
                         const particle = k.add([
-                            k.text(['$', '¢', '€', '¥', '★', '✨'][Math.floor(Math.random() * 6)], { size: 16 + Math.random() * 8 }),
+                            k.text(['$', '¢', '€', '¥'][Math.floor(Math.random() * 4)], { size: 14 }),
                             k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                             k.color(...UI_COLORS.GOLD),
                             k.z(UI_Z_LAYERS.PARTICLES + 2)
                         ]);
 
-                        const speed = 150 + Math.random() * 150; // Increased speed range
+                        const speed = 100 + Math.random() * 100;
                         particle.velocity = k.vec2(
                             Math.cos(angle) * speed,
                             Math.sin(angle) * speed
                         );
-                        particle.life = 2.5; // Increased from 1 to 2.5 seconds
-                        particle.rotation = Math.random() * 360;
-                        particle.rotationSpeed = (Math.random() - 0.5) * 360; // Rotation
+                        particle.life = 1;
 
                         particle.onUpdate(() => {
                             particle.pos = particle.pos.add(particle.velocity.scale(k.dt()));
-                            particle.velocity = particle.velocity.scale(0.98); // Slight deceleration
                             particle.life -= k.dt();
-                            particle.opacity = particle.life / 2.5;
-                            particle.angle += particle.rotationSpeed * k.dt();
+                            particle.opacity = particle.life;
 
                             if (particle.life <= 0) {
                                 k.destroy(particle);
@@ -1286,21 +903,20 @@ export function setupMenuScene(k) {
                         });
                     }
 
-                    // Enhanced "+$1" text with larger size and longer duration
+                    // Show "+$1" text
                     const rewardText = k.add([
-                        k.text('+$1', { size: 32 }), // Increased from 20
+                        k.text('+$1', { size: 20 }),
                         k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
 
-                    rewardText.life = 2.5; // Increased from 1.5
+                    rewardText.life = 1.5;
                     rewardText.onUpdate(() => {
-                        rewardText.pos.y -= 60 * k.dt(); // Slightly faster
+                        rewardText.pos.y -= 50 * k.dt();
                         rewardText.life -= k.dt();
-                        rewardText.opacity = rewardText.life / 2.5;
-                        rewardText.scale = k.vec2(1 + (2.5 - rewardText.life) * 0.2); // Scale up effect
+                        rewardText.opacity = rewardText.life / 1.5;
 
                         if (rewardText.life <= 0) {
                             k.destroy(rewardText);
@@ -1316,8 +932,7 @@ export function setupMenuScene(k) {
 
                 // Update movement
                 goldenEnemy.onUpdate(() => {
-                    goldenEnemy.pos.x += goldenEnemy.speed * goldenEnemy.directionX * k.dt();
-                    goldenEnemy.pos.y += goldenEnemy.speed * goldenEnemy.directionY * k.dt();
+                    goldenEnemy.pos.x += goldenEnemy.speed * goldenEnemy.direction * k.dt();
 
                     // Pulse effect
                     goldenEnemy.pulseTime += k.dt();
@@ -1325,8 +940,8 @@ export function setupMenuScene(k) {
                     goldenEnemy.scale = k.vec2(1 + pulse, 1 + pulse);
 
                     // Remove when off screen
-                    if (goldenEnemy.pos.x < -100 || goldenEnemy.pos.x > k.width() + 100 ||
-                        goldenEnemy.pos.y < -100 || goldenEnemy.pos.y > k.height() + 100) {
+                    if ((goldenEnemy.direction > 0 && goldenEnemy.pos.x > k.width() + 100) ||
+                        (goldenEnemy.direction < 0 && goldenEnemy.pos.x < -100)) {
                         k.destroy(goldenEnemy);
                     }
                 });
