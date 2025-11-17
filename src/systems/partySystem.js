@@ -72,7 +72,17 @@ export async function initParty(k = null) {
 function setupNetworkHandlers() {
     // Handle join requests from clients
     onMessage('join_request', (payload, fromPeerId) => {
-        console.log('Join request from:', fromPeerId, payload);
+        console.log('[PartySystem] Join request from:', fromPeerId);
+        console.log('[PartySystem] Payload:', {
+            playerName: payload.playerName,
+            inviteCode: payload.inviteCode,
+            selectedCharacter: payload.selectedCharacter
+        });
+
+        // Validate payload has required data
+        if (!payload.playerName) {
+            console.warn('[PartySystem] Join request missing playerName, using default');
+        }
 
         // Add player to party
         const slotIndex = addPlayerToPartyFromNetwork(

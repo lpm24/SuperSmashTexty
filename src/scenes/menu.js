@@ -243,54 +243,92 @@ export function setupMenuScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
 
-        // Get party info
-        const partySlots = getPartyDisplayInfo();
-
-        // Create party slot UI elements
+        // Create party slot UI elements with reactive updates
         const slotsStartY = partyPanelY + titlePadding;
-        partySlots.forEach((slot, index) => {
-            const slotY = slotsStartY + (index * (slotHeight + slotSpacing));
+        const slotElements = []; // Store references for updates
 
-            // Slot background
-            const slotBg = k.add([
-                k.rect(partyPanelWidth - 20, slotHeight),
-                k.pos(partyPanelX + 10, slotY),
-                k.color(slot.isEmpty ? UI_COLORS.BG_DARK : UI_COLORS.BG_LIGHT),
-                k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
-            ]);
+        // Function to create/update party slots
+        function updatePartySlots() {
+            // Destroy old slot elements
+            slotElements.forEach(elements => {
+                elements.forEach(el => {
+                    if (el.exists()) k.destroy(el);
+                });
+            });
+            slotElements.length = 0;
 
-            // Slot number
-            k.add([
-                k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(partyPanelX + 20, slotY + slotHeight / 2),
-                k.anchor('left'),
-                k.color(...UI_COLORS.TEXT_SECONDARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
+            // Get current party info
+            const partySlots = getPartyDisplayInfo();
 
-            // Player name or "Empty Slot"
-            k.add([
-                k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(partyPanelX + 45, slotY + slotHeight / 2),
-                k.anchor('left'),
-                k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
+            // Create new slot elements
+            partySlots.forEach((slot, index) => {
+                const slotY = slotsStartY + (index * (slotHeight + slotSpacing));
+                const elementsForThisSlot = [];
 
-            // "You" indicator for local player
-            if (slot.isLocal) {
-                k.add([
-                    k.text('(You)', { size: UI_TEXT_SIZES.SMALL - 4 }),
-                    k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
-                    k.anchor('right'),
-                    k.color(...UI_COLORS.GOLD),
+                // Slot background
+                const slotBg = k.add([
+                    k.rect(partyPanelWidth - 20, slotHeight),
+                    k.pos(partyPanelX + 10, slotY),
+                    k.color(slot.isEmpty ? UI_COLORS.BG_DARK : UI_COLORS.BG_LIGHT),
+                    k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
+                    k.z(UI_Z_LAYERS.UI_BACKGROUND + 1),
+                    'partySlotUI'
                 ]);
+                elementsForThisSlot.push(slotBg);
+
+                // Slot number
+                const slotNum = k.add([
+                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(partyPanelX + 20, slotY + slotHeight / 2),
+                    k.anchor('left'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT),
+                    'partySlotUI'
+                ]);
+                elementsForThisSlot.push(slotNum);
+
+                // Player name or "Empty Slot"
+                const nameText = k.add([
+                    k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(partyPanelX + 45, slotY + slotHeight / 2),
+                    k.anchor('left'),
+                    k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT),
+                    'partySlotUI'
+                ]);
+                elementsForThisSlot.push(nameText);
+
+                // "You" indicator for local player
+                if (slot.isLocal) {
+                    const youText = k.add([
+                        k.text('(You)', { size: UI_TEXT_SIZES.SMALL - 4 }),
+                        k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
+                        k.anchor('right'),
+                        k.color(...UI_COLORS.GOLD),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT),
+                        'partySlotUI'
+                    ]);
+                    elementsForThisSlot.push(youText);
+                }
+
+                slotElements.push(elementsForThisSlot);
+            });
+        }
+
+        // Initial creation
+        updatePartySlots();
+
+        // Poll for party changes every second
+        let lastPartyCheck = 0;
+        k.onUpdate(() => {
+            lastPartyCheck += k.dt();
+            if (lastPartyCheck >= 1.0) { // Check every second
+                lastPartyCheck = 0;
+                updatePartySlots();
             }
         });
 

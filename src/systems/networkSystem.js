@@ -30,6 +30,20 @@ export function initNetwork(inviteCode, isHost = true) {
             return;
         }
 
+        // Detect multiple tabs - check if there's already a PeerJS connection in another tab
+        const tabId = `smash-tab-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+        const existingTabKey = 'smash_active_network_tab';
+        const existingTab = sessionStorage.getItem(existingTabKey);
+
+        if (existingTab && existingTab !== tabId) {
+            console.warn('Another tab already has an active network connection. Multiplayer disabled in this tab.');
+            reject(new Error('Multiple tabs detected - only one tab can host multiplayer'));
+            return;
+        }
+
+        // Mark this tab as the active network tab
+        sessionStorage.setItem(existingTabKey, tabId);
+
         // Check if PeerJS is available
         if (typeof Peer === 'undefined') {
             console.error('PeerJS library not loaded');
@@ -162,14 +176,34 @@ export function connectToHost(hostInviteCode) {
         }
 
         const hostPeerId = `smash-${hostInviteCode}`;
-        console.log('Connecting to host:', hostPeerId);
+        console.log('[NetworkSystem] Attempting to connect to host:', hostPeerId);
+        console.log('[NetworkSystem] Using STUN/TURN servers for NAT traversal...');
+
+        // Add connection timeout
+        let connectionTimeout;
+        let isResolved = false;
 
         const conn = network.peer.connect(hostPeerId, {
             reliable: true
         });
 
+        // Set timeout for connection attempt (30 seconds)
+        connectionTimeout = setTimeout(() => {
+            if (!isResolved) {
+                console.error('[NetworkSystem] Connection timeout - host may be offline or unreachable');
+                console.error('[NetworkSystem] This could be due to:');
+                console.error('  - Host not found (wrong code or host offline)');
+                console.error('  - Firewall blocking connection');
+                console.error('  - NAT traversal failure (TURN servers may be overloaded)');
+                conn.close();
+                reject(new Error('Connection timeout - could not reach host'));
+            }
+        }, 30000);
+
         conn.on('open', () => {
-            console.log('Connected to host!');
+            isResolved = true;
+            clearTimeout(connectionTimeout);
+            console.log('[NetworkSystem] Successfully connected to host!');
             network.hostConnection = conn;
             network.hostId = hostPeerId;
 
@@ -186,7 +220,7 @@ export function connectToHost(hostInviteCode) {
         });
 
         conn.on('close', () => {
-            console.log('Disconnected from host');
+            console.log('[NetworkSystem] Disconnected from host');
             network.hostConnection = null;
             network.hostId = null;
 
@@ -195,7 +229,10 @@ export function connectToHost(hostInviteCode) {
         });
 
         conn.on('error', (err) => {
-            console.error('Failed to connect to host:', err);
+            isResolved = true;
+            clearTimeout(connectionTimeout);
+            console.error('[NetworkSystem] Connection error:', err);
+            console.error('[NetworkSystem] Error type:', err.type || 'unknown');
             reject(err);
         });
     });
