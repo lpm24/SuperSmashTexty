@@ -228,6 +228,10 @@ function setupClientHandlers() {
             // Remove enemies that no longer exist on host
             mpGame.enemies.forEach((enemy, id) => {
                 if (!receivedIds.has(id) && enemy.exists()) {
+                    // Clean up health bars before destroying
+                    if (enemy.cleanupHealthBars && typeof enemy.cleanupHealthBars === 'function') {
+                        enemy.cleanupHealthBars();
+                    }
                     mpGame.k.destroy(enemy); // Use Kaplay's destroy method
                     mpGame.enemies.delete(id);
                 }
@@ -414,10 +418,15 @@ function setupClientHandlers() {
         // Remove the entity from tracking and destroy it
         const entity = mpGame.enemies.get(payload.entityId) || mpGame.players.get(payload.entityId);
         if (entity && entity.exists()) {
-            // Trigger death animation/effects if available
-            if (entity.onDeath && typeof entity.onDeath === 'function') {
-                entity.onDeath();
+            // Clean up health bars before destroying entity
+            if (entity.cleanupHealthBars && typeof entity.cleanupHealthBars === 'function') {
+                entity.cleanupHealthBars();
             }
+
+            // Don't trigger onDeath for network-destroyed entities
+            // The host already handled death effects (splitting, explosions, etc.)
+            // and will broadcast any spawned entities separately
+            // This prevents errors from death handlers trying to spawn entities on clients
 
             // Destroy the entity
             mpGame.k.destroy(entity);
@@ -457,6 +466,7 @@ function setupClientHandlers() {
                     mpGame.k.pos(player.pos.x, player.pos.y - 40),
                     mpGame.k.anchor('center'),
                     mpGame.k.color(100, 255, 100),
+                    mpGame.k.opacity(1), // Required for lifespan component
                     mpGame.k.lifespan(2),
                     mpGame.k.z(1000)
                 ]);
@@ -607,7 +617,7 @@ function collectGameState() {
                 id: Number(entityId),
                 x: Number(enemy.pos.x),
                 y: Number(enemy.pos.y),
-                hp: Number(enemy.hp || 0),
+                hp: Number(enemy.hp() || 0),
                 type: String(enemy.enemyType || 'basic')
             });
         } else {
@@ -684,8 +694,9 @@ function sendInputState() {
     if (!localPlayer || !localPlayer.exists()) return;
 
     // Extract move as plain object (Vec2 has functions that can't be serialized)
-    const move = localPlayer.move
-        ? { x: Number(localPlayer.move.x || 0), y: Number(localPlayer.move.y || 0) }
+    // Read from moveDir (local keyboard input) not move (remote network input)
+    const move = localPlayer.moveDir
+        ? { x: Number(localPlayer.moveDir.x || 0), y: Number(localPlayer.moveDir.y || 0) }
         : { x: 0, y: 0 };
 
     sendToHost('player_input', {
