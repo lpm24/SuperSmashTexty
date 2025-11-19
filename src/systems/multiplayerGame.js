@@ -78,6 +78,8 @@ export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null
     if (isHost) {
         setupHostHandlers();
     } else {
+        // Reset handler registration flag to allow re-registration on reconnect
+        multiplayerClientHandlersRegistered = false;
         setupClientHandlers();
     }
 }
@@ -188,18 +190,18 @@ function setupHostHandlers() {
 }
 
 // Flag to prevent duplicate handler registration
-let clientHandlersRegistered = false;
+let multiplayerClientHandlersRegistered = false;
 
 /**
  * Set up message handlers for client
  */
 function setupClientHandlers() {
     // Prevent duplicate handler registration (memory leak fix)
-    if (clientHandlersRegistered) {
+    if (multiplayerClientHandlersRegistered) {
         console.log('[Multiplayer] Client handlers already registered, skipping duplicate registration');
         return;
     }
-    clientHandlersRegistered = true;
+    multiplayerClientHandlersRegistered = true;
     console.log('[Multiplayer] Registering client message handlers');
 
     // Receive game state updates from host
@@ -988,7 +990,7 @@ export function cleanupMultiplayer() {
     mpGame.nextEntityId = 1;
 
     // Reset client handler registration flag (allows re-registration on reconnect)
-    clientHandlersRegistered = false;
+    multiplayerClientHandlersRegistered = false;
 
     console.log('Multiplayer session cleaned up');
 }

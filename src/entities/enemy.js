@@ -19,7 +19,7 @@ import { getEnemyDefinition } from '../data/enemies.js';
 import { getSmartMoveDirection, getPerimeterMoveDirection } from '../systems/pathfinding.js';
 import { registerEnemy, isHost, isMultiplayerActive, broadcastEnemySplit } from '../systems/multiplayerGame.js';
 
-export function createEnemy(k, x, y, type = 'basic', floor = 1) {
+export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     const baseConfig = getEnemyDefinition(type);
     
     // Scale stats based on floor
@@ -91,22 +91,28 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
     
     if (floor >= 2) {
         // Floor 2+: Some enemies get armor (30% chance, or specific types)
-        if (floor >= 2 && (type === 'zombie' || type === 'turret' || type === 'heavyTank' || Math.random() < 0.3)) {
+        // Use seeded RNG if provided, fall back to Math.random() for backwards compatibility
+        const armorRoll = rng ? rng.next() : Math.random();
+        if (floor >= 2 && (type === 'zombie' || type === 'turret' || type === 'heavyTank' || armorRoll < 0.3)) {
             floorArmorBonus = Math.floor(15 + (floor - 2) * 5); // 15 base, +5 per floor
         }
     }
-    
+
     if (floor >= 3) {
         // Floor 3+: Some enemies get shields (20% chance, or specific types)
-        if (type === 'shooter' || type === 'turret' || type === 'wraith' || Math.random() < 0.2) {
+        // Use seeded RNG if provided, fall back to Math.random() for backwards compatibility
+        const shieldRoll = rng ? rng.next() : Math.random();
+        if (type === 'shooter' || type === 'turret' || type === 'wraith' || shieldRoll < 0.2) {
             floorShieldBonus = Math.floor(10 + (floor - 3) * 5); // 10 base, +5 per floor
             floorShieldRegen = 1 + (floor - 3) * 0.5; // 1 HP/sec base, +0.5 per floor
         }
     }
-    
+
     if (floor >= 4) {
         // Floor 4+: Some enemies get both armor and shields (10% chance, or specific types)
-        if (type === 'heavyTank' || type === 'spawner' || Math.random() < 0.1) {
+        // Use seeded RNG if provided, fall back to Math.random() for backwards compatibility
+        const bothRoll = rng ? rng.next() : Math.random();
+        if (type === 'heavyTank' || type === 'spawner' || bothRoll < 0.1) {
             if (floorArmorBonus === 0) floorArmorBonus = Math.floor(20 + (floor - 4) * 5);
             if (floorShieldBonus === 0) {
                 floorShieldBonus = Math.floor(15 + (floor - 4) * 5);
@@ -1114,25 +1120,29 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
         
         // Exploder explosion
         if (enemy.explodes && enemy.hp() <= 0) {
-            // Damage player if within explosion radius
-            const player = k.get('player')[0];
-            if (player && player.exists()) {
-                const explosionDir = k.vec2(
-                    player.pos.x - enemy.pos.x,
-                    player.pos.y - enemy.pos.y
-                );
-                const explosionDistance = explosionDir.len();
-                
-                if (explosionDistance <= enemy.explosionRadius) {
-                    // Player is in explosion radius
-                    if (!player.invulnerable) {
-                        const finalDamage = Math.max(1, enemy.explosionDamage - (player.defense || 0));
-                        player.hurt(finalDamage);
-                        player.invulnerable = true;
-                        player.invulnerableTime = player.invulnerableDuration;
-                        player.color = k.rgb(255, 100, 100);
+            // Damage all players within explosion radius (only host in multiplayer)
+            if (!isMultiplayerActive() || isHost()) {
+                const allPlayers = k.get('player');
+                allPlayers.forEach(player => {
+                    if (player && player.exists() && !player.isDead) {
+                        const explosionDir = k.vec2(
+                            player.pos.x - enemy.pos.x,
+                            player.pos.y - enemy.pos.y
+                        );
+                        const explosionDistance = explosionDir.len();
+
+                        if (explosionDistance <= enemy.explosionRadius) {
+                            // Player is in explosion radius
+                            if (!player.invulnerable) {
+                                const finalDamage = Math.max(1, enemy.explosionDamage - (player.defense || 0));
+                                player.hurt(finalDamage);
+                                player.invulnerable = true;
+                                player.invulnerableTime = player.invulnerableDuration;
+                                player.color = k.rgb(255, 100, 100);
+                            }
+                        }
                     }
-                }
+                });
             }
             
             // Visual explosion effect (could add particles later)

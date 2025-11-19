@@ -42,7 +42,7 @@ import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.j
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
 import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued } from '../systems/multiplayerGame.js';
-import { onMessage } from '../systems/networkSystem.js';
+import { onMessage, offMessage } from '../systems/networkSystem.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
@@ -81,7 +81,7 @@ let runStats = {
 };
 
 // Flag to prevent duplicate client message handler registration (memory leak fix)
-let clientMessageHandlersRegistered = false;
+let gameSceneMessageHandlersRegistered = false;
 
 // Apply permanent upgrades to player
 function applyPermanentUpgrades(k, player) {
@@ -158,7 +158,7 @@ export function setupGameScene(k) {
                 bossesKilled: 0
             };
             // Reset client message handler registration flag (allows re-registration on new game)
-            clientMessageHandlersRegistered = false;
+            gameSceneMessageHandlersRegistered = false;
             // Reset weapon detail saved state
             if (k.gameData) {
                 k.gameData.weaponDetailSavedState = undefined;
@@ -441,11 +441,14 @@ export function setupGameScene(k) {
 
             console.log('[Multiplayer] Spawned', players.length, 'players');
 
+            // Flag to prevent duplicate door transitions (used in message handler and update loop)
+            let doorEntered = false;
+
             // Listen for room transition from host (client only)
             if (!isHost()) {
                 // Prevent duplicate handler registration (memory leak fix)
-                if (!clientMessageHandlersRegistered) {
-                    clientMessageHandlersRegistered = true;
+                if (!gameSceneMessageHandlersRegistered) {
+                    gameSceneMessageHandlersRegistered = true;
                     console.log('[Multiplayer] Registering client message handlers for game scene');
 
                 onMessage('room_transition', (data) => {
@@ -2336,7 +2339,7 @@ export function setupGameScene(k) {
                         // Spawn random enemy type based on floor (host will broadcast this)
                         // Use seeded RNG in multiplayer to ensure consistent enemy types
                         const enemyType = getRandomEnemyType(currentFloor, spawnRng);
-                        const enemy = createEnemy(k, offsetX, offsetY, enemyType, currentFloor);
+                        const enemy = createEnemy(k, offsetX, offsetY, enemyType, currentFloor, spawnRng);
 
                         // Register enemy for multiplayer sync (only if host)
                         if (isMultiplayerActive() && isHost()) {
@@ -2369,7 +2372,7 @@ export function setupGameScene(k) {
 
                         // Use seeded RNG in multiplayer to ensure consistent enemy types
                         const enemyType = getRandomEnemyType(currentFloor, spawnRng);
-                        const enemy = createEnemy(k, x, y, enemyType, currentFloor);
+                        const enemy = createEnemy(k, x, y, enemyType, currentFloor, spawnRng);
 
                         // Register enemy for multiplayer sync (only if host)
                         if (isMultiplayerActive() && isHost()) {
@@ -2945,7 +2948,6 @@ export function setupGameScene(k) {
         }));
 
         // Handle door interaction (proximity-based)
-        let doorEntered = false;
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused || doorEntered) return;
 
@@ -3407,6 +3409,12 @@ export function setupGameScene(k) {
 
             // In multiplayer, don't end the game immediately - only host checks if all players are dead
             if (partySize > 1) {
+                // Broadcast player death FIRST to prevent race conditions
+                if (isMultiplayerActive() && player.slotIndex !== undefined) {
+                    broadcastPlayerDeath(player.slotIndex);
+                }
+
+                // Then set death state locally
                 player.isDead = true;
                 player.canMove = false;
                 player.canShoot = false;
@@ -3415,11 +3423,6 @@ export function setupGameScene(k) {
                 player.opacity = 0.5;
                 if (player.outline && player.outline.exists()) {
                     player.outline.opacity = 0.5;
-                }
-
-                // Broadcast player death immediately to all clients/host
-                if (isMultiplayerActive() && player.slotIndex !== undefined) {
-                    broadcastPlayerDeath(player.slotIndex);
                 }
 
                 // Only host checks if all players are dead
@@ -3702,14 +3705,39 @@ export function setupGameScene(k) {
         // Cleanup event handlers on scene leave (memory leak fix)
         k.onSceneLeave(() => {
             console.log('[Game] Cleaning up event handlers...');
-            // Cancel all update handlers
+
+            // Cancel all update handlers with error protection
             eventHandlers.updates.forEach(handler => {
-                if (handler && handler.cancel) handler.cancel();
+                try {
+                    if (handler && handler.cancel) handler.cancel();
+                } catch (err) {
+                    console.warn('[Game] Error canceling update handler:', err);
+                }
             });
-            // Cancel all keypress handlers
+
+            // Cancel all keypress handlers with error protection
             eventHandlers.keyPresses.forEach(handler => {
-                if (handler && handler.cancel) handler.cancel();
+                try {
+                    if (handler && handler.cancel) handler.cancel();
+                } catch (err) {
+                    console.warn('[Game] Error canceling keypress handler:', err);
+                }
             });
+
+            // Unregister network message handlers (if client)
+            if (!isHost() && isMultiplayerActive()) {
+                try {
+                    offMessage('room_transition');
+                    offMessage('room_completed');
+                    offMessage('game_over');
+                    console.log('[Game] Unregistered client message handlers');
+                } catch (err) {
+                    console.warn('[Game] Error unregistering message handlers:', err);
+                }
+                // Reset the flag to allow re-registration
+                gameSceneMessageHandlersRegistered = false;
+            }
+
             console.log('[Game] Cleaned up', eventHandlers.updates.length, 'update handlers and', eventHandlers.keyPresses.length, 'keypress handlers');
         });
     });
