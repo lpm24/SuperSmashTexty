@@ -24,9 +24,11 @@ import { createObstacle } from '../entities/obstacle.js';
 import { createProjectile } from '../entities/projectile.js';
 
 // System imports
+import { SpatialGrid } from '../systems/spatialGrid.js';
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
+import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
@@ -177,6 +179,13 @@ export function setupGameScene(k) {
 
         // Flag to prevent duplicate door transitions (used in message handler and update loop)
         let doorEntered = false;
+
+        // Initialize spatial grids for performance optimization (see src/systems/spatialGrid.js)
+        const spatialGrids = {
+            enemies: new SpatialGrid(128),    // Grid for enemies, bosses, minibosses
+            obstacles: new SpatialGrid(128),  // Grid for obstacles (walls, decorations)
+            pickups: new SpatialGrid(128)     // Grid for pickups (XP, currency, powerups)
+        };
 
         // Get party size early for multiplayer checks throughout the scene
         const partySize = getPartySize();
@@ -1342,6 +1351,26 @@ export function setupGameScene(k) {
         k.gameData.minimapSavedMode = undefined;
         k.gameData.tooltipSavedState = undefined;
 
+        // Rebuild spatial grids each frame for fast spatial queries
+        // Note: Rebuilding is O(n), but enables O(1) queries instead of O(n) per query
+        // With multiple queries per frame (collision, explosions, pickups), this is a net win
+        eventHandlers.updates.push(k.onUpdate(() => {
+            // Rebuild enemy grid (includes enemies, bosses, minibosses)
+            spatialGrids.enemies.clear();
+            k.get('enemy').forEach(e => spatialGrids.enemies.insert(e));
+            k.get('boss').forEach(b => spatialGrids.enemies.insert(b));
+            k.get('miniboss').forEach(m => spatialGrids.enemies.insert(m));
+
+            // Rebuild pickup grid (includes XP, currency, powerup weapons)
+            spatialGrids.pickups.clear();
+            k.get('xpPickup').forEach(p => spatialGrids.pickups.insert(p));
+            k.get('currencyPickup').forEach(p => spatialGrids.pickups.insert(p));
+            k.get('powerupWeaponPickup').forEach(p => spatialGrids.pickups.insert(p));
+
+            // Obstacles are static, so we only rebuild when entering a new room
+            // (We'll add obstacle insertion in room generation code later)
+        }));
+
         // Hover detection for tooltips
         eventHandlers.updates.push(k.onUpdate(() => {
             // Don't show tooltips when paused or during upgrade draft
@@ -1985,11 +2014,11 @@ export function setupGameScene(k) {
         
         // Determine if this room should have a miniboss (random chance, not in boss rooms)
         // 15% chance for miniboss room, increases with floor
-        // Use seeded RNG for multiplayer consistency
-        const roomRng = partySize > 1 ? getRoomRNG() : null;
+        // Use seeded RNG for multiplayer consistency (and single player for consistency)
+        const roomRng = partySize > 1 ? getRoomRNG() : new SeededRandom(Date.now());
         if (!isBossRoom && currentRoom !== 1) { // Don't spawn miniboss in first room or boss room
             const minibossChance = 0.15 + (currentFloor - 1) * 0.05; // 15% base, +5% per floor
-            isMinibossRoom = (roomRng ? roomRng.next() : Math.random()) < minibossChance;
+            isMinibossRoom = roomRng.next() < minibossChance;
         }
 
         // If miniboss room, reduce normal enemy count
@@ -1999,18 +2028,16 @@ export function setupGameScene(k) {
 
         // Get random miniboss type for floor
         // Use seeded RNG for multiplayer consistency
-        function getRandomMinibossType(floor, rng = null) {
+        function getRandomMinibossType(floor, rng) {
             const minibossTypes = ['brute', 'sentinel', 'berserker', 'guardian', 'warlock'];
             // Weight certain types by floor
             if (floor >= 3) {
                 // Higher floors get more variety
-                const index = rng ? rng.range(0, minibossTypes.length) : Math.floor(Math.random() * minibossTypes.length);
-                return minibossTypes[index];
+                return minibossTypes[rng.range(0, minibossTypes.length)];
             } else {
                 // Lower floors get simpler types
                 const simpleTypes = ['brute', 'berserker', 'guardian'];
-                const index = rng ? rng.range(0, simpleTypes.length) : Math.floor(Math.random() * simpleTypes.length);
-                return simpleTypes[index];
+                return simpleTypes[rng.range(0, simpleTypes.length)];
             }
         }
         
@@ -2416,14 +2443,17 @@ export function setupGameScene(k) {
                             }
                         }
 
-                        // Damage other enemies in range
-                        k.get('enemy').forEach(other => {
+                        // Damage other enemies in range (optimized with spatial grid)
+                        // OLD: k.get('enemy').forEach() - checks ALL enemies (O(n))
+                        // NEW: getNearby() - only checks enemies in nearby grid cells (O(1))
+                        const nearbyEnemies = spatialGrids.enemies.getNearby(posX, posY, explosionRadius);
+                        nearbyEnemies.forEach(other => {
                             if (other === enemy || !other.exists()) return;
-                            const distToOther = Math.sqrt(
-                                Math.pow(other.pos.x - posX, 2) +
-                                Math.pow(other.pos.y - posY, 2)
-                            );
-                            if (distToOther <= explosionRadius) {
+                            // Use squared distance to avoid expensive sqrt
+                            const dx = other.pos.x - posX;
+                            const dy = other.pos.y - posY;
+                            const distSq = dx * dx + dy * dy;
+                            if (distSq <= explosionRadius * explosionRadius) {
                                 other.hurt(explosionDamage);
                             }
                         });
@@ -2654,7 +2684,28 @@ export function setupGameScene(k) {
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
-            k.get('xpPickup').forEach(pickup => {
+            // OPTIMIZATION: Instead of checking ALL pickups, only check pickups near players
+            // Get nearby pickups using spatial grid (much faster than k.get('xpPickup'))
+            const pickupCheckRadius = player.pickupRadius * 1.5; // Add buffer for safety
+            const nearbyPickups = new Set(); // Use Set to avoid duplicates in multiplayer
+
+            // In single player, only check near the player
+            if (partySize === 1) {
+                spatialGrids.pickups.getNearby(player.pos.x, player.pos.y, pickupCheckRadius).forEach(p => {
+                    if (p.is && p.is('xpPickup')) nearbyPickups.add(p);
+                });
+            } else {
+                // In multiplayer, check near ALL players
+                players.forEach(p => {
+                    if (p.exists() && !p.isDead) {
+                        spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
+                            if (pickup.is && pickup.is('xpPickup')) nearbyPickups.add(pickup);
+                        });
+                    }
+                });
+            }
+
+            nearbyPickups.forEach(pickup => {
                 if (pickup.collected) return;
 
                 // In multiplayer, check distance to ALL players
@@ -2778,7 +2829,25 @@ export function setupGameScene(k) {
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
-            k.get('currencyPickup').forEach(pickup => {
+            // OPTIMIZATION: Only check pickups near players (using spatial grid)
+            const pickupCheckRadius = player.pickupRadius * 1.5;
+            const nearbyPickups = new Set();
+
+            if (partySize === 1) {
+                spatialGrids.pickups.getNearby(player.pos.x, player.pos.y, pickupCheckRadius).forEach(p => {
+                    if (p.is && p.is('currencyPickup')) nearbyPickups.add(p);
+                });
+            } else {
+                players.forEach(p => {
+                    if (p.exists() && !p.isDead) {
+                        spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
+                            if (pickup.is && pickup.is('currencyPickup')) nearbyPickups.add(pickup);
+                        });
+                    }
+                });
+            }
+
+            nearbyPickups.forEach(pickup => {
                 if (pickup.collected) return;
 
                 // In multiplayer, check distance to ALL players
@@ -2882,8 +2951,10 @@ export function setupGameScene(k) {
                 }
             });
 
-            // Handle powerup weapon pickup collection
-            k.get('powerupWeaponPickup').forEach(pickup => {
+            // Handle powerup weapon pickup collection (optimized with spatial grid)
+            const nearbyPowerups = spatialGrids.pickups.getNearby(player.pos.x, player.pos.y, player.pickupRadius * 1.5);
+            nearbyPowerups.forEach(pickup => {
+                if (!pickup.is || !pickup.is('powerupWeaponPickup')) return;
                 if (pickup.collected) return;
 
                 const distance = k.vec2(

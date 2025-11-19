@@ -521,27 +521,31 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
         
         // Shield regeneration (if shields exist and regen rate > 0)
         // Only regen if cooldown has expired (not damaged recently) and enemy is alive
+        // Host-authoritative in multiplayer to prevent desync from frame rate differences
         if (enemy.shieldRegenRate > 0 && enemy.shieldHealth < enemy.maxShieldHealth && enemy.hp() > 0 && !enemy.isDead) {
-            // Update cooldown timer
-            if (enemy.shieldRegenCooldown > 0) {
-                enemy.shieldRegenCooldown -= k.dt();
-            }
-            
-            // Only regenerate if cooldown has expired
-            if (enemy.shieldRegenCooldown <= 0) {
-                enemy.shieldRegenTimer += k.dt();
-                const regenInterval = 1.0; // Regenerate every second
-                
-                if (enemy.shieldRegenTimer >= regenInterval) {
-                    const regenAmount = enemy.shieldRegenRate * regenInterval;
-                    enemy.shieldHealth = Math.min(enemy.maxShieldHealth, enemy.shieldHealth + regenAmount);
-                    enemy.shieldRegenTimer = 0;
-                    
-                    // Update visual if shield regenerated
-                    if (enemy.shieldHealth > 0) {
-                        enemy.updateVisual();
+            // Only process shield regen on host (or in single player)
+            if (!isMultiplayerActive() || isHost()) {
+                // Update cooldown timer
+                if (enemy.shieldRegenCooldown > 0) {
+                    enemy.shieldRegenCooldown -= k.dt();
+                }
+
+                // Only regenerate if cooldown has expired
+                if (enemy.shieldRegenCooldown <= 0) {
+                    enemy.shieldRegenTimer += k.dt();
+                    const regenInterval = 1.0; // Regenerate every second
+
+                    if (enemy.shieldRegenTimer >= regenInterval) {
+                        const regenAmount = enemy.shieldRegenRate * regenInterval;
+                        enemy.shieldHealth = Math.min(enemy.maxShieldHealth, enemy.shieldHealth + regenAmount);
+                        enemy.shieldRegenTimer = 0;
                     }
                 }
+            }
+
+            // Update visual on all clients (synced via game_state)
+            if (enemy.shieldHealth > 0 && enemy.updateVisual) {
+                enemy.updateVisual();
             }
         }
 
