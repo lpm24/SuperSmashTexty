@@ -2,7 +2,7 @@
 import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
 import { playUpgradeSelect } from '../systems/sounds.js';
-import { isMultiplayerActive, getUpgradeRNG } from '../systems/multiplayerGame.js';
+import { isMultiplayerActive, getUpgradeRNG, broadcastUpgradeSelected, broadcastSynergyActivated } from '../systems/multiplayerGame.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -196,7 +196,18 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         trackUpgrade(player, selected.key);
 
         // Check and apply synergies
-        checkAndApplySynergies(k, player);
+        const activatedSynergies = checkAndApplySynergies(k, player);
+
+        // Broadcast upgrade selection in multiplayer
+        if (isMultiplayerActive() && player.slotIndex !== undefined) {
+            broadcastUpgradeSelected(player.slotIndex, selected.key);
+
+            // Broadcast synergy activation if any synergies were activated
+            if (activatedSynergies && activatedSynergies.length > 0) {
+                const synergyNames = activatedSynergies.map(s => s.name);
+                broadcastSynergyActivated(player.slotIndex, synergyNames);
+            }
+        }
 
         // Remove UI
         k.get('upgradeUI').forEach(obj => k.destroy(obj));

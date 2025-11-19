@@ -170,25 +170,25 @@ export function playPistolFire() {
   const variation = Math.random();
 
   if (variation < 0.33) {
-    // Sharp click
-    playTone(vary(150, 0.2), 0.08, 'square', 0.15, {
-      attack: 0.001,
+    // Smooth pop with triangle wave
+    playTone(vary(280, 0.15), 0.08, 'triangle', 0.14, {
+      attack: 0.002,
       decay: 0.05,
-      pitchBend: 0.5
+      pitchBend: 0.65
     });
   } else if (variation < 0.66) {
-    // Medium pop
-    playTone(vary(180, 0.2), 0.09, 'square', 0.15, {
-      attack: 0.001,
+    // Softer shot with sine wave
+    playTone(vary(320, 0.15), 0.09, 'sine', 0.13, {
+      attack: 0.003,
       decay: 0.06,
-      pitchBend: 0.6
+      pitchBend: 0.7
     });
   } else {
-    // Higher pitch
-    playTone(vary(200, 0.2), 0.07, 'square', 0.15, {
-      attack: 0.001,
+    // Crisp but pleasant with triangle
+    playTone(vary(300, 0.15), 0.07, 'triangle', 0.14, {
+      attack: 0.002,
       decay: 0.04,
-      pitchBend: 0.4
+      pitchBend: 0.6
     });
   }
 }

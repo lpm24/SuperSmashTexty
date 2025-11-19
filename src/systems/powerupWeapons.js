@@ -8,6 +8,7 @@
  */
 
 import { WEAPON_DEFINITIONS } from '../data/weapons.js';
+import { isMultiplayerActive, isHost, broadcastPowerupExpired } from './multiplayerGame.js';
 
 // Powerup weapon definitions
 export const POWERUP_WEAPONS = {
@@ -214,6 +215,10 @@ export function updatePowerupWeapon(player, dt = 0) {
     // Update ammo-based powerups
     if (powerup.isAmmoBased && player.powerupAmmo !== null) {
         if (player.powerupAmmo <= 0) {
+            // Broadcast expiration before restoring (only host in multiplayer)
+            if (isMultiplayerActive() && isHost() && player.slotIndex !== undefined) {
+                broadcastPowerupExpired(player.slotIndex, player.powerupWeapon);
+            }
             restoreOriginalWeapon(player);
             return true;
         }
@@ -223,6 +228,10 @@ export function updatePowerupWeapon(player, dt = 0) {
     if (powerup.isTimeBased && player.powerupDuration !== null) {
         player.powerupDuration -= dt;
         if (player.powerupDuration <= 0) {
+            // Broadcast expiration before restoring (only host in multiplayer)
+            if (isMultiplayerActive() && isHost() && player.slotIndex !== undefined) {
+                broadcastPowerupExpired(player.slotIndex, player.powerupWeapon);
+            }
             restoreOriginalWeapon(player);
             return true;
         }

@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued } from '../systems/multiplayerGame.js';
 import { onMessage } from '../systems/networkSystem.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
@@ -79,6 +79,9 @@ let runStats = {
     enemiesKilled: 0,
     bossesKilled: 0
 };
+
+// Flag to prevent duplicate client message handler registration (memory leak fix)
+let clientMessageHandlersRegistered = false;
 
 // Apply permanent upgrades to player
 function applyPermanentUpgrades(k, player) {
@@ -154,6 +157,8 @@ export function setupGameScene(k) {
                 enemiesKilled: 0,
                 bossesKilled: 0
             };
+            // Reset client message handler registration flag (allows re-registration on new game)
+            clientMessageHandlersRegistered = false;
             // Reset weapon detail saved state
             if (k.gameData) {
                 k.gameData.weaponDetailSavedState = undefined;
@@ -163,6 +168,12 @@ export function setupGameScene(k) {
         // Use persistent game state
         let currentFloor = gameState.currentFloor;
         let currentRoom = gameState.currentRoom;
+
+        // Track event handlers for cleanup (memory leak fix)
+        const eventHandlers = {
+            updates: [],
+            keyPresses: []
+        };
 
         // Get party size early for multiplayer checks throughout the scene
         const partySize = getPartySize();
@@ -252,6 +263,12 @@ export function setupGameScene(k) {
             if (player.upgradeStacks && Object.keys(player.upgradeStacks).length > 0) {
                 recalculateAllUpgrades(player);
             }
+            console.log('[Game] Restored player stats from gameState:', {
+                level: player.level,
+                health: `${player.hp()}/${player.maxHealth}`,
+                upgrades: Object.keys(player.upgradeStacks || {}).length,
+                isRemote: gameState.playerStats.isRemote
+            });
         } else {
             // New game - create fresh player
             player = createPlayer(k, playerSpawnX, playerSpawnY);
@@ -426,11 +443,34 @@ export function setupGameScene(k) {
 
             // Listen for room transition from host (client only)
             if (!isHost()) {
+                // Prevent duplicate handler registration (memory leak fix)
+                if (!clientMessageHandlersRegistered) {
+                    clientMessageHandlersRegistered = true;
+                    console.log('[Multiplayer] Registering client message handlers for game scene');
+
                 onMessage('room_transition', (data) => {
-                    console.log('[Multiplayer] Received room transition from host with entry direction:', data.entryDirection);
+                    console.log('[Multiplayer] Received room transition from host with entry direction:', data.entryDirection, 'and stats for', data.allPlayerStats?.length || 0, 'players');
 
                     // Update gameState to match host's entry direction for consistent spawn positions
                     gameState.entryDirection = data.entryDirection;
+
+                    // Save player stats to gameState so they persist across scene reload
+                    if (data.allPlayerStats) {
+                        gameState.allPlayerStats = data.allPlayerStats;
+                        // Find local player stats by matching slot index (not by isRemote flag!)
+                        // On client, localSlot is our slot index in the party
+                        const localPlayerStats = data.allPlayerStats.find(stats => stats.slotIndex === localSlot);
+                        if (localPlayerStats) {
+                            gameState.playerStats = localPlayerStats;
+                            console.log('[Multiplayer] Client found and saved local player stats for slot', localSlot, ':', {
+                                level: localPlayerStats.level,
+                                health: `${localPlayerStats.currentHP}/${localPlayerStats.maxHealth}`,
+                                upgrades: Object.keys(localPlayerStats.upgradeStacks || {}).length
+                            });
+                        } else {
+                            console.warn('[Multiplayer] Client could not find stats for local slot', localSlot);
+                        }
+                    }
 
                     // Prevent duplicate transitions
                     if (doorEntered) return;
@@ -490,6 +530,76 @@ export function setupGameScene(k) {
                         currencyEarned: currencyEarned
                     });
                 });
+
+                // Listen for powerup weapon application from host
+                onMessage('powerup_weapon_applied', (data) => {
+                    console.log('[Multiplayer] Received powerup weapon application:', data.powerupKey);
+
+                    // Apply powerup to all players (client-side visual update)
+                    // The actual weapon stats will be synced via game_state
+                    players.forEach(p => {
+                        if (p.exists()) {
+                            applyPowerupWeapon(p, data.powerupKey);
+                        }
+                    });
+                });
+
+                // Listen for upgrade selection from host/clients
+                onMessage('upgrade_selected', (data) => {
+                    console.log('[Multiplayer] Received upgrade selection:', data.upgradeKey, 'for slot:', data.slotIndex);
+
+                    // Find the player who selected the upgrade
+                    const upgradingPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (upgradingPlayer && upgradingPlayer.exists()) {
+                        // Apply upgrade locally (stats will sync via game_state but this is immediate)
+                        applyUpgrade(upgradingPlayer, data.upgradeKey);
+                        trackUpgrade(upgradingPlayer, data.upgradeKey);
+                        checkAndApplySynergies(k, upgradingPlayer);
+                    }
+                });
+
+                // Listen for level up queued events
+                onMessage('level_up_queued', (data) => {
+                    console.log('[Multiplayer] Received level up queued:', data.level, 'for slot:', data.slotIndex);
+
+                    // Find the player who leveled up
+                    const leveledPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (leveledPlayer && leveledPlayer.exists()) {
+                        // Initialize pendingLevelUps if needed
+                        if (!leveledPlayer.pendingLevelUps) {
+                            leveledPlayer.pendingLevelUps = [];
+                        }
+                        // Queue the level up
+                        if (!leveledPlayer.pendingLevelUps.includes(data.level)) {
+                            leveledPlayer.pendingLevelUps.push(data.level);
+                        }
+                    }
+                });
+
+                // Listen for synergy activation
+                onMessage('synergy_activated', (data) => {
+                    console.log('[Multiplayer] Received synergy activation:', data.synergies, 'for slot:', data.slotIndex);
+
+                    // Find the player who activated synergies
+                    const synergyPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (synergyPlayer && synergyPlayer.exists()) {
+                        // Apply synergies immediately
+                        checkAndApplySynergies(k, synergyPlayer);
+                    }
+                });
+
+                // Listen for powerup weapon expiration
+                onMessage('powerup_expired', (data) => {
+                    console.log('[Multiplayer] Received powerup expiration:', data.powerupKey, 'for slot:', data.slotIndex);
+
+                    // Find the player whose powerup expired
+                    const expiringPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (expiringPlayer && expiringPlayer.exists()) {
+                        // Restore original weapon
+                        restoreOriginalWeapon(expiringPlayer);
+                    }
+                });
+                } // End of handler registration guard
             }
         }
 
@@ -1229,7 +1339,7 @@ export function setupGameScene(k) {
         k.gameData.tooltipSavedState = undefined;
 
         // Hover detection for tooltips
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             // Don't show tooltips when paused or during upgrade draft
             if (k.paused || isUpgradeDraftActive()) {
                 return;
@@ -1374,18 +1484,18 @@ export function setupGameScene(k) {
         bossShieldText.hidden = true;
         
         // Update particle system
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (k.paused) return;
             updateParticles(k);
-        });
+        }));
 
         // Update multiplayer system
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (k.paused) return;
             if (isMultiplayerActive()) {
                 updateMultiplayer(k.dt());
             }
-        });
+        }));
 
         // Update HUD
         k.onUpdate(() => {
@@ -2355,14 +2465,26 @@ export function setupGameScene(k) {
                         enemy.cleanupHealthBars();
                     }
 
-                    // Broadcast enemy death to clients (if host)
-                    if (isMultiplayerActive() && isHost() && enemy.mpEntityId) {
-                        broadcastDeathEvent({
-                            entityId: enemy.mpEntityId,
-                            entityType: 'enemy',
-                            x: posX,
-                            y: posY
-                        });
+                    // Broadcast enemy death to all players (host broadcasts to clients, client sends to host)
+                    if (isMultiplayerActive() && enemy.mpEntityId) {
+                        if (isHost()) {
+                            // Host broadcasts death to all clients
+                            broadcastDeathEvent({
+                                entityId: enemy.mpEntityId,
+                                entityType: 'enemy',
+                                x: posX,
+                                y: posY
+                            });
+                        } else {
+                            // Client sends death notification to host
+                            // The host will then broadcast to all clients
+                            sendEnemyDeath({
+                                entityId: enemy.mpEntityId,
+                                entityType: 'enemy',
+                                x: posX,
+                                y: posY
+                            });
+                        }
                     }
 
                     k.destroy(enemy);
@@ -2788,6 +2910,8 @@ export function setupGameScene(k) {
                         allPlayers.forEach(p => {
                             applyPowerupWeapon(p, pickup.powerupKey);
                         });
+                        // Broadcast powerup application to all clients
+                        broadcastPowerupWeaponApplied(pickup.powerupKey);
                     } else {
                         // Singleplayer: apply to local player only
                         applyPowerupWeapon(player, pickup.powerupKey);
@@ -3262,9 +3386,9 @@ export function setupGameScene(k) {
             gameState.currentFloor = currentFloor;
             gameState.currentRoom = currentRoom;
 
-            // In multiplayer, broadcast room transition to sync spawn positions
+            // In multiplayer, broadcast room transition to sync spawn positions and player stats
             if (isMultiplayerActive() && isHost()) {
-                broadcastRoomTransition(gameState.entryDirection);
+                broadcastRoomTransition(gameState.entryDirection, gameState.allPlayerStats);
             }
 
             // Restart game scene with new room/floor
@@ -3555,21 +3679,24 @@ export function setupGameScene(k) {
                 return; // Prevent escape key from interfering with upgrade selection
             }
 
-            k.paused = !k.paused;
-
-            // Synchronize pause state in multiplayer
+            // In multiplayer, only host changes pause state locally
+            // Clients send request and wait for host response
             if (isMultiplayerActive()) {
                 if (isHost()) {
-                    // Host: broadcast pause state to all clients
+                    // Host: change pause state and broadcast to all clients
+                    k.paused = !k.paused;
                     broadcastPauseState(k.paused);
+                    updatePauseUI(k.paused);
                 } else {
-                    // Client: send pause request to host
-                    sendPauseRequest(k.paused);
+                    // Client: send pause request to host (don't change local state yet)
+                    // The pause_state message from host will update our state
+                    sendPauseRequest(!k.paused);
                 }
+            } else {
+                // Single-player: change pause state directly
+                k.paused = !k.paused;
+                updatePauseUI(k.paused);
             }
-
-            // Update pause UI
-            updatePauseUI(k.paused);
         });
     });
 }

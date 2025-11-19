@@ -1068,8 +1068,13 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
     
     // Handle special death mechanics
     enemy.onDeath(() => {
-        // Slime splitting
+        // Slime splitting - only spawn on host in multiplayer to avoid desyncs
         if (enemy.splits && enemy.hp() <= 0) {
+            // In multiplayer, only host spawns split enemies and broadcasts them
+            if (isMultiplayerActive() && !isHost()) {
+                return; // Clients skip spawning - they'll receive spawn_entity messages
+            }
+
             const splitCount = 2; // Split into 2 smaller slimes
             for (let i = 0; i < splitCount; i++) {
                 const angle = (Math.PI * 2 / splitCount) * i;
@@ -1084,17 +1089,26 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                 smallSlime.size = Math.floor(smallSlime.size * 0.8);
                 smallSlime.splits = false; // Don't split again
                 smallSlime.isSplitEnemy = true; // Mark as split enemy for tracking
+
+                // Register split enemy for multiplayer sync (host only)
+                if (isMultiplayerActive() && isHost() && registerEnemy) {
+                    registerEnemy(smallSlime, {
+                        enemyType: 'slime',
+                        maxHealth: smallSlime.maxHealth,
+                        floor: enemy.floor,
+                        isSplitEnemy: true
+                    });
+                }
             }
 
-            // Increment split enemy counter (only on host in multiplayer)
-            if (!isMultiplayerActive() || isHost()) {
-                if (k.gameData && k.gameData.incrementSplitEnemies) {
-                    k.gameData.incrementSplitEnemies(splitCount);
-                }
-                // Broadcast split event to clients in multiplayer
-                if (isMultiplayerActive() && isHost()) {
-                    broadcastEnemySplit(splitCount);
-                }
+            // Increment split enemy counter
+            if (k.gameData && k.gameData.incrementSplitEnemies) {
+                k.gameData.incrementSplitEnemies(splitCount);
+            }
+
+            // Broadcast split event to clients in multiplayer
+            if (isMultiplayerActive() && isHost()) {
+                broadcastEnemySplit(splitCount);
             }
         }
         

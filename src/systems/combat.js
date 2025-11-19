@@ -109,6 +109,18 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
+        // Check if there are any enemies in the room (enemies, bosses, minibosses)
+        const enemies = k.get('enemy');
+        const bosses = k.get('boss');
+        const minibosses = k.get('miniboss');
+        const hasTargets = enemies.length > 0 || bosses.length > 0 || minibosses.length > 0;
+
+        // Don't shoot if there are no targets (except orbital weapons which are passive)
+        if (!hasTargets && player.weaponKey !== 'orbital') {
+            player.isShooting = false; // Track shooting state for multiplayer
+            return;
+        }
+
         // Handle orbital weapons (passive, no firing needed)
         if (player.weaponKey === 'orbital') {
             updateOrbitalWeapons(k, player);

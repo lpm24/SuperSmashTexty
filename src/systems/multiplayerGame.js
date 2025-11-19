@@ -161,6 +161,21 @@ function setupHostHandlers() {
         }
     });
 
+    // Handle enemy death notifications from clients
+    onMessage('enemy_death', (payload, fromPeerId) => {
+        console.log('[Multiplayer] Received enemy death from client:', fromPeerId, 'entity:', payload.entityId);
+
+        // Broadcast the death to all clients (including back to the sender for confirmation)
+        broadcast('entity_destroyed', {
+            entityId: payload.entityId,
+            entityType: payload.entityType,
+            x: payload.x,
+            y: payload.y
+        });
+
+        console.log('[Multiplayer] Host broadcasted enemy death to all clients');
+    });
+
     // Handle re-sync requests from clients
     onMessage('resync_request', (payload, fromPeerId) => {
         console.log('[Multiplayer] Re-sync requested by client:', fromPeerId);
@@ -172,10 +187,21 @@ function setupHostHandlers() {
     });
 }
 
+// Flag to prevent duplicate handler registration
+let clientHandlersRegistered = false;
+
 /**
  * Set up message handlers for client
  */
 function setupClientHandlers() {
+    // Prevent duplicate handler registration (memory leak fix)
+    if (clientHandlersRegistered) {
+        console.log('[Multiplayer] Client handlers already registered, skipping duplicate registration');
+        return;
+    }
+    clientHandlersRegistered = true;
+    console.log('[Multiplayer] Registering client message handlers');
+
     // Receive game state updates from host
     onMessage('game_state', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
@@ -961,6 +987,9 @@ export function cleanupMultiplayer() {
     // Reset entity ID counter
     mpGame.nextEntityId = 1;
 
+    // Reset client handler registration flag (allows re-registration on reconnect)
+    clientHandlersRegistered = false;
+
     console.log('Multiplayer session cleaned up');
 }
 
@@ -1193,6 +1222,115 @@ export function broadcastGameOver(runStats, currencyEarned) {
 }
 
 /**
+ * Broadcast powerup weapon application to all clients (host only)
+ * Called when a powerup weapon is picked up
+ * @param {string} powerupKey - Powerup weapon key
+ */
+export function broadcastPowerupWeaponApplied(powerupKey) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('powerup_weapon_applied', {
+        powerupKey: powerupKey,
+        timestamp: Date.now()
+    });
+
+    console.log('[Multiplayer] Broadcasted powerup weapon application:', powerupKey);
+}
+
+/**
+ * Broadcast upgrade selection (both host and client)
+ * Called when a player selects an upgrade
+ * @param {number} slotIndex - Player slot index
+ * @param {string} upgradeKey - Selected upgrade key
+ */
+export function broadcastUpgradeSelected(slotIndex, upgradeKey) {
+    if (!mpGame.isActive) return;
+
+    if (mpGame.isHost) {
+        broadcast('upgrade_selected', {
+            slotIndex: slotIndex,
+            upgradeKey: upgradeKey,
+            timestamp: Date.now()
+        });
+        console.log('[Multiplayer] Host broadcasted upgrade selection:', upgradeKey, 'for slot:', slotIndex);
+    } else {
+        sendToHost('upgrade_selected', {
+            slotIndex: slotIndex,
+            upgradeKey: upgradeKey
+        });
+        console.log('[Multiplayer] Client sent upgrade selection to host:', upgradeKey);
+    }
+}
+
+/**
+ * Broadcast level up queued event (both host and client)
+ * Called when a player levels up during combat
+ * @param {number} slotIndex - Player slot index
+ * @param {number} level - New level
+ */
+export function broadcastLevelUpQueued(slotIndex, level) {
+    if (!mpGame.isActive) return;
+
+    if (mpGame.isHost) {
+        broadcast('level_up_queued', {
+            slotIndex: slotIndex,
+            level: level,
+            timestamp: Date.now()
+        });
+        console.log('[Multiplayer] Host broadcasted level up queued:', level, 'for slot:', slotIndex);
+    } else {
+        sendToHost('level_up_queued', {
+            slotIndex: slotIndex,
+            level: level
+        });
+        console.log('[Multiplayer] Client sent level up queued to host');
+    }
+}
+
+/**
+ * Broadcast synergy activation (both host and client)
+ * Called when synergies are activated
+ * @param {number} slotIndex - Player slot index
+ * @param {Array<string>} synergyKeys - Activated synergy keys
+ */
+export function broadcastSynergyActivated(slotIndex, synergyKeys) {
+    if (!mpGame.isActive) return;
+
+    if (mpGame.isHost) {
+        broadcast('synergy_activated', {
+            slotIndex: slotIndex,
+            synergies: synergyKeys,
+            timestamp: Date.now()
+        });
+        console.log('[Multiplayer] Host broadcasted synergy activation:', synergyKeys, 'for slot:', slotIndex);
+    } else {
+        sendToHost('synergy_activated', {
+            slotIndex: slotIndex,
+            synergies: synergyKeys
+        });
+        console.log('[Multiplayer] Client sent synergy activation to host');
+    }
+}
+
+/**
+ * Broadcast powerup weapon expiration (host only)
+ * Called when powerup weapon expires (ammo or time)
+ * @param {number} slotIndex - Player slot index
+ * @param {string} powerupKey - Expired powerup key
+ */
+export function broadcastPowerupExpired(slotIndex, powerupKey) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('powerup_expired', {
+        slotIndex: slotIndex,
+        powerupKey: powerupKey,
+        timestamp: Date.now()
+    });
+
+    console.log('[Multiplayer] Broadcasted powerup expiration:', powerupKey, 'for slot:', slotIndex);
+}
+
+/**
  * Get the game seed (for synchronized random generation)
  * @returns {number} Game seed
  */
@@ -1290,6 +1428,19 @@ export function sendPauseRequest(paused) {
 }
 
 /**
+ * Send enemy death notification to host (client only)
+ * Called when a client kills an enemy to notify host and sync state
+ * @param {Object} deathData - Enemy death data { entityId, entityType, x, y }
+ */
+export function sendEnemyDeath(deathData) {
+    if (mpGame.isHost) return; // Host doesn't send to itself
+
+    sendToHost('enemy_death', deathData);
+
+    console.log(`[Multiplayer] Client sent enemy death to host:`, deathData.entityId);
+}
+
+/**
  * Broadcast room completion to all clients (host only)
  * Called when the host detects all enemies are defeated
  */
@@ -1315,15 +1466,19 @@ export function broadcastXPGain(xpValue) {
 
 /**
  * Broadcast room transition to all clients (host only)
- * Called when transitioning to a new room to sync spawn positions
+ * Called when transitioning to a new room to sync spawn positions and player stats
  * @param {string} entryDirection - Direction players will enter from ('north', 'south', 'east', 'west', or null)
+ * @param {Array} allPlayerStats - Stats for all players to restore after transition
  */
-export function broadcastRoomTransition(entryDirection) {
+export function broadcastRoomTransition(entryDirection, allPlayerStats = null) {
     if (!mpGame.isHost) return;
 
-    broadcast('room_transition', { entryDirection: entryDirection });
+    broadcast('room_transition', {
+        entryDirection: entryDirection,
+        allPlayerStats: allPlayerStats
+    });
 
-    console.log('[Multiplayer] Broadcasted room transition with entry direction:', entryDirection);
+    console.log('[Multiplayer] Broadcasted room transition with entry direction:', entryDirection, 'and player stats for', allPlayerStats?.length || 0, 'players');
 }
 
 /**

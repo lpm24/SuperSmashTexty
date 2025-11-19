@@ -23,7 +23,10 @@
       "Bash(bash:*)",
       "Bash(find:*)",
       "Bash(npx peerjs:*)",
-      "Bash(taskkill:*)"
+      "Bash(taskkill:*)",
+      "Bash(git checkout:*)",
+      "Bash(npm install:*)",
+      "Bash(npx gh-pages -d dist)"
     ],
     "deny": [],
     "ask": []

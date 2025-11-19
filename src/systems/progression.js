@@ -18,6 +18,9 @@ import { PROGRESSION_CONFIG } from '../config/constants.js';
 // Sound system imports
 import { playLevelUp } from './sounds.js';
 
+// Multiplayer imports
+import { broadcastLevelUpQueued } from './multiplayerGame.js';
+
 export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null, isMultiplayer = false) {
     let levelUpInProgress = false;
 
@@ -94,6 +97,12 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             } else {
                 // Not safe - queue level up for after room clear
                 player.pendingLevelUps.push(level);
+
+                // Broadcast level up queued event in multiplayer
+                if (isMultiplayer && player.slotIndex !== undefined) {
+                    broadcastLevelUpQueued(player.slotIndex, level);
+                }
+
                 k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION * 2, () => {
                     if (notification.exists()) k.destroy(notification);
                     levelUpInProgress = false;

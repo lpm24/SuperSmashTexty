@@ -311,6 +311,21 @@ export function onMessage(messageType, handler) {
 }
 
 /**
+ * Unregister a message handler
+ * @param {string} messageType - Type of message to remove
+ */
+export function offMessage(messageType) {
+    network.messageHandlers.delete(messageType);
+}
+
+/**
+ * Clear all message handlers (useful for cleanup)
+ */
+export function clearAllMessageHandlers() {
+    network.messageHandlers.clear();
+}
+
+/**
  * Register a connection callback
  * @param {Function} callback - Callback function (event, peerId) => void
  *                              event can be 'join', 'leave', 'host_disconnect'
