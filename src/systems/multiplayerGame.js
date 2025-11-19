@@ -15,7 +15,9 @@ const mpGame = {
     players: new Map(), // Map of slotIndex -> player entity
     localPlayerSlot: 0, // Which slot is the local player
     lastSyncTime: 0,
-    syncInterval: 1 / 20, // 20 updates per second
+    syncInterval: 1 / 15, // 15 updates per second (reduced from 20 for better performance)
+    lastResyncTime: 0,
+    resyncInterval: 5.0, // Re-sync check every 5 seconds (desync detection)
     inputBuffer: [], // Store inputs to send to host
     isHost: false,
     // Entity tracking (host only)
@@ -133,6 +135,41 @@ function setupHostHandlers() {
             console.log('[Multiplayer] Host set pause state to:', payload.paused);
         }
     });
+
+    // Handle player death notifications from clients
+    onMessage('player_death', (payload, fromPeerId) => {
+        console.log('[Multiplayer] Received player death from client:', fromPeerId, 'slot:', payload.slotIndex);
+
+        // Mark player as dead on host
+        const player = mpGame.players.get(payload.slotIndex);
+        if (player && player.exists()) {
+            player.isDead = true;
+            player.canMove = false;
+            player.canShoot = false;
+            player.isShooting = false;
+
+            // Visual indication of death
+            player.opacity = 0.5;
+            if (player.outline && player.outline.exists()) {
+                player.outline.opacity = 0.5;
+            }
+
+            console.log('[Multiplayer] Host marked player at slot', payload.slotIndex, 'as dead');
+
+            // Broadcast to all other clients
+            broadcast('player_death', { slotIndex: payload.slotIndex }, [fromPeerId]);
+        }
+    });
+
+    // Handle re-sync requests from clients
+    onMessage('resync_request', (payload, fromPeerId) => {
+        console.log('[Multiplayer] Re-sync requested by client:', fromPeerId);
+
+        // Send full game state to requesting client immediately
+        sendToPeer(fromPeerId, 'game_state', collectGameState());
+
+        console.log('[Multiplayer] Sent full game state re-sync to client:', fromPeerId);
+    });
 }
 
 /**
@@ -149,14 +186,29 @@ function setupClientHandlers() {
                 if (playerState.slotIndex !== mpGame.localPlayerSlot) {
                     const player = mpGame.players.get(playerState.slotIndex);
                     if (player && player.exists()) {
-                        // Smoothly interpolate position
-                        player.pos.x = playerState.x;
-                        player.pos.y = playerState.y;
+                        // Store target position for smooth interpolation
+                        if (!player.netTarget) {
+                            player.netTarget = { x: playerState.x, y: playerState.y };
+                        } else {
+                            player.netTarget.x = playerState.x;
+                            player.netTarget.y = playerState.y;
+                        }
                         player.angle = playerState.angle || 0;
 
-                        // Update health
+                        // Update health and maxHealth
+                        if (playerState.maxHealth !== undefined) {
+                            player.maxHealth = playerState.maxHealth;
+                        }
                         if (playerState.hp !== undefined && player.setHP) {
                             player.setHP(playerState.hp);
+                        }
+
+                        // Update invulnerability state
+                        if (playerState.invulnerable !== undefined) {
+                            player.invulnerable = playerState.invulnerable;
+                        }
+                        if (playerState.invulnerableTime !== undefined) {
+                            player.invulnerableTime = playerState.invulnerableTime;
                         }
 
                         // Update death state
@@ -205,11 +257,33 @@ function setupClientHandlers() {
 
                 const existingEnemy = mpGame.enemies.get(enemyState.id);
                 if (existingEnemy && existingEnemy.exists()) {
-                    // Update existing enemy
-                    existingEnemy.pos.x = enemyState.x;
-                    existingEnemy.pos.y = enemyState.y;
+                    // Update existing enemy with interpolation for smooth movement
+                    // Store target position for interpolation
+                    if (!existingEnemy.netTarget) {
+                        existingEnemy.netTarget = { x: enemyState.x, y: enemyState.y };
+                    } else {
+                        existingEnemy.netTarget.x = enemyState.x;
+                        existingEnemy.netTarget.y = enemyState.y;
+                    }
+
+                    // Update health immediately (no interpolation for discrete values)
+                    if (enemyState.maxHealth !== undefined) {
+                        existingEnemy.maxHealth = enemyState.maxHealth;
+                    }
                     if (existingEnemy.setHP && enemyState.hp !== undefined) {
                         existingEnemy.setHP(enemyState.hp);
+                    }
+
+                    // Update shield and armor state for visual sync
+                    if (enemyState.shieldHealth !== undefined) {
+                        existingEnemy.shieldHealth = enemyState.shieldHealth;
+                    }
+                    if (enemyState.armorHealth !== undefined) {
+                        existingEnemy.armorHealth = enemyState.armorHealth;
+                    }
+                    // Update visual if shield/armor changed
+                    if (existingEnemy.updateVisual) {
+                        existingEnemy.updateVisual();
                     }
                 } else {
                     // TODO: Mid-game join limitation
@@ -238,32 +312,9 @@ function setupClientHandlers() {
             });
         }
 
-        // Update projectiles (visual only for clients)
-        if (payload.projectiles) {
-            const receivedIds = new Set();
-
-            payload.projectiles.forEach(projState => {
-                receivedIds.add(projState.id);
-
-                const existing = mpGame.projectiles.get(projState.id);
-                if (existing && existing.exists()) {
-                    // Update position
-                    existing.pos.x = projState.x;
-                    existing.pos.y = projState.y;
-                    existing.angle = projState.angle || 0;
-                }
-                // Note: Creating new projectiles dynamically is complex
-                // For MVP, clients see host-spawned projectiles
-            });
-
-            // Clean up projectiles that don't exist anymore
-            mpGame.projectiles.forEach((proj, id) => {
-                if (!receivedIds.has(id) && proj.exists()) {
-                    mpGame.k.destroy(proj); // Use Kaplay's destroy method
-                    mpGame.projectiles.delete(id);
-                }
-            });
-        }
+        // NOTE: Projectiles are no longer synced via game_state
+        // They are spawned via spawn_projectile messages and move autonomously
+        // This significantly reduces network bandwidth and improves performance
 
         // Update pickups
         if (payload.pickups) {
@@ -277,6 +328,19 @@ function setupClientHandlers() {
                     // Update position
                     existing.pos.x = pickupState.x;
                     existing.pos.y = pickupState.y;
+
+                    // Update magnetization state
+                    if (pickupState.magnetizing !== undefined) {
+                        existing.magnetizing = pickupState.magnetizing;
+
+                        // Set target player if specified
+                        if (pickupState.magnetizing && pickupState.targetPlayerSlot !== undefined) {
+                            const targetPlayer = mpGame.players.get(pickupState.targetPlayerSlot);
+                            if (targetPlayer && targetPlayer.exists()) {
+                                existing.targetPlayer = targetPlayer;
+                            }
+                        }
+                    }
                 }
             });
 
@@ -305,7 +369,7 @@ function setupClientHandlers() {
             );
             enemy.mpEntityId = payload.id;
             mpGame.enemies.set(payload.id, enemy);
-            console.log(`Spawned enemy ${payload.id} (${payload.type}) at (${payload.x}, ${payload.y})`);
+            // Removed console.log for performance
         } else if (payload.entityType === 'xpPickup') {
             const pickup = createXPPickup(
                 mpGame.k,
@@ -316,7 +380,7 @@ function setupClientHandlers() {
             pickup.mpEntityId = payload.id;
             pickup.pickupType = 'xp';
             mpGame.pickups.set(payload.id, pickup);
-            console.log(`Spawned XP pickup ${payload.id} with value ${payload.value}`);
+            // Removed console.log for performance
         } else if (payload.entityType === 'currencyPickup') {
             const pickup = createCurrencyPickup(
                 mpGame.k,
@@ -328,7 +392,7 @@ function setupClientHandlers() {
             pickup.mpEntityId = payload.id;
             pickup.pickupType = 'currency';
             mpGame.pickups.set(payload.id, pickup);
-            console.log(`Spawned currency pickup ${payload.id} with value ${payload.value}`);
+            // Removed console.log for performance
         }
     });
 
@@ -367,7 +431,7 @@ function setupClientHandlers() {
             projectile.mpEntityId = payload.id;
             mpGame.projectiles.set(payload.id, projectile);
 
-            console.log(`Spawned projectile ${payload.id} at (${payload.x}, ${payload.y})`);
+            // Removed console.log for performance
         });
     });
 
@@ -416,7 +480,11 @@ function setupClientHandlers() {
         console.log(`Entity destroyed: ${payload.entityType} ${payload.entityId} at (${payload.x}, ${payload.y})`);
 
         // Remove the entity from tracking and destroy it
-        const entity = mpGame.enemies.get(payload.entityId) || mpGame.players.get(payload.entityId);
+        // Check all entity types: enemies, players, and pickups
+        const entity = mpGame.enemies.get(payload.entityId) ||
+                      mpGame.players.get(payload.entityId) ||
+                      mpGame.pickups.get(payload.entityId);
+
         if (entity && entity.exists()) {
             // Clean up health bars before destroying entity
             if (entity.cleanupHealthBars && typeof entity.cleanupHealthBars === 'function') {
@@ -430,6 +498,11 @@ function setupClientHandlers() {
 
             // Destroy the entity
             mpGame.k.destroy(entity);
+
+            // Remove from appropriate tracking map
+            if (payload.entityType === 'pickup' || payload.entityType === 'xpPickup' || payload.entityType === 'currencyPickup') {
+                mpGame.pickups.delete(payload.entityId);
+            }
         }
 
         // Clean up from tracking maps
@@ -518,6 +591,52 @@ function setupClientHandlers() {
             console.log('[Multiplayer] Client set pause state to:', payload.paused);
         }
     });
+
+    // Receive XP gain from host
+    onMessage('xp_gain', (payload) => {
+        console.log('[Multiplayer] Received XP gain from host:', payload.value);
+
+        // Give XP to all local players
+        if (mpGame.players) {
+            mpGame.players.forEach((p, slot) => {
+                if (p && p.exists() && !p.isDead && p.addXP) {
+                    p.addXP(payload.value);
+                }
+            });
+        }
+    });
+
+    // Receive enemy split events from host
+    onMessage('enemy_split', (payload) => {
+        console.log('[Multiplayer] Received enemy split event:', payload.count);
+
+        // Update split enemy counter
+        if (mpGame.k && mpGame.k.gameData && mpGame.k.gameData.incrementSplitEnemies) {
+            mpGame.k.gameData.incrementSplitEnemies(payload.count);
+        }
+    });
+
+    // Receive player death events from host
+    onMessage('player_death', (payload) => {
+        console.log('[Multiplayer] Received player death event for slot:', payload.slotIndex);
+
+        // Mark player as dead immediately
+        const player = mpGame.players.get(payload.slotIndex);
+        if (player && player.exists()) {
+            player.isDead = true;
+            player.canMove = false;
+            player.canShoot = false;
+            player.isShooting = false;
+
+            // Visual indication of death
+            player.opacity = 0.5;
+            if (player.outline && player.outline.exists()) {
+                player.outline.opacity = 0.5;
+            }
+
+            console.log('[Multiplayer] Marked player at slot', payload.slotIndex, 'as dead');
+        }
+    });
 }
 
 /**
@@ -539,6 +658,7 @@ export function updateMultiplayer(dt) {
     if (!mpGame.isActive) return;
 
     mpGame.lastSyncTime += dt;
+    mpGame.lastResyncTime += dt;
 
     if (mpGame.isHost) {
         // Host: broadcast game state periodically
@@ -546,12 +666,79 @@ export function updateMultiplayer(dt) {
             broadcastGameState();
             mpGame.lastSyncTime = 0;
         }
+
+        // Host: periodic desync check (verify critical state)
+        if (mpGame.lastResyncTime >= mpGame.resyncInterval) {
+            // Check if any players have inconsistent state
+            mpGame.players.forEach((player, slotIndex) => {
+                if (player && player.exists()) {
+                    // Check for critical desyncs (e.g., dead but still has HP)
+                    if (player.isDead && player.hp() > 0) {
+                        console.warn('[Multiplayer] Desync detected: Player', slotIndex, 'is marked dead but has HP. Correcting...');
+                        player.setHP(0);
+                    }
+                    if (!player.isDead && player.hp() <= 0) {
+                        console.warn('[Multiplayer] Desync detected: Player', slotIndex, 'has no HP but not marked dead. Correcting...');
+                        player.isDead = true;
+                        player.canMove = false;
+                        player.canShoot = false;
+                    }
+                }
+            });
+            mpGame.lastResyncTime = 0;
+        }
     } else {
         // Client: send input state periodically
         if (mpGame.lastSyncTime >= mpGame.syncInterval) {
             sendInputState();
             mpGame.lastSyncTime = 0;
         }
+
+        // Client: periodic desync check and auto-resync request
+        if (mpGame.lastResyncTime >= mpGame.resyncInterval) {
+            // Check for desyncs on client
+            let desyncDetected = false;
+
+            mpGame.players.forEach((player, slotIndex) => {
+                if (player && player.exists()) {
+                    // Check for critical desyncs
+                    if (player.isDead && player.hp() > 0) {
+                        console.warn('[Multiplayer] Client desync: Player', slotIndex, 'is dead but has HP');
+                        desyncDetected = true;
+                    }
+                    if (!player.isDead && player.hp() <= 0) {
+                        console.warn('[Multiplayer] Client desync: Player', slotIndex, 'has no HP but not dead');
+                        desyncDetected = true;
+                    }
+                }
+            });
+
+            if (desyncDetected) {
+                console.log('[Multiplayer] Desync detected - requesting full re-sync from host');
+                requestResync();
+            }
+
+            mpGame.lastResyncTime = 0;
+        }
+
+        // Client: interpolate entity positions for smooth movement
+        const lerpFactor = Math.min(dt * 10, 1); // Lerp 10x per second, cap at 1
+
+        // Interpolate remote players
+        mpGame.players.forEach(player => {
+            if (player.exists() && player.isRemote && player.netTarget) {
+                player.pos.x += (player.netTarget.x - player.pos.x) * lerpFactor;
+                player.pos.y += (player.netTarget.y - player.pos.y) * lerpFactor;
+            }
+        });
+
+        // Interpolate enemies
+        mpGame.enemies.forEach(enemy => {
+            if (enemy.exists() && enemy.netTarget) {
+                enemy.pos.x += (enemy.netTarget.x - enemy.pos.x) * lerpFactor;
+                enemy.pos.y += (enemy.netTarget.y - enemy.pos.y) * lerpFactor;
+            }
+        });
     }
 }
 
@@ -589,12 +776,21 @@ function collectGameState() {
                 // Fallback to empty arrays/objects
             }
 
+            // Get current HP safely - if player has hp() method, use it, otherwise use maxHealth
+            let currentHP = player.maxHealth;
+            if (player.hp && typeof player.hp === 'function') {
+                currentHP = player.hp();
+            } else if (typeof player.hp === 'number') {
+                currentHP = player.hp;
+            }
+
             playerStates.push({
                 slotIndex: Number(slotIndex),
                 x: Number(player.pos.x),
                 y: Number(player.pos.y),
                 angle: Number(player.angle || 0),
-                hp: Number(player.hp || player.maxHealth),
+                hp: Number(currentHP),
+                maxHealth: Number(player.maxHealth || 100),
                 level: Number(player.level || 1),
                 xp: Number(player.xp || 0),
                 isDead: Boolean(player.isDead || false), // Track death state
@@ -605,7 +801,10 @@ function collectGameState() {
                 // Stats that affect gameplay
                 speed: Number(player.speed || 0),
                 damage: Number(player.damage || 0),
-                pickupRadius: Number(player.pickupRadius || 0)
+                pickupRadius: Number(player.pickupRadius || 0),
+                // Visual state for color sync
+                invulnerable: Boolean(player.invulnerable || false),
+                invulnerableTime: Number(player.invulnerableTime || 0)
             });
         }
     });
@@ -613,12 +812,24 @@ function collectGameState() {
     // Collect enemy states
     mpGame.enemies.forEach((enemy, entityId) => {
         if (enemy.exists()) {
+            // Get current HP safely
+            let currentHP = 0;
+            if (enemy.hp && typeof enemy.hp === 'function') {
+                currentHP = enemy.hp();
+            } else if (typeof enemy.hp === 'number') {
+                currentHP = enemy.hp;
+            }
+
             enemyStates.push({
                 id: Number(entityId),
                 x: Number(enemy.pos.x),
                 y: Number(enemy.pos.y),
-                hp: Number(enemy.hp() || 0),
-                type: String(enemy.enemyType || 'basic')
+                hp: Number(currentHP),
+                maxHealth: Number(enemy.maxHealth || 0),
+                type: String(enemy.enemyType || 'basic'),
+                // Shield and armor state for visual sync
+                shieldHealth: Number(enemy.shieldHealth || 0),
+                armorHealth: Number(enemy.armorHealth || 0)
             });
         } else {
             // Enemy destroyed - remove from tracking
@@ -626,17 +837,12 @@ function collectGameState() {
         }
     });
 
-    // Collect projectile states
+    // NOTE: Projectiles are NOT synced via game_state anymore
+    // They are spawned via spawn_projectile messages and then move autonomously
+    // This significantly reduces network traffic (projectiles change every frame)
+    // Just clean up destroyed projectiles from tracking
     mpGame.projectiles.forEach((projectile, entityId) => {
-        if (projectile.exists()) {
-            projectileStates.push({
-                id: Number(entityId),
-                x: Number(projectile.pos.x),
-                y: Number(projectile.pos.y),
-                angle: Number(projectile.angle || 0)
-            });
-        } else {
-            // Projectile destroyed - remove from tracking
+        if (!projectile.exists()) {
             mpGame.projectiles.delete(entityId);
         }
     });
@@ -644,12 +850,20 @@ function collectGameState() {
     // Collect pickup states
     mpGame.pickups.forEach((pickup, entityId) => {
         if (pickup.exists()) {
-            pickupStates.push({
+            const pickupState = {
                 id: Number(entityId),
                 x: Number(pickup.pos.x),
                 y: Number(pickup.pos.y),
-                type: String(pickup.pickupType || 'xp')
-            });
+                type: String(pickup.pickupType || 'xp'),
+                magnetizing: Boolean(pickup.magnetizing || false)
+            };
+
+            // Include target player slot if magnetizing
+            if (pickup.magnetizing && pickup.targetPlayer && pickup.targetPlayer.slotIndex !== undefined) {
+                pickupState.targetPlayerSlot = Number(pickup.targetPlayer.slotIndex);
+            }
+
+            pickupStates.push(pickupState);
         } else {
             // Pickup collected - remove from tracking
             mpGame.pickups.delete(entityId);
@@ -798,6 +1012,16 @@ export function registerProjectile(projectile, creationParams = {}) {
     projectile.mpEntityId = entityId;
     mpGame.projectiles.set(entityId, projectile);
 
+    // Extract color from projectile entity
+    let colorArray = [255, 255, 100]; // Default yellow
+    if (projectile.color && projectile.color.r !== undefined) {
+        colorArray = [
+            Math.round(projectile.color.r),
+            Math.round(projectile.color.g),
+            Math.round(projectile.color.b)
+        ];
+    }
+
     // Broadcast projectile spawn to all clients
     broadcast('spawn_projectile', {
         id: Number(entityId),
@@ -812,12 +1036,26 @@ export function registerProjectile(projectile, creationParams = {}) {
         isCrit: Boolean(projectile.isCrit),
         maxRange: Number(projectile.maxRange),
         angle: Number(projectile.angle || 0),
-        // Visual properties (if available from creation params)
-        char: creationParams.char || '*',
-        color: creationParams.color || [255, 255, 100]
+        // Visual properties from projectile entity
+        char: projectile.text || creationParams.char || '*',
+        color: colorArray
     });
 
     return entityId;
+}
+
+/**
+ * Unregister a projectile from multiplayer tracking (client and host)
+ * Called when a projectile is destroyed to prevent memory leaks
+ * @param {Object} projectile - Projectile entity to unregister
+ */
+export function unregisterProjectile(projectile) {
+    if (!mpGame.isActive) return;
+
+    // Remove from tracking map using the entity's network ID
+    if (projectile.mpEntityId !== undefined) {
+        mpGame.projectiles.delete(projectile.mpEntityId);
+    }
 }
 
 /**
@@ -850,6 +1088,20 @@ export function registerPickup(pickup, creationParams = {}) {
     broadcast('spawn_entity', spawnData);
 
     return entityId;
+}
+
+/**
+ * Unregister a pickup from multiplayer tracking (client and host)
+ * Called when a pickup is destroyed to prevent memory leaks
+ * @param {Object} pickup - Pickup entity to unregister
+ */
+export function unregisterPickup(pickup) {
+    if (!mpGame.isActive) return;
+
+    // Remove from tracking map using the entity's network ID
+    if (pickup.mpEntityId !== undefined) {
+        mpGame.pickups.delete(pickup.mpEntityId);
+    }
 }
 
 /**
@@ -920,6 +1172,24 @@ export function broadcastRevivalEvent() {
     });
 
     console.log('[Multiplayer] Broadcasted player revival event');
+}
+
+/**
+ * Broadcast game over event to all clients (host only)
+ * Called when all players are dead
+ * @param {Object} runStats - Run statistics
+ * @param {number} currencyEarned - Currency earned this run
+ */
+export function broadcastGameOver(runStats, currencyEarned) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('game_over', {
+        runStats: runStats,
+        currencyEarned: currencyEarned,
+        timestamp: Date.now()
+    });
+
+    console.log('[Multiplayer] Broadcasted game over event');
 }
 
 /**
@@ -1017,4 +1287,84 @@ export function sendPauseRequest(paused) {
     sendToHost('pause_request', { paused });
 
     console.log(`[Multiplayer] Sent pause request to host: ${paused}`);
+}
+
+/**
+ * Broadcast room completion to all clients (host only)
+ * Called when the host detects all enemies are defeated
+ */
+export function broadcastRoomCompletion() {
+    if (!mpGame.isHost) return;
+
+    broadcast('room_completed', {});
+
+    console.log('[Multiplayer] Broadcasted room completion');
+}
+
+/**
+ * Broadcast XP gain to all clients (host only)
+ * Called when XP is collected so all players gain XP
+ */
+export function broadcastXPGain(xpValue) {
+    if (!mpGame.isHost) return;
+
+    broadcast('xp_gain', { value: xpValue });
+
+    console.log('[Multiplayer] Broadcasted XP gain:', xpValue);
+}
+
+/**
+ * Broadcast room transition to all clients (host only)
+ * Called when transitioning to a new room to sync spawn positions
+ * @param {string} entryDirection - Direction players will enter from ('north', 'south', 'east', 'west', or null)
+ */
+export function broadcastRoomTransition(entryDirection) {
+    if (!mpGame.isHost) return;
+
+    broadcast('room_transition', { entryDirection: entryDirection });
+
+    console.log('[Multiplayer] Broadcasted room transition with entry direction:', entryDirection);
+}
+
+/**
+ * Broadcast enemy split event to all clients (host only)
+ * Called when an enemy splits (e.g., slimes) to update the total enemy count
+ * @param {number} splitCount - Number of enemies created by splitting
+ */
+export function broadcastEnemySplit(splitCount) {
+    if (!mpGame.isHost) return;
+
+    broadcast('enemy_split', { count: splitCount });
+
+    console.log('[Multiplayer] Broadcasted enemy split:', splitCount);
+}
+
+/**
+ * Broadcast player death event (both host and client)
+ * Called immediately when a player dies to ensure all clients are synced
+ * @param {number} slotIndex - Player slot that died
+ */
+export function broadcastPlayerDeath(slotIndex) {
+    if (!mpGame.isActive) return;
+
+    if (mpGame.isHost) {
+        // Host broadcasts to all clients
+        broadcast('player_death', { slotIndex });
+        console.log('[Multiplayer] Host broadcasted player death for slot:', slotIndex);
+    } else {
+        // Client sends to host
+        sendToHost('player_death', { slotIndex });
+        console.log('[Multiplayer] Client sent player death to host for slot:', slotIndex);
+    }
+}
+
+/**
+ * Request full game state re-sync from host (client only)
+ * Called when client detects desynchronization
+ */
+export function requestResync() {
+    if (mpGame.isHost) return; // Host doesn't request resyncs
+
+    sendToHost('resync_request', { timestamp: Date.now() });
+    console.log('[Multiplayer] Client requested full game state re-sync');
 }

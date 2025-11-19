@@ -1,6 +1,7 @@
 // Miniboss entity definition - scaled-down bosses that appear randomly in rooms
 import { createProjectile } from './projectile.js';
 import { getMinibossDefinition } from '../data/minibosses.js';
+import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 
 export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
     const baseConfig = getMinibossDefinition(type);
@@ -246,14 +247,17 @@ export function createMiniboss(k, x, y, type = 'brute', floor = 1) {
             const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
 
             if (miniboss.burnTimer >= burnTickInterval) {
-                // Deal burn damage
-                if (miniboss.takeDamage) {
-                    miniboss.takeDamage(miniboss.burnDamage);
-                } else {
-                    miniboss.hurt(miniboss.burnDamage);
+                // In multiplayer, only host deals burn damage
+                if (!isMultiplayerActive() || isHost()) {
+                    // Deal burn damage
+                    if (miniboss.takeDamage) {
+                        miniboss.takeDamage(miniboss.burnDamage);
+                    } else {
+                        miniboss.hurt(miniboss.burnDamage);
+                    }
                 }
 
-                // Visual feedback for burn damage (orange tint)
+                // Visual feedback for burn damage (orange tint) on all clients
                 const originalColor = miniboss.color;
                 miniboss.color = k.rgb(255, 150, 50);
                 k.wait(0.1, () => {

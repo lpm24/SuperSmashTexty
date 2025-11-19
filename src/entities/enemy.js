@@ -17,7 +17,7 @@ import { getEnemyDefinition } from '../data/enemies.js';
 
 // System imports
 import { getSmartMoveDirection, getPerimeterMoveDirection } from '../systems/pathfinding.js';
-import { registerEnemy, isHost, isMultiplayerActive } from '../systems/multiplayerGame.js';
+import { registerEnemy, isHost, isMultiplayerActive, broadcastEnemySplit } from '../systems/multiplayerGame.js';
 
 export function createEnemy(k, x, y, type = 'basic', floor = 1) {
     const baseConfig = getEnemyDefinition(type);
@@ -545,14 +545,17 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
             const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
 
             if (enemy.burnTimer >= burnTickInterval) {
-                // Deal burn damage
-                if (enemy.takeDamage) {
-                    enemy.takeDamage(enemy.burnDamage);
-                } else {
-                    enemy.hurt(enemy.burnDamage);
+                // In multiplayer, only host deals burn damage
+                if (!isMultiplayerActive() || isHost()) {
+                    // Deal burn damage
+                    if (enemy.takeDamage) {
+                        enemy.takeDamage(enemy.burnDamage);
+                    } else {
+                        enemy.hurt(enemy.burnDamage);
+                    }
                 }
 
-                // Visual feedback for burn damage (orange tint)
+                // Visual feedback for burn damage (orange tint) on all clients
                 enemy.color = k.rgb(255, 150, 50);
                 k.wait(0.1, () => {
                     if (enemy.exists()) {
@@ -1073,13 +1076,25 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1) {
                 const spawnDistance = 20;
                 const spawnX = enemy.pos.x + Math.cos(angle) * spawnDistance;
                 const spawnY = enemy.pos.y + Math.sin(angle) * spawnDistance;
-                
+
                 // Create smaller slime (half health, smaller size)
                 const smallSlime = createEnemy(k, spawnX, spawnY, 'slime', enemy.floor);
                 smallSlime.maxHealth = Math.floor(smallSlime.maxHealth / 2);
                 smallSlime.setHP(smallSlime.maxHealth);
                 smallSlime.size = Math.floor(smallSlime.size * 0.8);
                 smallSlime.splits = false; // Don't split again
+                smallSlime.isSplitEnemy = true; // Mark as split enemy for tracking
+            }
+
+            // Increment split enemy counter (only on host in multiplayer)
+            if (!isMultiplayerActive() || isHost()) {
+                if (k.gameData && k.gameData.incrementSplitEnemies) {
+                    k.gameData.incrementSplitEnemies(splitCount);
+                }
+                // Broadcast split event to clients in multiplayer
+                if (isMultiplayerActive() && isHost()) {
+                    broadcastEnemySplit(splitCount);
+                }
             }
         }
         

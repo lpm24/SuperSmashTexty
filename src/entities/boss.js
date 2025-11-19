@@ -17,6 +17,9 @@ import { createProjectile } from './projectile.js';
 // Data imports
 import { getBossDefinition } from '../data/bosses.js';
 
+// Multiplayer imports
+import { isMultiplayerActive, isHost, registerEnemy } from '../systems/multiplayerGame.js';
+
 export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) {
     const baseConfig = getBossDefinition(type);
     
@@ -271,6 +274,11 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
             const minion = createEnemy(k, spawnX, spawnY, minionType, floor);
             minion.isBossMinion = true; // Mark as boss minion
             boss.spawnedMinions.push(minion);
+
+            // Register minion for multiplayer sync
+            if (isMultiplayerActive() && isHost()) {
+                registerEnemy(minion, { type: minionType, floor: floor, isBossMinion: true });
+            }
         }
     };
     
@@ -352,14 +360,17 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
             const burnTickInterval = 0.5; // Deal burn damage every 0.5 seconds
 
             if (boss.burnTimer >= burnTickInterval) {
-                // Deal burn damage
-                if (boss.takeDamage) {
-                    boss.takeDamage(boss.burnDamage);
-                } else {
-                    boss.hurt(boss.burnDamage);
+                // In multiplayer, only host deals burn damage
+                if (!isMultiplayerActive() || isHost()) {
+                    // Deal burn damage
+                    if (boss.takeDamage) {
+                        boss.takeDamage(boss.burnDamage);
+                    } else {
+                        boss.hurt(boss.burnDamage);
+                    }
                 }
 
-                // Visual feedback for burn damage (orange tint)
+                // Visual feedback for burn damage (orange tint) on all clients
                 const originalColor = boss.color;
                 boss.color = k.rgb(255, 150, 50);
                 k.wait(0.1, () => {
@@ -745,9 +756,10 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
             // Spawn minions if under limit
             if (boss.minionSpawnTimer >= spawnInterval && activeMinions.length < maxMinions) {
                 // Spawn Bat or Slime (using fast or basic as proxy)
-                const minionType = Math.random() < 0.5 ? 'fast' : 'basic';
-                const angle = Math.random() * Math.PI * 2;
-                const spawnDistance = 50 + Math.random() * 30;
+                // Use seeded RNG for multiplayer consistency
+                const minionType = (boss.rng ? boss.rng.next() : Math.random()) < 0.5 ? 'fast' : 'basic';
+                const angle = (boss.rng ? boss.rng.next() : Math.random()) * Math.PI * 2;
+                const spawnDistance = 50 + (boss.rng ? boss.rng.next() : Math.random()) * 30;
                 const spawnX = boss.pos.x + Math.cos(angle) * spawnDistance;
                 const spawnY = boss.pos.y + Math.sin(angle) * spawnDistance;
                 
@@ -902,14 +914,15 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
     if (type === 'swarmQueen') {
         boss.onDeath(() => {
             // Spawn 8-12 minions in burst on death
-            const minionCount = 8 + Math.floor(Math.random() * 5); // 8-12 minions
+            // Use seeded RNG for multiplayer consistency
+            const minionCount = 8 + Math.floor((boss.rng ? boss.rng.next() : Math.random()) * 5); // 8-12 minions
             for (let i = 0; i < minionCount; i++) {
-                const angle = (Math.PI * 2 / minionCount) * i + Math.random() * 0.3;
-                const spawnDistance = 40 + Math.random() * 20;
+                const angle = (Math.PI * 2 / minionCount) * i + (boss.rng ? boss.rng.next() : Math.random()) * 0.3;
+                const spawnDistance = 40 + (boss.rng ? boss.rng.next() : Math.random()) * 20;
                 const spawnX = boss.pos.x + Math.cos(angle) * spawnDistance;
                 const spawnY = boss.pos.y + Math.sin(angle) * spawnDistance;
-                
-                const minionType = Math.random() < 0.5 ? 'fast' : 'basic';
+
+                const minionType = (boss.rng ? boss.rng.next() : Math.random()) < 0.5 ? 'fast' : 'basic';
                 const minion = createEnemy(k, spawnX, spawnY, minionType, floor);
                 minion.isBossMinion = true;
             }

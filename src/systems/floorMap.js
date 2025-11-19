@@ -249,7 +249,8 @@ export class FloorMap {
                     const enemyCount = this.randomRange(3, 6); // 3-5 enemy types
                     room.enemyTypes = [];
                     for (let i = 0; i < enemyCount; i++) {
-                        room.enemyTypes.push(getRandomEnemyType(this.floor));
+                        // Use seeded RNG for multiplayer consistency
+                        room.enemyTypes.push(getRandomEnemyType(this.floor, this.rng));
                     }
                 }
             }

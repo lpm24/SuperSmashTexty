@@ -12,15 +12,18 @@ import {
 // Track if upgrade draft is currently showing
 let upgradeDraftActive = false;
 
-export function showUpgradeDraft(k, player, onSelect) {
+export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOverride = null) {
     // Don't show if already showing
     if (upgradeDraftActive) return;
 
     // Mark upgrade draft as active
     upgradeDraftActive = true;
 
-    // Pause the game
-    k.paused = true;
+    // Pause the game (but not in multiplayer mode)
+    const inMultiplayer = isMultiplayerActive();
+    if (!inMultiplayer) {
+        k.paused = true;
+    }
 
     // Save tooltip state and hide it (accessed from k.gameData if available)
     if (k.gameData && k.gameData.saveTooltipState && k.gameData.hideTooltip) {
@@ -40,10 +43,11 @@ export function showUpgradeDraft(k, player, onSelect) {
 
     // Get 3 random upgrades (weapon-aware)
     // In multiplayer, use seeded RNG for deterministic upgrade generation
+    // Use levelOverride if provided to ensure different upgrades for sequential level ups
     let upgradeRng = null;
     if (isMultiplayerActive()) {
         const playerIndex = player.playerIndex !== undefined ? player.playerIndex : 0;
-        const playerLevel = player.level || 1;
+        const playerLevel = levelOverride || player.level || 1;
         upgradeRng = getUpgradeRNG(playerIndex, playerLevel);
     }
     const upgrades = getRandomUpgrades(3, player, upgradeRng);
@@ -63,9 +67,12 @@ export function showUpgradeDraft(k, player, onSelect) {
         'upgradeOverlay'
     ]);
 
-    // Title
+    // Title - show player name in multiplayer
+    const titleText = inMultiplayer && playerName
+        ? `${playerName} - Level Up! Choose an Upgrade`
+        : 'Level Up! Choose an Upgrade';
     const title = k.add([
-        k.text('Level Up! Choose an Upgrade', { size: UI_TEXT_SIZES.TITLE }),
+        k.text(titleText, { size: UI_TEXT_SIZES.TITLE }),
         k.pos(k.width() / 2, 80),
         k.anchor('center'),
         k.color(...UI_COLORS.WARNING),
@@ -202,8 +209,10 @@ export function showUpgradeDraft(k, player, onSelect) {
             k.gameData.minimapSavedMode = undefined;
         }
 
-        // Unpause game
-        k.paused = false;
+        // Unpause game (unless in multiplayer - game should stay unpaused)
+        if (!inMultiplayer) {
+            k.paused = false;
+        }
 
         // Restore tooltip state after unpausing
         if (k.gameData && k.gameData.restoreTooltipState && k.gameData.tooltipSavedState) {

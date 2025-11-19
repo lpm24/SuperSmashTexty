@@ -39,13 +39,28 @@ npm install
 npm run dev
 ```
 
-The game will open in your browser at `http://localhost:3000`
+The game will open in your browser at `http://localhost:3010`
+
+### Multiplayer Setup (Local Development)
+
+For local multiplayer testing, you need to run the PeerJS server:
+
+```bash
+npx peerjs --port 9000
+```
+
+This starts a local PeerJS signaling server on port 9000. The game automatically detects if you're running on localhost and will use this local server. When deployed to GitHub Pages, it automatically switches to the PeerJS cloud service.
+
+**Note:** The multiplayer system automatically handles environment detection:
+- **Localhost** → Uses local PeerJS server (localhost:9000)
+- **GitHub Pages** → Uses PeerJS cloud service (cloud.peerjs.com)
 
 ### Development Commands
 
 - `npm run dev` - Start development server with hot reload
 - `npm run build` - Build for production (outputs to `dist/`)
 - `npm run preview` - Preview production build locally
+- `npx peerjs --port 9000` - Start local PeerJS server for multiplayer testing
 
 ### Project Structure
 
@@ -80,11 +95,16 @@ The game will open in your browser at `http://localhost:3000`
 - **Engine:** KAPLAY v3001.0.19 (ES Modules)
 - **Build Tool:** Vite v5.0.0 with hot module replacement
 - **Rendering:** ASCII bitmap font atlas / monospace sprite sheet
+- **Multiplayer:** PeerJS v1.5.4 (WebRTC P2P networking)
+  - Auto-detects environment (localhost vs production)
+  - Uses local PeerJS server for development
+  - Uses PeerJS cloud service for GitHub Pages deployment
+  - Supports up to 4 players via invite code system
 - **Architecture:**
   - **Data-Driven:** Content separated from logic (21 enemies, 4 bosses, 5 minibosses)
   - **State Management:** Centralized, serializable GameState for multiplayer support
   - **Input System:** Deterministic input handling with frame history
-  - **Network-Ready:** Abstraction layer for future multiplayer (local mode by default)
+  - **Network Layer:** P2P multiplayer with host-authoritative game state
 - **Deployment:** GitHub Pages (static build)
 - **Storage:** Browser localStorage for saves and settings
 

@@ -21,6 +21,9 @@ import { playLevelUp } from './sounds.js';
 export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null, isMultiplayer = false) {
     let levelUpInProgress = false;
 
+    // Track pending level ups for multiplayer (queue them for after room clear)
+    player.pendingLevelUps = player.pendingLevelUps || [];
+
     // Add XP to player
     player.addXP = function(amount) {
         if (k.paused || levelUpInProgress) return; // Don't add XP while paused or leveling up
@@ -71,21 +74,40 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             k.z(1000) // High z-index to show above other UI
         ]);
 
-        // In multiplayer, don't show upgrade draft - just show notification and continue
+        // In multiplayer, check if room is safe (no enemies)
         if (isMultiplayer) {
-            k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION * 2, () => {
-                if (notification.exists()) k.destroy(notification);
-                levelUpInProgress = false;
-            });
+            const enemies = k.get('enemy');
+            const bosses = k.get('boss');
+            const isSafe = enemies.length === 0 && bosses.length === 0;
+
+            if (isSafe) {
+                // Safe! Show upgrade draft immediately
+                k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
+                    k.destroy(notification);
+                    // Show upgrade draft (pass level for proper RNG seeding)
+                    const playerName = player.playerName || (player.isRemote ? `Player ${player.slotIndex + 1}` : 'You');
+                    showUpgradeDraft(k, player, () => {
+                        // Callback when upgrade is selected
+                        levelUpInProgress = false;
+                    }, playerName, level);
+                });
+            } else {
+                // Not safe - queue level up for after room clear
+                player.pendingLevelUps.push(level);
+                k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION * 2, () => {
+                    if (notification.exists()) k.destroy(notification);
+                    levelUpInProgress = false;
+                });
+            }
         } else {
             // Single player: show upgrade draft after notification
             k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
                 k.destroy(notification);
-                // Show upgrade draft
+                // Show upgrade draft (pass level for proper RNG seeding)
                 showUpgradeDraft(k, player, () => {
                     // Callback when upgrade is selected
                     levelUpInProgress = false;
-                });
+                }, null, level);
             });
         }
     }

@@ -49,10 +49,17 @@ export function initNetwork(inviteCode, isHost = true) {
         // Create peer with invite code as ID (for host) or random ID (for client)
         const peerId = isHost ? `smash-${inviteCode}` : undefined;
 
-        try {
-            network.peer = new Peer(peerId, {
+        // Auto-detect environment: use local PeerJS server for localhost, cloud for production
+        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+
+        // Configure PeerJS connection based on environment
+        let peerConfig;
+        if (isLocalhost) {
+            // Localhost: use local PeerJS server
+            console.log('[NetworkSystem] Running on localhost - using local PeerJS server (localhost:9000)');
+            peerConfig = {
                 debug: 3, // Maximum debug logging
-                host: 'localhost', // Local PeerJS server
+                host: 'localhost',
                 port: 9000,
                 path: '/',
                 secure: false, // HTTP for localhost
@@ -68,7 +75,32 @@ export function initNetwork(inviteCode, isHost = true) {
                         }
                     ]
                 }
-            });
+            };
+        } else {
+            // Production (GitHub Pages): use PeerJS cloud service
+            console.log('[NetworkSystem] Running on GitHub Pages - using PeerJS cloud service');
+            peerConfig = {
+                debug: 2, // Moderate debug logging
+                // No host/port/path specified = uses PeerJS cloud service (cloud.peerjs.com)
+                secure: true, // HTTPS for production
+                config: {
+                    // STUN and TURN servers for reliable connection
+                    iceServers: [
+                        { urls: 'stun:stun.l.google.com:19302' },
+                        { urls: 'stun:stun1.l.google.com:19302' },
+                        // Public TURN server as fallback relay
+                        {
+                            urls: 'turn:numb.viagenie.ca',
+                            username: 'webrtc@live.com',
+                            credential: 'muazkh'
+                        }
+                    ]
+                }
+            };
+        }
+
+        try {
+            network.peer = new Peer(peerId, peerConfig);
 
             network.peer.on('open', (id) => {
                 console.log('Peer initialized with ID:', id);

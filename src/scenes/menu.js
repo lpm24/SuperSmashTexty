@@ -1,6 +1,7 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
 import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode } from '../systems/partySystem.js';
+import { isHost } from '../systems/multiplayerGame.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import {
@@ -283,7 +284,7 @@ export function setupMenuScene(k) {
                     k.pos(partyPanelX + 20, slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
-                    k.outline(1.5),
+                    k.outline(1.5, k.rgb(255, 255, 255)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
@@ -298,7 +299,7 @@ export function setupMenuScene(k) {
                         k.pos(partyPanelX + 38, slotY + slotHeight / 2),
                         k.anchor('left'),
                         k.color(...charData.color),
-                        k.outline(1.5),
+                        k.outline(1.5, k.rgb(255, 255, 255)),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT),
                         'partySlotUI'
@@ -312,7 +313,7 @@ export function setupMenuScene(k) {
                     k.pos(partyPanelX + (slot.isEmpty ? 45 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
-                    k.outline(1.5),
+                    k.outline(1.5, k.rgb(255, 255, 255)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
@@ -326,7 +327,7 @@ export function setupMenuScene(k) {
                         k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
                         k.anchor('right'),
                         k.color(...UI_COLORS.GOLD),
-                        k.outline(1.5),
+                        k.outline(1.5, k.rgb(255, 255, 255)),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT),
                         'partySlotUI'
@@ -573,6 +574,8 @@ export function setupMenuScene(k) {
             350, 55, UI_TEXT_SIZES.HEADER
         );
         playButton.onClick(() => {
+            if (playButton.disabled) return; // Don't allow clicks on disabled button
+
             playMenuSelect();
 
             // Broadcast game start to all clients if in multiplayer
@@ -583,6 +586,12 @@ export function setupMenuScene(k) {
 
             k.go('game', { resetState: true });
         });
+
+        // Disable start game button if in a party but not the host
+        const partySize = getPartySize();
+        if (partySize > 1 && !isHost()) {
+            playButton.setDisabled(true);
+        }
 
         const characterButton = createMenuButton(
             k, 'Character Select', centerX, buttonStartY + buttonSpacing,

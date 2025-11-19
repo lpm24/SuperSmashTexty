@@ -239,10 +239,12 @@ export function calculateDamageAfterDefense(baseDamage, defense = 0, damageReduc
 /**
  * Check if an attack is a critical hit
  * @param {number} critChance - Critical hit chance (0-1)
+ * @param {Object} rng - Optional seeded RNG for multiplayer consistency
  * @returns {boolean} Whether the attack is a crit
  */
-export function rollCriticalHit(critChance) {
-    return Math.random() < critChance;
+export function rollCriticalHit(critChance, rng = null) {
+    const roll = rng ? rng.next() : Math.random();
+    return roll < critChance;
 }
 
 /**

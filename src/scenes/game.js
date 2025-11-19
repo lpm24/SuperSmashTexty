@@ -32,7 +32,7 @@ import { checkAndApplySynergies } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
-import { isUpgradeDraftActive } from './upgradeDraft.js';
+import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
 import { generateFloorMap } from '../systems/floorMap.js';
@@ -41,7 +41,7 @@ import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition } from '../systems/multiplayerGame.js';
 import { onMessage } from '../systems/networkSystem.js';
 import { getNetworkInfo } from '../systems/networkSystem.js';
 
@@ -278,6 +278,18 @@ export function setupGameScene(k) {
             // Initialize multiplayer system with kaplay instance
             initMultiplayerGame(party.isHost, localSlot, k);
 
+            // Broadcast game seed to clients (host only) to ensure synchronized RNG
+            if (party.isHost) {
+                broadcastGameSeed();
+            }
+
+            // Set slot index on local player
+            player.slotIndex = localSlot;
+
+            // Adjust local player position to match slot index (for consistent multiplayer positioning)
+            const localOffsetX = localSlot * 30;
+            player.pos.x = playerSpawnX + localOffsetX;
+
             // Register local player
             registerPlayer(localSlot, player);
             console.log('[Multiplayer] Registered local player at slot', localSlot);
@@ -287,11 +299,13 @@ export function setupGameScene(k) {
                 if (index !== localSlot && slot.playerId !== null) {
                     console.log('[Multiplayer] Creating remote player for slot', index, ':', slot);
                     // Spawn remote player with their selected character
-                    const offsetX = (index - localSlot) * 30; // Small offset
+                    // Use absolute slot index for consistent positioning across all clients
+                    const offsetX = index * 30; // Absolute offset based on slot index
                     const remotePlayer = createPlayer(k, playerSpawnX + offsetX, playerSpawnY, slot.selectedCharacter);
 
                     // Mark as remote player (disable local input)
                     remotePlayer.isRemote = true;
+                    remotePlayer.slotIndex = index;
                     remotePlayer.playerName = slot.playerName;
 
                     // Restore remote player stats if available
@@ -410,8 +424,27 @@ export function setupGameScene(k) {
 
             console.log('[Multiplayer] Spawned', players.length, 'players');
 
-            // Listen for room completion from host (client only)
+            // Listen for room transition from host (client only)
             if (!isHost()) {
+                onMessage('room_transition', (data) => {
+                    console.log('[Multiplayer] Received room transition from host with entry direction:', data.entryDirection);
+
+                    // Update gameState to match host's entry direction for consistent spawn positions
+                    gameState.entryDirection = data.entryDirection;
+
+                    // Prevent duplicate transitions
+                    if (doorEntered) return;
+                    doorEntered = true;
+
+                    // Play door sound for client
+                    playDoorOpen();
+
+                    // Transition to next room (same as handleDoorEntry but without broadcasting)
+                    // Note: We DON'T call handleDoorEntry because that would save stats again
+                    // and broadcast another room_transition. Just transition the scene.
+                    k.go('game');
+                });
+
                 onMessage('room_completed', () => {
                     console.log('[Multiplayer] Received room completion from host');
                     roomCompleted = true;
@@ -423,6 +456,38 @@ export function setupGameScene(k) {
                             door.isSpawnDoor = false;
                             door.updateVisual();
                         }
+                    });
+
+                    // Process pending level ups on client
+                    processPendingLevelUps();
+                });
+
+                // Listen for game over event from host
+                onMessage('game_over', (data) => {
+                    console.log('[Multiplayer] Received game over event from host');
+
+                    // Calculate currency earned (use host's value if provided)
+                    const currencyEarned = data.currencyEarned || calculateCurrencyEarned(runStats);
+
+                    // Update persistent stats and add currency
+                    const fullRunStats = {
+                        ...runStats,
+                        level: player.level,
+                        currencyEarned: currencyEarned
+                    };
+                    updateRunStats(fullRunStats);
+                    addCurrency(currencyEarned);
+
+                    // Check for achievements
+                    checkAchievements(k);
+
+                    // Cleanup multiplayer
+                    cleanupMultiplayer();
+
+                    // Go to game over scene
+                    k.go('gameOver', {
+                        runStats: { ...runStats },
+                        currencyEarned: currencyEarned
                     });
                 });
             }
@@ -519,6 +584,7 @@ export function setupGameScene(k) {
                     });
 
                     // Restore visual state
+                    p.opacity = 1; // Restore full opacity
                     if (p.characterData && p.characterData.color) {
                         p.color = k.rgb(...p.characterData.color);
                     }
@@ -807,9 +873,9 @@ export function setupGameScene(k) {
             k.text('1', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
-            k.color(100, 200, 255), // Light blue text to match XP
+            k.color(255, 255, 255), // White text for better visibility
             k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
+            k.z(UI_Z_LAYERS.UI_BG + 3) // Above the badge background
         ]);
 
         // Player Health Bar (follows player when damaged, shown below player)
@@ -1153,6 +1219,12 @@ export function setupGameScene(k) {
         k.gameData.saveTooltipState = saveTooltipState;
         k.gameData.restoreTooltipState = restoreTooltipState;
         k.gameData.minimap = gameState.minimap;
+        // Track split enemies for accurate counter
+        k.gameData.additionalEnemiesFromSplits = 0;
+        k.gameData.incrementSplitEnemies = (count) => {
+            additionalEnemiesFromSplits += count;
+            k.gameData.additionalEnemiesFromSplits = additionalEnemiesFromSplits;
+        };
         k.gameData.minimapSavedMode = undefined;
         k.gameData.tooltipSavedState = undefined;
 
@@ -1364,9 +1436,11 @@ export function setupGameScene(k) {
             // Update enemies counter (only show in regular rooms, not boss rooms)
             if (!isBossRoom && !roomCompleted) {
                 const currentEnemies = k.get('enemy').length;
-                const totalEnemies = enemiesToSpawn + (isMinibossRoom ? 1 : 0); // Include miniboss if present
+                // Include split enemies in total count
+                const totalEnemies = enemiesToSpawn + additionalEnemiesFromSplits + (isMinibossRoom ? 1 : 0); // Include miniboss and split enemies
                 const currentMinibosses = k.get('miniboss').length;
-                const remainingEnemies = currentEnemies + currentMinibosses + Math.max(0, totalEnemies - enemiesSpawned - (isMinibossRoom && minibossSpawned ? 1 : 0));
+                // Calculate remaining: current alive + not yet spawned
+                const remainingEnemies = currentEnemies + currentMinibosses + Math.max(0, totalEnemies - enemiesSpawned - additionalEnemiesFromSplits - (isMinibossRoom && minibossSpawned ? 1 : 0));
                 enemiesCounter.text = `${remainingEnemies}/${totalEnemies}`;
                 enemiesCounter.hidden = false;
                 enemyIcon.hidden = false;
@@ -1729,7 +1803,8 @@ export function setupGameScene(k) {
             playerState.defense = player.defense || 0;
 
             // Update state flags
-            playerState.isDead = !player.exists() || player.hp() <= 0;
+            // Use player.isDead flag if set, otherwise fall back to HP check
+            playerState.isDead = player.isDead || !player.exists() || player.hp() <= 0;
             playerState.invulnerable = player.invulnerable || false;
 
             // Update state time
@@ -1792,6 +1867,7 @@ export function setupGameScene(k) {
         let isMinibossRoom = false; // Track if this room has a miniboss
         let entranceDoorExclusionTime = 4; // Seconds to exclude entrance door from enemy spawning (3-5 seconds)
         let roomStartTime = 0; // Track when room started
+        let additionalEnemiesFromSplits = 0; // Track extra enemies created by splitting (e.g., slimes)
         
         // Determine if this room should have a miniboss (random chance, not in boss rooms)
         // 15% chance for miniboss room, increases with floor
@@ -2019,7 +2095,9 @@ export function setupGameScene(k) {
                 // Check if boss is defeated (only host checks in multiplayer)
                 if (!isMultiplayerActive() || isHost()) {
                     const bosses = k.get('boss');
-                    if (bosses.length === 0 && !roomCompleted) {
+                    const bossMinions = k.get('enemy').filter(e => e.isBossMinion); // Check for boss minions
+                    // Room completes when boss and all boss minions are defeated
+                    if (bosses.length === 0 && bossMinions.length === 0 && !roomCompleted) {
                         roomCompleted = true;
                         handleRoomCompletion();
                     }
@@ -2302,12 +2380,8 @@ export function setupGameScene(k) {
                         const lootRng = partySize > 1 ? getRoomRNG() : null;
 
                         // Spawn XP pickup at enemy position
+                        // Note: createXPPickup handles multiplayer registration internally
                         const xpPickup = createXPPickup(k, posX, posY, xpValue);
-
-                        // Register pickup for multiplayer sync
-                        if (isMultiplayerActive() && isHost()) {
-                            registerPickup(xpPickup, { type: 'xpPickup', value: xpValue });
-                        }
 
                         // Spawn currency drops (1-3 coins with random currency icons)
                         const currencyDropCount = lootRng ? lootRng.range(1, 4) : Math.floor(Math.random() * 3) + 1;
@@ -2317,12 +2391,8 @@ export function setupGameScene(k) {
                             const offsetX = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
                             const offsetY = lootRng ? (lootRng.next() - 0.5) * 20 : (Math.random() - 0.5) * 20;
                             const icon = getRandomCurrencyIcon();
+                            // Note: createCurrencyPickup handles multiplayer registration internally
                             const currencyPickup = createCurrencyPickup(k, posX + offsetX, posY + offsetY, currencyValue, icon);
-
-                            // Register pickup for multiplayer sync
-                            if (isMultiplayerActive() && isHost()) {
-                                registerPickup(currencyPickup, { type: 'currencyPickup', value: currencyValue, icon: icon });
-                            }
                         }
 
                         // Check for powerup weapon drop
@@ -2331,12 +2401,8 @@ export function setupGameScene(k) {
                             // Offset slightly to avoid overlap with other pickups
                             const offsetX = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
                             const offsetY = lootRng ? (lootRng.next() - 0.5) * 30 : (Math.random() - 0.5) * 30;
+                            // Note: createPowerupWeaponPickup handles multiplayer registration internally
                             const powerupPickup = createPowerupWeaponPickup(k, posX + offsetX, posY + offsetY, powerupDrop);
-
-                            // Register pickup for multiplayer sync
-                            if (isMultiplayerActive() && isHost()) {
-                                registerPickup(powerupPickup, { type: 'powerupPickup', value: powerupDrop });
-                            }
                         }
                     }
                 }
@@ -2367,7 +2433,8 @@ export function setupGameScene(k) {
                         const lootRng = partySize > 1 ? getRoomRNG() : null;
 
                         // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
-                        createXPPickup(k, posX, posY, xpValue);
+                        // Note: createXPPickup handles multiplayer registration internally
+                        const xpPickup = createXPPickup(k, posX, posY, xpValue);
 
                         // Spawn currency drops (10-15 coins with random currency icons)
                         const minibossCurrencyCount = lootRng ? lootRng.range(10, 16) : Math.floor(Math.random() * 6) + 10;
@@ -2378,7 +2445,8 @@ export function setupGameScene(k) {
                             const radius = lootRng ? (30 + lootRng.next() * 20) : (30 + Math.random() * 20);
                             const offsetX = Math.cos(angle) * radius;
                             const offsetY = Math.sin(angle) * radius;
-                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, minibossCurrencyValue);
+                            // Note: createCurrencyPickup handles multiplayer registration internally
+                            const currencyPickup = createCurrencyPickup(k, posX + offsetX, posY + offsetY, minibossCurrencyValue);
                         }
                     }
 
@@ -2422,7 +2490,8 @@ export function setupGameScene(k) {
                         const lootRng = partySize > 1 ? getRoomRNG() : null;
 
                         // Spawn XP pickup at boss position (bosses give more XP)
-                        createXPPickup(k, posX, posY, xpValue);
+                        // Note: createXPPickup handles multiplayer registration internally
+                        const xpPickup = createXPPickup(k, posX, posY, xpValue);
 
                         // Spawn currency drops (20-30 coins with SAME currency icon)
                         const bossCurrencyCount = lootRng ? lootRng.range(20, 31) : Math.floor(Math.random() * 11) + 20;
@@ -2435,7 +2504,8 @@ export function setupGameScene(k) {
                             const offsetX = Math.cos(angle) * radius;
                             const offsetY = Math.sin(angle) * radius;
                             // Use the same icon for all boss drops
-                            createCurrencyPickup(k, posX + offsetX, posY + offsetY, bossCurrencyValue, bossCurrencyIcon);
+                            // Note: createCurrencyPickup handles multiplayer registration internally
+                            const currencyPickup = createCurrencyPickup(k, posX + offsetX, posY + offsetY, bossCurrencyValue, bossCurrencyIcon);
                         }
                     }
 
@@ -2461,21 +2531,38 @@ export function setupGameScene(k) {
             k.get('xpPickup').forEach(pickup => {
                 if (pickup.collected) return;
 
-                // Calculate distance to player
-                const distance = k.vec2(
+                // In multiplayer, check distance to ALL players
+                // In single player, only check local player
+                let closestPlayer = player;
+                let closestDistance = k.vec2(
                     player.pos.x - pickup.pos.x,
                     player.pos.y - pickup.pos.y
                 ).len();
 
+                if (partySize > 1) {
+                    // Check all players to find the closest one
+                    players.forEach(p => {
+                        if (!p.exists() || p.isDead) return;
+                        const dist = k.vec2(
+                            p.pos.x - pickup.pos.x,
+                            p.pos.y - pickup.pos.y
+                        ).len();
+                        if (dist < closestDistance) {
+                            closestDistance = dist;
+                            closestPlayer = p;
+                        }
+                    });
+                }
+
                 // Start magnetizing if within pickup radius (once started, never stops)
-                if (!pickup.magnetizing && distance <= player.pickupRadius) {
+                if (!pickup.magnetizing && closestDistance <= closestPlayer.pickupRadius) {
                     pickup.magnetizing = true;
-                    pickup.targetPlayer = player;
+                    pickup.targetPlayer = closestPlayer;
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
                 // In multiplayer, only the host handles pickup collection to ensure all players get rewards
-                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                if (closestDistance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
                     // In multiplayer, only host collects pickups
                     if (isMultiplayerActive() && !isHost()) {
                         return; // Skip on clients - host will handle collection
@@ -2486,11 +2573,17 @@ export function setupGameScene(k) {
 
                     // In multiplayer, give XP to all players (shared XP)
                     if (partySize > 1) {
+                        // Give XP to all players on host
                         players.forEach(p => {
                             if (p.exists() && !p.isDead && p.addXP) {
                                 p.addXP(pickup.value);
                             }
                         });
+
+                        // Broadcast XP gain to clients so they get it too
+                        if (isHost()) {
+                            broadcastXPGain(pickup.value);
+                        }
                     } else {
                         // Single player: just give to local player
                         player.addXP(pickup.value);
@@ -2562,21 +2655,38 @@ export function setupGameScene(k) {
             k.get('currencyPickup').forEach(pickup => {
                 if (pickup.collected) return;
 
-                // Calculate distance to player
-                const distance = k.vec2(
+                // In multiplayer, check distance to ALL players
+                // In single player, only check local player
+                let closestPlayer = player;
+                let closestDistance = k.vec2(
                     player.pos.x - pickup.pos.x,
                     player.pos.y - pickup.pos.y
                 ).len();
 
+                if (partySize > 1) {
+                    // Check all players to find the closest one
+                    players.forEach(p => {
+                        if (!p.exists() || p.isDead) return;
+                        const dist = k.vec2(
+                            p.pos.x - pickup.pos.x,
+                            p.pos.y - pickup.pos.y
+                        ).len();
+                        if (dist < closestDistance) {
+                            closestDistance = dist;
+                            closestPlayer = p;
+                        }
+                    });
+                }
+
                 // Start magnetizing if within pickup radius (once started, never stops)
-                if (!pickup.magnetizing && distance <= player.pickupRadius) {
+                if (!pickup.magnetizing && closestDistance <= closestPlayer.pickupRadius) {
                     pickup.magnetizing = true;
-                    pickup.targetPlayer = player;
+                    pickup.targetPlayer = closestPlayer;
                 }
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
                 // In multiplayer, only the host handles pickup collection
-                if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                if (closestDistance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
                     // In multiplayer, only host collects pickups
                     if (isMultiplayerActive() && !isHost()) {
                         return; // Skip on clients - host will handle collection
@@ -2663,11 +2773,25 @@ export function setupGameScene(k) {
 
                 // Auto-collect if very close (collection radius is smaller than pickup radius)
                 if (distance <= PICKUP_CONFIG.COLLECTION_RADIUS && !pickup.collected) {
+                    // In multiplayer, only host collects pickups
+                    if (isMultiplayerActive() && !isHost()) {
+                        return; // Skip on clients - host will handle collection
+                    }
+
                     pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playCurrencyPickup(); // Use currency pickup sound for now
 
-                    // Apply powerup weapon to player
-                    applyPowerupWeapon(player, pickup.powerupKey);
+                    // Apply powerup weapon to player (in multiplayer, applies to all players)
+                    if (isMultiplayerActive() && isHost()) {
+                        // Apply powerup to all players in party
+                        const allPlayers = k.get('player');
+                        allPlayers.forEach(p => {
+                            applyPowerupWeapon(p, pickup.powerupKey);
+                        });
+                    } else {
+                        // Singleplayer: apply to local player only
+                        applyPowerupWeapon(player, pickup.powerupKey);
+                    }
 
                     // Visual feedback - flash effect
                     const powerup = POWERUP_WEAPONS[pickup.powerupKey];
@@ -2700,6 +2824,12 @@ export function setupGameScene(k) {
         let doorEntered = false;
         k.onUpdate(() => {
             if (!player.exists() || k.paused || doorEntered) return;
+
+            // In multiplayer, only HOST checks for door transitions
+            // Clients wait for room_transition broadcast from host
+            if (isMultiplayerActive() && !isHost()) {
+                return; // Clients don't check doors - wait for host signal
+            }
 
             k.get('door').forEach(door => {
                 // Only interact with exit doors (not spawn doors, not blocked doors)
@@ -2777,12 +2907,8 @@ export function setupGameScene(k) {
 
                 // Each XP pickup is worth more on higher floors
                 const xpValue = Math.floor(1 + currentFloor * 0.5);
+                // Note: createXPPickup handles multiplayer registration internally
                 const xpPickup = createXPPickup(k, x, y, xpValue);
-
-                // Register pickup for multiplayer sync
-                if (isMultiplayerActive() && isHost()) {
-                    registerPickup(xpPickup, { type: 'xpPickup', value: xpValue });
-                }
             }
 
             // Spawn currency pickups in a spread pattern
@@ -2795,12 +2921,8 @@ export function setupGameScene(k) {
                 // Each currency pickup is worth more on higher floors
                 const currencyValue = Math.floor(1 + currentFloor * 0.3);
                 const icon = getRandomCurrencyIcon();
+                // Note: createCurrencyPickup handles multiplayer registration internally
                 const currencyPickup = createCurrencyPickup(k, x, y, currencyValue, icon);
-
-                // Register pickup for multiplayer sync
-                if (isMultiplayerActive() && isHost()) {
-                    registerPickup(currencyPickup, { type: 'currencyPickup', value: currencyValue, icon: icon });
-                }
             }
 
             // Extra bonus for boss rooms - spawn a few powerup weapons
@@ -2815,14 +2937,60 @@ export function setupGameScene(k) {
                     const y = centerY + Math.sin(angle) * distance;
 
                     const randomPowerup = powerupKeys[Math.floor((rewardRng ? rewardRng.next() : Math.random()) * powerupKeys.length)];
+                    // Note: createPowerupWeaponPickup handles multiplayer registration internally
                     const powerupPickup = createPowerupWeaponPickup(k, x, y, randomPowerup);
-
-                    // Register pickup for multiplayer sync
-                    if (isMultiplayerActive() && isHost()) {
-                        registerPickup(powerupPickup, { type: 'powerupPickup', value: randomPowerup });
-                    }
                 }
             }
+        }
+
+        // Process pending level ups for all players sequentially
+        function processPendingLevelUps() {
+            // Build a queue of all pending level ups from all players
+            const levelUpQueue = [];
+
+            players.forEach((p) => {
+                if (p.exists() && p.pendingLevelUps && p.pendingLevelUps.length > 0) {
+                    p.pendingLevelUps.forEach(level => {
+                        levelUpQueue.push({ player: p, level: level });
+                    });
+                    // Clear the pending level ups now that we've queued them
+                    p.pendingLevelUps = [];
+                }
+            });
+
+            // If no pending level ups, return early
+            if (levelUpQueue.length === 0) {
+                return;
+            }
+
+            console.log('[Game] Processing', levelUpQueue.length, 'pending level ups');
+
+            // Process level ups sequentially
+            let currentIndex = 0;
+
+            function showNextLevelUp() {
+                if (currentIndex >= levelUpQueue.length) {
+                    console.log('[Game] All pending level ups processed');
+                    return;
+                }
+
+                const { player: levelUpPlayer, level } = levelUpQueue[currentIndex];
+                currentIndex++;
+
+                // Determine player name for display
+                const playerName = levelUpPlayer.playerName || (levelUpPlayer.isRemote ? `Player ${levelUpPlayer.slotIndex + 1}` : 'You');
+
+                console.log('[Game] Showing level up for', playerName, 'level', level);
+
+                // Show upgrade draft for this player (pass level for proper RNG seeding)
+                showUpgradeDraft(k, levelUpPlayer, () => {
+                    // Callback when upgrade is selected - show next level up
+                    showNextLevelUp();
+                }, playerName, level);
+            }
+
+            // Start showing level ups
+            showNextLevelUp();
         }
 
         // Handle room completion
@@ -2847,6 +3015,11 @@ export function setupGameScene(k) {
             // Revive all dead players in multiplayer
             if (partySize > 1) {
                 reviveAllPlayers();
+            }
+
+            // Process pending level ups for all players in multiplayer
+            if (partySize > 1) {
+                processPendingLevelUps();
             }
 
             // ==========================================
@@ -3089,6 +3262,11 @@ export function setupGameScene(k) {
             gameState.currentFloor = currentFloor;
             gameState.currentRoom = currentRoom;
 
+            // In multiplayer, broadcast room transition to sync spawn positions
+            if (isMultiplayerActive() && isHost()) {
+                broadcastRoomTransition(gameState.entryDirection);
+            }
+
             // Restart game scene with new room/floor
             k.go('game');
         }
@@ -3103,7 +3281,7 @@ export function setupGameScene(k) {
                 player.orbitalOrbs = [];
             }
 
-            // In multiplayer, don't end the game immediately - check if all players are dead
+            // In multiplayer, don't end the game immediately - only host checks if all players are dead
             if (partySize > 1) {
                 player.isDead = true;
                 player.canMove = false;
@@ -3115,9 +3293,20 @@ export function setupGameScene(k) {
                     player.outline.opacity = 0.5;
                 }
 
-                console.log('[Multiplayer] Player died - checking if any players are still alive');
+                // Broadcast player death immediately to all clients/host
+                if (isMultiplayerActive() && player.slotIndex !== undefined) {
+                    broadcastPlayerDeath(player.slotIndex);
+                }
 
-                // Check if any other players are still alive
+                // Only host checks if all players are dead
+                if (!isHost()) {
+                    console.log('[Multiplayer] Client player died - waiting for host game over event');
+                    return; // Clients don't trigger game over, wait for host event
+                }
+
+                console.log('[Multiplayer] Host player died - checking if any players are still alive');
+
+                // Check if any other players are still alive (host only)
                 const anyPlayerAlive = players.some(p =>
                     p.exists() && p.hp() > 0 && !p.isDead
                 );
@@ -3127,11 +3316,11 @@ export function setupGameScene(k) {
                     return; // Don't go to game over - other players are still alive
                 }
 
-                console.log('[Multiplayer] All players are dead - game over');
-                // Fall through to game over sequence if all players are dead
+                console.log('[Multiplayer] All players are dead - triggering game over');
+                // Host continues to trigger game over and broadcast to clients
             }
 
-            // Single player: game over as normal
+            // Single player or host: game over as normal
             // Calculate currency earned
             const currencyEarned = calculateCurrencyEarned(runStats);
 
@@ -3148,6 +3337,11 @@ export function setupGameScene(k) {
 
             // Check for achievements
             checkAchievements(k);
+
+            // Broadcast game over to clients (if host in multiplayer)
+            if (isMultiplayerActive() && isHost()) {
+                broadcastGameOver(runStats, currencyEarned);
+            }
 
             // Cleanup multiplayer
             if (isMultiplayerActive()) {

@@ -164,30 +164,38 @@ export function createPlayer(k, x, y, characterKey = null) {
     // Movement
     let moveDir = k.vec2(0, 0);
 
+    // Expose moveDir on player object for multiplayer input reading
+    player.moveDir = moveDir;
+
     k.onKeyDown(['w', 'up'], () => {
         if (player.isRemote) return; // Skip input for remote players
         moveDir.y = -1;
+        player.moveDir = moveDir; // Update reference
     });
 
     k.onKeyDown(['s', 'down'], () => {
         if (player.isRemote) return; // Skip input for remote players
         moveDir.y = 1;
+        player.moveDir = moveDir; // Update reference
     });
 
     k.onKeyDown(['a', 'left'], () => {
         if (player.isRemote) return; // Skip input for remote players
         moveDir.x = -1;
+        player.moveDir = moveDir; // Update reference
     });
 
     k.onKeyDown(['d', 'right'], () => {
         if (player.isRemote) return; // Skip input for remote players
         moveDir.x = 1;
+        player.moveDir = moveDir; // Update reference
     });
     
     k.onKeyRelease(['w', 'up'], () => {
         if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('s') && !k.isKeyDown('down')) {
             moveDir.y = 0;
+            player.moveDir = moveDir; // Update reference
         }
     });
 
@@ -195,13 +203,15 @@ export function createPlayer(k, x, y, characterKey = null) {
         if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('w') && !k.isKeyDown('up')) {
             moveDir.y = 0;
+            player.moveDir = moveDir; // Update reference
         }
     });
-    
+
     k.onKeyRelease(['a', 'left'], () => {
         if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('d') && !k.isKeyDown('right')) {
             moveDir.x = 0;
+            player.moveDir = moveDir; // Update reference
         }
     });
 
@@ -209,6 +219,7 @@ export function createPlayer(k, x, y, characterKey = null) {
         if (player.isRemote) return; // Skip input for remote players
         if (!k.isKeyDown('a') && !k.isKeyDown('left')) {
             moveDir.x = 0;
+            player.moveDir = moveDir; // Update reference
         }
     });
 

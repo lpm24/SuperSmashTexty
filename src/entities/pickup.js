@@ -1,7 +1,7 @@
 // Pickup entity definitions
 import { PICKUP_CONFIG } from '../config/constants.js';
 import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
-import { registerPickup, isHost, isMultiplayerActive } from '../systems/multiplayerGame.js';
+import { registerPickup, isHost, isMultiplayerActive, unregisterPickup } from '../systems/multiplayerGame.js';
 
 export function createXPPickup(k, x, y, value) {
     const pickup = k.add([
@@ -101,6 +101,13 @@ export function createXPPickup(k, x, y, value) {
     pickup.pickupType = 'xp'; // Mark type for sync
     if (isMultiplayerActive() && isHost()) {
         registerPickup(pickup, { type: 'xpPickup', value });
+    }
+
+    // Cleanup: Remove from tracking map when destroyed (prevents memory leak)
+    if (isMultiplayerActive()) {
+        pickup.onDestroy(() => {
+            unregisterPickup(pickup);
+        });
     }
 
     return pickup;
@@ -217,6 +224,13 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
         registerPickup(pickup, { type: 'currencyPickup', value, icon: currencyIcon });
     }
 
+    // Cleanup: Remove from tracking map when destroyed (prevents memory leak)
+    if (isMultiplayerActive()) {
+        pickup.onDestroy(() => {
+            unregisterPickup(pickup);
+        });
+    }
+
     return pickup;
 }
 
@@ -325,6 +339,13 @@ export function createPowerupWeaponPickup(k, x, y, powerupKey) {
     pickup.pickupType = 'powerup'; // Mark type for sync
     if (isMultiplayerActive() && isHost()) {
         registerPickup(pickup);
+    }
+
+    // Cleanup: Remove from tracking map when destroyed (prevents memory leak)
+    if (isMultiplayerActive()) {
+        pickup.onDestroy(() => {
+            unregisterPickup(pickup);
+        });
     }
 
     return pickup;

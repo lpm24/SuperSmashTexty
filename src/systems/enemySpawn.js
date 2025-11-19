@@ -54,25 +54,27 @@ function getDefaultWeights() {
 }
 
 // Weighted random selection
-function weightedRandom(weights) {
+function weightedRandom(weights, rng = null) {
     const total = Object.values(weights).reduce((sum, weight) => sum + weight, 0);
-    let random = Math.random() * total;
-    
+    // Use seeded RNG if provided (for multiplayer sync), otherwise Math.random
+    let random = (rng ? rng.next() : Math.random()) * total;
+
     for (const [type, weight] of Object.entries(weights)) {
         random -= weight;
         if (random <= 0) {
             return type;
         }
     }
-    
+
     // Fallback (shouldn't happen)
     return Object.keys(weights)[0];
 }
 
 // Get random enemy type for a given floor
-export function getRandomEnemyType(floor = 1) {
+// Pass rng parameter for multiplayer to ensure consistent spawns across clients
+export function getRandomEnemyType(floor = 1, rng = null) {
     const weights = ENEMY_SPAWN_WEIGHTS[floor] || getDefaultWeights();
-    return weightedRandom(weights);
+    return weightedRandom(weights, rng);
 }
 
 

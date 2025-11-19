@@ -12,7 +12,7 @@
 
 // Configuration imports
 import { WEAPON_CONFIG } from '../config/constants.js';
-import { registerProjectile, isHost, isMultiplayerActive } from '../systems/multiplayerGame.js';
+import { registerProjectile, isHost, isMultiplayerActive, unregisterProjectile } from '../systems/multiplayerGame.js';
 
 export function createProjectile(k, x, y, direction, speed, damage, piercing = 0, obstaclePiercing = 0, isCrit = false, maxRange = null) {
     // Calculate rotation angle from direction vector
@@ -86,6 +86,13 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     // Multiplayer: Register projectile for network sync if host
     if (isMultiplayerActive() && isHost()) {
         registerProjectile(projectile);
+    }
+
+    // Cleanup: Remove from tracking map when destroyed (prevents memory leak)
+    if (isMultiplayerActive()) {
+        projectile.onDestroy(() => {
+            unregisterProjectile(projectile);
+        });
     }
 
     return projectile;
