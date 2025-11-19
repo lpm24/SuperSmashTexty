@@ -5,6 +5,9 @@
 
 import { generateInviteCode } from './nameGenerator.js';
 
+// Debug flag - set to true to enable verbose network logging
+const NET_DEBUG = false;
+
 // Network state
 const network = {
     peer: null,              // Our Peer instance
@@ -184,7 +187,7 @@ function handleIncomingConnection(conn) {
     if (!network.isHost) return;
 
     conn.on('open', () => {
-        console.log('Connection opened with:', conn.peer);
+        if (NET_DEBUG) console.log('Connection opened with:', conn.peer);
         network.connections.set(conn.peer, conn);
 
         // Notify callbacks
@@ -196,7 +199,7 @@ function handleIncomingConnection(conn) {
     });
 
     conn.on('close', () => {
-        console.log('Connection closed with:', conn.peer);
+        if (NET_DEBUG) console.log('Connection closed with:', conn.peer);
         network.connections.delete(conn.peer);
 
         // Notify callbacks
@@ -226,8 +229,10 @@ export function connectToHost(hostInviteCode) {
         }
 
         const hostPeerId = `smash-${hostInviteCode}`;
-        console.log('[NetworkSystem] Attempting to connect to host:', hostPeerId);
-        console.log('[NetworkSystem] Using STUN/TURN servers for NAT traversal...');
+        if (NET_DEBUG) {
+            console.log('[NetworkSystem] Attempting to connect to host:', hostPeerId);
+            console.log('[NetworkSystem] Using STUN/TURN servers for NAT traversal...');
+        }
 
         // Add connection timeout
         let connectionTimeout;

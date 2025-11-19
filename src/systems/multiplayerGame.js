@@ -9,6 +9,9 @@ import { createEnemy } from '../entities/enemy.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
 import { SeededRandom, createSeed } from '../utils/seededRandom.js';
 
+// Debug flag - set to true to enable verbose multiplayer logging
+const MP_DEBUG = false;
+
 // Multiplayer game state
 const mpGame = {
     isActive: false,
@@ -95,7 +98,7 @@ function setupHostHandlers() {
         const party = getParty();
         const slotIndex = party.slots.findIndex(slot => slot.peerId === fromPeerId);
 
-        console.log('[Multiplayer] Received input from peer:', fromPeerId, 'slot:', slotIndex, 'payload:', payload);
+        if (MP_DEBUG) console.log('[Multiplayer] Received input from peer:', fromPeerId, 'slot:', slotIndex);
 
         if (slotIndex !== -1 && mpGame.players.has(slotIndex)) {
             const player = mpGame.players.get(slotIndex);
@@ -110,7 +113,7 @@ function setupHostHandlers() {
             if (payload.aimAngle !== undefined) {
                 player.aimAngle = payload.aimAngle;
             }
-            console.log('[Multiplayer] Applied input to player at slot', slotIndex);
+            if (MP_DEBUG) console.log('[Multiplayer] Applied input to player at slot', slotIndex);
         } else {
             console.warn('[Multiplayer] Could not find player for peer:', fromPeerId, 'slot:', slotIndex);
             console.warn('[Multiplayer] Party slots:', party.slots);
@@ -120,7 +123,7 @@ function setupHostHandlers() {
 
     // Handle pause requests from clients
     onMessage('pause_request', (payload, fromPeerId) => {
-        console.log('[Multiplayer] Pause request from peer:', fromPeerId, 'paused:', payload.paused);
+        if (MP_DEBUG) console.log('[Multiplayer] Pause request from peer:', fromPeerId, 'paused:', payload.paused);
 
         // Host applies the pause state and broadcasts to all clients
         if (mpGame.k) {
@@ -134,13 +137,13 @@ function setupHostHandlers() {
             // Broadcast to all clients (including the requester for confirmation)
             broadcast('pause_state', { paused: payload.paused });
 
-            console.log('[Multiplayer] Host set pause state to:', payload.paused);
+            if (MP_DEBUG) console.log('[Multiplayer] Host set pause state to:', payload.paused);
         }
     });
 
     // Handle player death notifications from clients
     onMessage('player_death', (payload, fromPeerId) => {
-        console.log('[Multiplayer] Received player death from client:', fromPeerId, 'slot:', payload.slotIndex);
+        if (MP_DEBUG) console.log('[Multiplayer] Received player death from client:', fromPeerId, 'slot:', payload.slotIndex);
 
         // Mark player as dead on host
         const player = mpGame.players.get(payload.slotIndex);
@@ -156,7 +159,7 @@ function setupHostHandlers() {
                 player.outline.opacity = 0.5;
             }
 
-            console.log('[Multiplayer] Host marked player at slot', payload.slotIndex, 'as dead');
+            if (MP_DEBUG) console.log('[Multiplayer] Host marked player at slot', payload.slotIndex, 'as dead');
 
             // Broadcast to all other clients
             broadcast('player_death', { slotIndex: payload.slotIndex }, [fromPeerId]);
@@ -165,7 +168,7 @@ function setupHostHandlers() {
 
     // Handle enemy death notifications from clients
     onMessage('enemy_death', (payload, fromPeerId) => {
-        console.log('[Multiplayer] Received enemy death from client:', fromPeerId, 'entity:', payload.entityId);
+        if (MP_DEBUG) console.log('[Multiplayer] Received enemy death from client:', fromPeerId, 'entity:', payload.entityId);
 
         // Broadcast the death to all clients (including back to the sender for confirmation)
         broadcast('entity_destroyed', {
@@ -605,7 +608,7 @@ function setupClientHandlers() {
 
     // Receive pause state updates from host
     onMessage('pause_state', (payload) => {
-        console.log('[Multiplayer] Received pause state from host:', payload.paused);
+        if (MP_DEBUG) console.log('[Multiplayer] Received pause state from host:', payload.paused);
 
         // Apply pause state locally
         if (mpGame.k) {
@@ -616,13 +619,13 @@ function setupClientHandlers() {
                 mpGame.k.gameData.updatePauseUI(payload.paused);
             }
 
-            console.log('[Multiplayer] Client set pause state to:', payload.paused);
+            if (MP_DEBUG) console.log('[Multiplayer] Client set pause state to:', payload.paused);
         }
     });
 
     // Receive XP gain from host
     onMessage('xp_gain', (payload) => {
-        console.log('[Multiplayer] Received XP gain from host:', payload.value);
+        if (MP_DEBUG) console.log('[Multiplayer] Received XP gain from host:', payload.value);
 
         // Give XP to all local players
         if (mpGame.players) {
@@ -646,7 +649,7 @@ function setupClientHandlers() {
 
     // Receive player death events from host
     onMessage('player_death', (payload) => {
-        console.log('[Multiplayer] Received player death event for slot:', payload.slotIndex);
+        if (MP_DEBUG) console.log('[Multiplayer] Received player death event for slot:', payload.slotIndex);
 
         // Mark player as dead immediately
         const player = mpGame.players.get(payload.slotIndex);
@@ -662,7 +665,7 @@ function setupClientHandlers() {
                 player.outline.opacity = 0.5;
             }
 
-            console.log('[Multiplayer] Marked player at slot', payload.slotIndex, 'as dead');
+            if (MP_DEBUG) console.log('[Multiplayer] Marked player at slot', payload.slotIndex, 'as dead');
         }
     });
 
