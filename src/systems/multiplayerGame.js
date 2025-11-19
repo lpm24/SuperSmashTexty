@@ -665,6 +665,33 @@ function setupClientHandlers() {
             console.log('[Multiplayer] Marked player at slot', payload.slotIndex, 'as dead');
         }
     });
+
+    // Receive player disconnect events from host
+    onMessage('player_disconnected', (payload) => {
+        console.log('[Multiplayer] Received player disconnect event for slot:', payload.slotIndex);
+
+        // Clean up the disconnected player's entity on this client
+        const player = mpGame.players.get(payload.slotIndex);
+        if (player && player.exists()) {
+            // Clear pending level-ups
+            if (player.pendingLevelUps) {
+                player.pendingLevelUps = [];
+            }
+
+            // Clean up health bars before destroying
+            if (player.cleanupHealthBars && typeof player.cleanupHealthBars === 'function') {
+                player.cleanupHealthBars();
+            }
+
+            // Destroy player entity
+            mpGame.k.destroy(player);
+
+            // Remove from tracking
+            mpGame.players.delete(payload.slotIndex);
+
+            console.log('[Multiplayer] Cleaned up disconnected player from slot', payload.slotIndex);
+        }
+    });
 }
 
 /**
@@ -676,6 +703,53 @@ export function registerPlayer(slotIndex, playerEntity) {
     mpGame.players.set(slotIndex, playerEntity);
     playerEntity.mpSlotIndex = slotIndex; // Store slot index on entity
     console.log(`Registered player for slot ${slotIndex}`);
+}
+
+/**
+ * Handle player disconnect (cleanup entity and state)
+ * @param {number} slotIndex - Party slot index (0-3)
+ */
+export function handlePlayerDisconnect(slotIndex) {
+    const player = mpGame.players.get(slotIndex);
+    if (player && player.exists()) {
+        console.log(`[Multiplayer] Cleaning up disconnected player in slot ${slotIndex}`);
+
+        // Clear pending level-ups
+        if (player.pendingLevelUps) {
+            player.pendingLevelUps = [];
+        }
+
+        // Clean up health bars before destroying
+        if (player.cleanupHealthBars && typeof player.cleanupHealthBars === 'function') {
+            player.cleanupHealthBars();
+        }
+
+        // Destroy player entity
+        if (mpGame.k) {
+            mpGame.k.destroy(player);
+        }
+
+        // Remove from tracking
+        mpGame.players.delete(slotIndex);
+
+        // Broadcast disconnect to other clients (host only)
+        if (mpGame.isHost) {
+            broadcastPlayerDisconnect(slotIndex);
+        }
+
+        console.log(`[Multiplayer] Disconnected player cleanup complete for slot ${slotIndex}`);
+    }
+}
+
+/**
+ * Broadcast player disconnect event to all clients
+ * @param {number} slotIndex - Slot index of disconnected player
+ */
+export function broadcastPlayerDisconnect(slotIndex) {
+    if (!mpGame.isHost) return;
+
+    broadcast('player_disconnected', { slotIndex });
+    console.log(`[Multiplayer] Broadcasted player disconnect for slot ${slotIndex}`);
 }
 
 /**

@@ -15,7 +15,7 @@ import {
     getConnectedPeers,
     getNetworkInfo
 } from './networkSystem.js';
-import { sendInitialGameState } from './multiplayerGame.js';
+import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlayer } from './multiplayerGame.js';
 
 // Party state
 const party = {
@@ -410,6 +410,11 @@ function handlePlayerDisconnect(peerId) {
     const slotIndex = party.peerIdToSlot.get(peerId);
     if (slotIndex !== undefined) {
         console.log('Player disconnected from slot', slotIndex);
+
+        // Clean up player entity from the game (destroys entity, clears pending level-ups, broadcasts to clients)
+        cleanupDisconnectedPlayer(slotIndex);
+
+        // Remove from party
         removePlayerFromParty(slotIndex);
         party.peerIdToSlot.delete(peerId);
         broadcastPartyUpdate();
