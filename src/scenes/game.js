@@ -175,6 +175,9 @@ export function setupGameScene(k) {
             keyPresses: []
         };
 
+        // Flag to prevent duplicate door transitions (used in message handler and update loop)
+        let doorEntered = false;
+
         // Get party size early for multiplayer checks throughout the scene
         const partySize = getPartySize();
 
@@ -441,9 +444,6 @@ export function setupGameScene(k) {
 
             console.log('[Multiplayer] Spawned', players.length, 'players');
 
-            // Flag to prevent duplicate door transitions (used in message handler and update loop)
-            let doorEntered = false;
-
             // Listen for room transition from host (client only)
             if (!isHost()) {
                 // Prevent duplicate handler registration (memory leak fix)
@@ -510,11 +510,12 @@ export function setupGameScene(k) {
                     console.log('[Multiplayer] Received game over event from host');
 
                     // Calculate currency earned (use host's value if provided)
-                    const currencyEarned = data.currencyEarned || calculateCurrencyEarned(runStats);
+                    const currencyEarned = data.currencyEarned || calculateCurrencyEarned(data.runStats || runStats);
 
                     // Update persistent stats and add currency
+                    // Use runStats from host (data.runStats) instead of local runStats (which is empty for clients)
                     const fullRunStats = {
-                        ...runStats,
+                        ...(data.runStats || runStats),
                         level: player.level,
                         currencyEarned: currencyEarned
                     };
@@ -529,7 +530,7 @@ export function setupGameScene(k) {
 
                     // Go to game over scene
                     k.go('gameOver', {
-                        runStats: { ...runStats },
+                        runStats: { ...(data.runStats || runStats) },
                         currencyEarned: currencyEarned
                     });
                 });
