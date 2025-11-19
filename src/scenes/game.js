@@ -39,13 +39,11 @@ import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosio
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
 import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
-import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
-import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
+import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued } from '../systems/multiplayerGame.js';
-import { onMessage, offMessage } from '../systems/networkSystem.js';
-import { getNetworkInfo } from '../systems/networkSystem.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit } from '../systems/multiplayerGame.js';
+import { onMessage, offMessage, getNetworkInfo } from '../systems/networkSystem.js';
 
 // Config imports
 import { PICKUP_CONFIG } from '../config/constants.js';
@@ -86,22 +84,23 @@ let runStats = {
 let gameSceneMessageHandlersRegistered = false;
 
 // Apply permanent upgrades to player
-function applyPermanentUpgrades(k, player) {
+// If upgradeLevels is provided, use those; otherwise use local storage (for local player)
+function applyPermanentUpgrades(k, player, upgradeLevels = null) {
     // Apply starting health upgrades
-    const healthLevel = getPermanentUpgradeLevel('startingHealth');
+    const healthLevel = upgradeLevels?.startingHealth ?? getPermanentUpgradeLevel('startingHealth');
     if (healthLevel > 0) {
         player.maxHealth += healthLevel * 10;
         player.setHP(player.maxHealth); // Full health
     }
-    
+
     // Apply starting damage upgrades
-    const damageLevel = getPermanentUpgradeLevel('startingDamage');
+    const damageLevel = upgradeLevels?.startingDamage ?? getPermanentUpgradeLevel('startingDamage');
     if (damageLevel > 0) {
         player.projectileDamage += damageLevel;
     }
-    
+
     // Apply starting speed upgrades
-    const speedLevel = getPermanentUpgradeLevel('startingSpeed');
+    const speedLevel = upgradeLevels?.startingSpeed ?? getPermanentUpgradeLevel('startingSpeed');
     if (speedLevel > 0) {
         player.speed += speedLevel * 10;
     }
@@ -128,12 +127,6 @@ export function setupGameScene(k) {
             // TODO: Get selected character from menu
             const characterKey = 'survivor'; // Default for now
             state.addPlayer(playerId, characterKey);
-
-            console.log('[Game] New architecture initialized:', {
-                playerId,
-                sessionId: state.sessionId,
-                gameMode: state.gameMode
-            });
         }
 
         // Get current game state (for both new and continuing games)
@@ -192,8 +185,6 @@ export function setupGameScene(k) {
 
         // Generate floor map if starting new floor or no map exists
         if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
-            console.log(`[Game] Generating new floor map for floor ${currentFloor}`);
-
             // Set current floor for seeded RNG in multiplayer
             if (partySize > 1) {
                 setCurrentFloor(currentFloor);
@@ -271,16 +262,14 @@ export function setupGameScene(k) {
             if (gameState.playerStats.activeSynergies) {
                 player.activeSynergies = new Set(gameState.playerStats.activeSynergies);
             }
+            // Restore pending level ups
+            if (gameState.playerStats.pendingLevelUps) {
+                player.pendingLevelUps = [...gameState.playerStats.pendingLevelUps];
+            }
             // CRITICAL: Recalculate all upgrades to ensure they're properly applied
             if (player.upgradeStacks && Object.keys(player.upgradeStacks).length > 0) {
                 recalculateAllUpgrades(player);
             }
-            console.log('[Game] Restored player stats from gameState:', {
-                level: player.level,
-                health: `${player.hp()}/${player.maxHealth}`,
-                upgrades: Object.keys(player.upgradeStacks || {}).length,
-                isRemote: gameState.playerStats.isRemote
-            });
         } else {
             // New game - create fresh player
             player = createPlayer(k, playerSpawnX, playerSpawnY);
@@ -297,12 +286,8 @@ export function setupGameScene(k) {
         let players = [player]; // Array of all player entities
 
         if (partySize > 1 && networkInfo.isInitialized) {
-            console.log('[Multiplayer] Initializing multiplayer game with', partySize, 'players');
-            console.log('[Multiplayer] Party slots:', party.slots);
-
             // Find local player slot
             const localSlot = party.slots.findIndex(slot => slot.isLocal);
-            console.log('[Multiplayer] Local player slot:', localSlot);
 
             // Initialize multiplayer system with kaplay instance
             initMultiplayerGame(party.isHost, localSlot, k);
@@ -321,12 +306,10 @@ export function setupGameScene(k) {
 
             // Register local player
             registerPlayer(localSlot, player);
-            console.log('[Multiplayer] Registered local player at slot', localSlot);
 
             // Spawn additional players for other party members
             party.slots.forEach((slot, index) => {
                 if (index !== localSlot && slot.playerId !== null) {
-                    console.log('[Multiplayer] Creating remote player for slot', index, ':', slot);
                     // Spawn remote player with their selected character
                     // Use absolute slot index for consistent positioning across all clients
                     const offsetX = index * 30; // Absolute offset based on slot index
@@ -341,7 +324,6 @@ export function setupGameScene(k) {
                     if (gameState.allPlayerStats && gameState.allPlayerStats.length > 0) {
                         const savedStats = gameState.allPlayerStats.find(stats => stats.slotIndex === index);
                         if (savedStats) {
-                            console.log('[Multiplayer] Restoring stats for remote player at slot', index);
                             Object.assign(remotePlayer, savedStats);
                             remotePlayer.setHP(savedStats.currentHP || remotePlayer.maxHealth);
 
@@ -352,6 +334,10 @@ export function setupGameScene(k) {
                             if (savedStats.activeSynergies) {
                                 remotePlayer.activeSynergies = new Set(savedStats.activeSynergies);
                             }
+                            // Restore pending level ups
+                            if (savedStats.pendingLevelUps) {
+                                remotePlayer.pendingLevelUps = [...savedStats.pendingLevelUps];
+                            }
 
                             // Recalculate upgrades
                             if (remotePlayer.upgradeStacks && Object.keys(remotePlayer.upgradeStacks).length > 0) {
@@ -360,7 +346,8 @@ export function setupGameScene(k) {
                         }
                     } else {
                         // No saved stats - apply permanent upgrades to new remote player
-                        applyPermanentUpgrades(k, remotePlayer);
+                        // Use the slot's permanent upgrade levels (from their save data)
+                        applyPermanentUpgrades(k, remotePlayer, slot.permanentUpgradeLevels);
                     }
 
                     // Setup combat system for remote player (uses network input)
@@ -451,17 +438,13 @@ export function setupGameScene(k) {
                 }
             });
 
-            console.log('[Multiplayer] Spawned', players.length, 'players');
-
             // Listen for room transition from host (client only)
             if (!isHost()) {
                 // Prevent duplicate handler registration (memory leak fix)
                 if (!gameSceneMessageHandlersRegistered) {
                     gameSceneMessageHandlersRegistered = true;
-                    console.log('[Multiplayer] Registering client message handlers for game scene');
 
                 onMessage('room_transition', (data) => {
-                    console.log('[Multiplayer] Received room transition from host with entry direction:', data.entryDirection, 'and stats for', data.allPlayerStats?.length || 0, 'players');
 
                     // Update gameState to match host's entry direction for consistent spawn positions
                     gameState.entryDirection = data.entryDirection;
@@ -474,11 +457,6 @@ export function setupGameScene(k) {
                         const localPlayerStats = data.allPlayerStats.find(stats => stats.slotIndex === localSlot);
                         if (localPlayerStats) {
                             gameState.playerStats = localPlayerStats;
-                            console.log('[Multiplayer] Client found and saved local player stats for slot', localSlot, ':', {
-                                level: localPlayerStats.level,
-                                health: `${localPlayerStats.currentHP}/${localPlayerStats.maxHealth}`,
-                                upgrades: Object.keys(localPlayerStats.upgradeStacks || {}).length
-                            });
                         } else {
                             console.warn('[Multiplayer] Client could not find stats for local slot', localSlot);
                         }
@@ -498,7 +476,6 @@ export function setupGameScene(k) {
                 });
 
                 onMessage('room_completed', () => {
-                    console.log('[Multiplayer] Received room completion from host');
                     roomCompleted = true;
 
                     // Update doors to show they're open
@@ -510,14 +487,12 @@ export function setupGameScene(k) {
                         }
                     });
 
-                    // Process pending level ups on client
-                    processPendingLevelUps();
+                    // Note: Level ups are now manually triggered via button, not auto-shown
+                    // processPendingLevelUps();
                 });
 
                 // Listen for game over event from host
                 onMessage('game_over', (data) => {
-                    console.log('[Multiplayer] Received game over event from host');
-
                     // Calculate currency earned (use host's value if provided)
                     const currencyEarned = data.currencyEarned || calculateCurrencyEarned(data.runStats || runStats);
 
@@ -546,8 +521,6 @@ export function setupGameScene(k) {
 
                 // Listen for powerup weapon application from host
                 onMessage('powerup_weapon_applied', (data) => {
-                    console.log('[Multiplayer] Received powerup weapon application:', data.powerupKey);
-
                     // Apply powerup to all players (client-side visual update)
                     // The actual weapon stats will be synced via game_state
                     players.forEach(p => {
@@ -559,8 +532,6 @@ export function setupGameScene(k) {
 
                 // Listen for upgrade selection from host/clients
                 onMessage('upgrade_selected', (data) => {
-                    console.log('[Multiplayer] Received upgrade selection:', data.upgradeKey, 'for slot:', data.slotIndex);
-
                     // Find the player who selected the upgrade
                     const upgradingPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (upgradingPlayer && upgradingPlayer.exists()) {
@@ -573,8 +544,6 @@ export function setupGameScene(k) {
 
                 // Listen for level up queued events
                 onMessage('level_up_queued', (data) => {
-                    console.log('[Multiplayer] Received level up queued:', data.level, 'for slot:', data.slotIndex);
-
                     // Find the player who leveled up
                     const leveledPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (leveledPlayer && leveledPlayer.exists()) {
@@ -591,8 +560,6 @@ export function setupGameScene(k) {
 
                 // Listen for synergy activation
                 onMessage('synergy_activated', (data) => {
-                    console.log('[Multiplayer] Received synergy activation:', data.synergies, 'for slot:', data.slotIndex);
-
                     // Find the player who activated synergies
                     const synergyPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (synergyPlayer && synergyPlayer.exists()) {
@@ -603,8 +570,6 @@ export function setupGameScene(k) {
 
                 // Listen for powerup weapon expiration
                 onMessage('powerup_expired', (data) => {
-                    console.log('[Multiplayer] Received powerup expiration:', data.powerupKey, 'for slot:', data.slotIndex);
-
                     // Find the player whose powerup expired
                     const expiringPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (expiringPlayer && expiringPlayer.exists()) {
@@ -659,13 +624,6 @@ export function setupGameScene(k) {
             playerState.defense = player.defense || 0;
             playerState.damageReduction = player.damageReduction || 0;
             playerState.dodgeChance = player.dodgeChance || 0;
-
-            console.log('[Game] Player entity synced to PlayerState:', {
-                playerId: localPlayerId,
-                position: { x: playerState.x, y: playerState.y },
-                health: `${playerState.health}/${playerState.maxHealth}`,
-                level: playerState.level
-            });
         }
 
         // ==========================================
@@ -683,11 +641,9 @@ export function setupGameScene(k) {
                     p.setHP(p.maxHealth);
                     p.isDead = false;
 
-                    // Re-enable input for local player
-                    if (!p.isRemote) {
-                        p.canMove = true;
-                        p.canShoot = true;
-                    }
+                    // Re-enable movement and shooting (for all players, including remote ones on host)
+                    p.canMove = true;
+                    p.canShoot = true;
 
                     // Show revival effect
                     const reviveEffect = k.add([
@@ -716,7 +672,6 @@ export function setupGameScene(k) {
                     }
 
                     revivedCount++;
-                    console.log(`[Revival] Player ${index} revived (${p.playerName || 'Local'})`);
                 }
             });
 
@@ -863,20 +818,20 @@ export function setupGameScene(k) {
         }
         
         // HUD
-        // Top-left panel background (smaller, just for enemy counter)
+        // Top-left panel background (outside room boundary)
         const topLeftPanelBg = k.add([
-            k.rect(100, 40),
-            k.pos(10, 10),
+            k.rect(82, 22),
+            k.pos(8, 2),
             k.color(0, 0, 0),
             k.opacity(0.6),
             k.fixed(),
-            k.z(UI_Z_LAYERS.UI_BG - 1)
+            k.z(UI_Z_LAYERS.UI_BG)
         ]);
 
-        // Enemy counter with skull icon (top left)
+        // Enemy counter with skull icon (top left - outside room)
         const enemyIcon = k.add([
             k.text('☠', { size: UI_TEXT_SIZES.HUD }),
-            k.pos(20, 20),
+            k.pos(20, 6),
             k.color(...UI_COLORS.WARNING),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
@@ -884,16 +839,16 @@ export function setupGameScene(k) {
 
         const enemiesCounter = k.add([
             k.text('0/0', { size: UI_TEXT_SIZES.HUD }),
-            k.pos(40, 20),
+            k.pos(40, 6),
             k.color(...UI_COLORS.WARNING),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Top-right panel background
+        // Top-right panel background (outside room boundary)
         const topRightPanelBg = k.add([
-            k.rect(120, 40),
-            k.pos(k.width() - 10, 10),
+            k.rect(85, 22),
+            k.pos(k.width() - 10, 2),
             k.anchor('topright'),
             k.color(0, 0, 0),
             k.opacity(0.6),
@@ -901,10 +856,10 @@ export function setupGameScene(k) {
             k.z(UI_Z_LAYERS.UI_BG - 1)
         ]);
 
-        // Credit counter (top right) - z-layer 950 to appear above minimap
+        // Credit counter (top right - outside room) - z-layer 950 to appear above minimap
         const creditIcon = k.add([
             k.text('$', { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() - 20, 20),
+            k.pos(k.width() - 20, 6),
             k.anchor('topright'),
             k.color(255, 215, 0), // Gold color
             k.fixed(),
@@ -913,9 +868,9 @@ export function setupGameScene(k) {
 
         const creditText = k.add([
             k.text('0', { size: UI_TEXT_SIZES.HUD }),
-            k.pos(k.width() - 40, 20),
+            k.pos(k.width() - 40, 6),
             k.anchor('topright'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.color(255, 215, 0), // Gold color to match icon
             k.fixed(),
             k.z(950)
         ]);
@@ -946,10 +901,10 @@ export function setupGameScene(k) {
             ]);
         }
 
-        // XP Bar (bottom of screen)
+        // XP Bar (bottom of screen, below room boundary)
         const xpBarWidth = k.width() - 40;
         const xpBarHeight = 15; // Reduced by 25% from 20
-        const xpBarY = k.height() - 30;
+        const xpBarY = k.height() - 18;
 
         const xpBarBg = k.add([
             k.rect(xpBarWidth, xpBarHeight),
@@ -962,7 +917,7 @@ export function setupGameScene(k) {
 
         const xpBarFill = k.add([
             k.rect(0, xpBarHeight - 4),
-            k.pos(50, xpBarY + 2), // Start after level badge
+            k.pos(58, xpBarY + 2), // Start after level badge (adjusted for larger badge)
             k.color(100, 200, 255), // Light blue XP color (matches pickup)
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 1)
@@ -978,7 +933,7 @@ export function setupGameScene(k) {
         ]);
 
         // Level badge (circular frame on left end of XP bar)
-        const levelBadgeSize = 28;
+        const levelBadgeSize = 36; // 30% bigger (was 28)
         const levelBadgeX = 20 + levelBadgeSize / 2;
         const levelBadgeY = xpBarY + xpBarHeight / 2;
 
@@ -993,7 +948,7 @@ export function setupGameScene(k) {
         ]);
 
         const levelText = k.add([
-            k.text('1', { size: UI_TEXT_SIZES.SMALL }),
+            k.text('1', { size: UI_TEXT_SIZES.BODY }), // 30% bigger (was SMALL)
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
             k.color(255, 255, 255), // White text for better visibility
@@ -1031,7 +986,7 @@ export function setupGameScene(k) {
         // WEAPON INDICATOR (Bottom Left - Icon Only)
         // ==========================================
         const weaponIconSize = 48;
-        const weaponIconX = 20;
+        const weaponIconX = 25;
         const weaponIconY = k.height() - 85; // Above XP bar (moved up to avoid overlap)
 
         const weaponIconBg = k.add([
@@ -1255,8 +1210,8 @@ export function setupGameScene(k) {
         // LEVEL UP BUTTON (Bottom Right)
         // ==========================================
         const levelUpButtonSize = 50;
-        const levelUpButtonX = k.width() - levelUpButtonSize - 20;
-        const levelUpButtonY = k.height() - levelUpButtonSize - 20;
+        const levelUpButtonX = k.width() - levelUpButtonSize - 25;
+        const levelUpButtonY = k.height() - levelUpButtonSize - 25;
 
         const levelUpButtonBg = k.add([
             k.rect(levelUpButtonSize, levelUpButtonSize),
@@ -1313,6 +1268,26 @@ export function setupGameScene(k) {
             if (progressionSystem && player.pendingLevelUps && player.pendingLevelUps.length > 0) {
                 progressionSystem.processPendingLevelUp();
             }
+        });
+
+        // Pulsing glow effect for level up button
+        let levelUpGlowTime = 0;
+        levelUpButtonBg.onUpdate(() => {
+            if (levelUpButtonBg.hidden) return;
+
+            levelUpGlowTime += k.dt() * 4; // Speed of pulse
+            const pulse = (Math.sin(levelUpGlowTime) + 1) / 2; // 0 to 1
+
+            // Pulse the outline thickness and brightness
+            const outlineSize = 3 + pulse * 3; // 3 to 6
+            const brightness = 200 + pulse * 55; // 200 to 255
+            levelUpButtonBg.outline.width = outlineSize;
+            levelUpButtonBg.outline.color = k.rgb(brightness, brightness, 100 + pulse * 155);
+
+            // Subtle scale pulse
+            const scale = 1 + pulse * 0.05;
+            levelUpButtonBg.scale = k.vec2(scale, scale);
+            levelUpButtonText.scale = k.vec2(scale, scale);
         });
 
         // ==========================================
@@ -1736,6 +1711,30 @@ export function setupGameScene(k) {
                 updateBuffDisplay();
             }
 
+            // Update level up button visibility and count
+            if (player.exists() && player.pendingLevelUps && player.pendingLevelUps.length > 0) {
+                // Show button
+                levelUpButtonBg.hidden = false;
+                levelUpButtonText.hidden = false;
+
+                // Show/hide count badge based on pending level ups
+                const pendingCount = player.pendingLevelUps.length;
+                if (pendingCount > 1) {
+                    levelUpCountBadge.hidden = false;
+                    levelUpCountText.hidden = false;
+                    levelUpCountText.text = pendingCount.toString();
+                } else {
+                    levelUpCountBadge.hidden = true;
+                    levelUpCountText.hidden = true;
+                }
+            } else {
+                // Hide button when no pending level ups
+                levelUpButtonBg.hidden = true;
+                levelUpButtonText.hidden = true;
+                levelUpCountBadge.hidden = true;
+                levelUpCountText.hidden = true;
+            }
+
             // Update boss HUD
             const bosses = k.get('boss');
             const twinGuardians = bosses.filter(b => b.type === 'twinGuardianMelee' || b.type === 'twinGuardianRanged');
@@ -2026,12 +2025,6 @@ export function setupGameScene(k) {
         state.currentRoom = currentRoom;
         state.roomCleared = false;
 
-        console.log('[Game] Room state synced:', {
-            floor: state.currentFloor,
-            room: state.currentRoom,
-            isBossRoom: currentRoom === 3
-        });
-
         // ==========================================
         // NEW ARCHITECTURE: InputManager integration
         // ==========================================
@@ -2048,15 +2041,6 @@ export function setupGameScene(k) {
 
             // Get input for local player
             const playerInput = inputs.get(localPlayerId);
-
-            // Log occasionally to verify it's working
-            if (Math.random() < 0.01) { // Log ~1% of frames
-                console.log('[InputManager] Frame:', inputMgr.frameNumber, 'Input:', {
-                    move: `(${playerInput.moveX}, ${playerInput.moveY})`,
-                    aim: `(${playerInput.aimX}, ${playerInput.aimY})`,
-                    firing: playerInput.firing
-                });
-            }
         }));
 
         // ==========================================
@@ -2814,15 +2798,12 @@ export function setupGameScene(k) {
 
                     // In multiplayer, give XP to all players (shared XP)
                     if (partySize > 1) {
-                        // HOST: Only give XP to local host player
-                        // Remote players will get XP from the broadcast
+                        // HOST: Give XP to local host player and broadcast to clients
                         if (isHost()) {
-                            players.forEach(p => {
-                                // Only give to local players (slotIndex matches local slot)
-                                if (p.exists() && !p.isDead && p.addXP && p.slotIndex === getParty().localSlot) {
-                                    p.addXP(pickup.value);
-                                }
-                            });
+                            // Give XP to local player
+                            if (player.exists() && !player.isDead && player.addXP) {
+                                player.addXP(pickup.value);
+                            }
                             // Broadcast XP gain to clients
                             broadcastXPGain(pickup.value);
                         } else {
@@ -3229,14 +3210,11 @@ export function setupGameScene(k) {
                 return;
             }
 
-            console.log('[Game] Processing', levelUpQueue.length, 'pending level ups');
-
             // Process level ups sequentially
             let currentIndex = 0;
 
             function showNextLevelUp() {
                 if (currentIndex >= levelUpQueue.length) {
-                    console.log('[Game] All pending level ups processed');
                     return;
                 }
 
@@ -3245,8 +3223,6 @@ export function setupGameScene(k) {
 
                 // Determine player name for display
                 const playerName = levelUpPlayer.playerName || (levelUpPlayer.isRemote ? `Player ${levelUpPlayer.slotIndex + 1}` : 'You');
-
-                console.log('[Game] Showing level up for', playerName, 'level', level);
 
                 // Show upgrade draft for this player (pass level for proper RNG seeding)
                 showUpgradeDraft(k, levelUpPlayer, () => {
@@ -3267,12 +3243,6 @@ export function setupGameScene(k) {
             state.roomCleared = true;
             state.clearRoom();
 
-            console.log('[Game] Room cleared:', {
-                floor: state.currentFloor,
-                room: state.currentRoom,
-                cleared: state.roomCleared
-            });
-
             // Broadcast room completion to clients in multiplayer
             if (isMultiplayerActive() && isHost()) {
                 broadcastRoomCompletion();
@@ -3283,10 +3253,10 @@ export function setupGameScene(k) {
                 reviveAllPlayers();
             }
 
-            // Process pending level ups for all players in multiplayer
-            if (partySize > 1) {
-                processPendingLevelUps();
-            }
+            // Note: Level ups are now manually triggered via button, not auto-shown
+            // if (partySize > 1) {
+            //     processPendingLevelUps();
+            // }
 
             // ==========================================
             // LEGACY STATE
@@ -3383,7 +3353,9 @@ export function setupGameScene(k) {
                     weaponDef: p.weaponDef,
                     baseProjectileDamage: p.baseProjectileDamage,
                     baseFireRate: p.baseFireRate,
-                    baseProjectileSpeed: p.baseProjectileSpeed
+                    baseProjectileSpeed: p.baseProjectileSpeed,
+                    // Pending level ups (preserve across room transitions)
+                    pendingLevelUps: p.pendingLevelUps || []
                 };
             }).filter(stats => stats !== null);
 
@@ -3425,10 +3397,6 @@ export function setupGameScene(k) {
                     } else {
                         // Successfully moved - check if we entered the boss room
                         const newRoom = gameState.floorMap.getCurrentRoom();
-                        if (newRoom.isBossRoom) {
-                            // Boss room reached! This completes the floor
-                            console.log('[Game] Boss room reached - floor complete after this room');
-                        }
                         // Update current room count for legacy systems
                         currentRoom = gameState.floorMap.getVisitedCount();
                     }
@@ -3465,16 +3433,9 @@ export function setupGameScene(k) {
 
                     // Update new state system for floor transition
                     state.nextFloor();
-
-                    console.log('[Game] Advanced to next floor:', state.currentFloor);
                 } else {
                     // Just advancing to next room
                     state.nextRoom();
-
-                    console.log('[Game] Advanced to next room:', {
-                        floor: state.currentFloor,
-                        room: state.currentRoom
-                    });
                 }
             } else {
                 // ==========================================
@@ -3508,16 +3469,9 @@ export function setupGameScene(k) {
 
                     // Update new state system for floor transition
                     state.nextFloor();
-
-                    console.log('[Game] Advanced to next floor:', state.currentFloor);
                 } else {
                     // Just advancing to next room
                     state.nextRoom();
-
-                    console.log('[Game] Advanced to next room:', {
-                        floor: state.currentFloor,
-                        room: state.currentRoom
-                    });
                 }
             }
 
@@ -3567,11 +3521,8 @@ export function setupGameScene(k) {
 
                 // Only host checks if all players are dead
                 if (!isHost()) {
-                    console.log('[Multiplayer] Client player died - waiting for host game over event');
                     return; // Clients don't trigger game over, wait for host event
                 }
-
-                console.log('[Multiplayer] Host player died - checking if any players are still alive');
 
                 // Check if any other players are still alive (host only)
                 const anyPlayerAlive = players.some(p =>
@@ -3579,11 +3530,8 @@ export function setupGameScene(k) {
                 );
 
                 if (anyPlayerAlive) {
-                    console.log('[Multiplayer] At least one player is still alive - continuing game');
                     return; // Don't go to game over - other players are still alive
                 }
-
-                console.log('[Multiplayer] All players are dead - triggering game over');
                 // Host continues to trigger game over and broadcast to clients
             }
 
@@ -3796,16 +3744,102 @@ export function setupGameScene(k) {
             // Only allow clicking when pause menu is visible
             if (!k.paused || quitButton.hidden) return;
 
-            // Cleanup multiplayer
+            // Handle multiplayer quit logic
             if (isMultiplayerActive()) {
-                cleanupMultiplayer();
-            }
+                if (isHost()) {
+                    // Host: broadcast quit to all clients, then quit
+                    broadcastHostQuit();
+                    cleanupMultiplayer();
+                    gameState.currentFloor = 1;
+                    gameState.currentRoom = 1;
+                    gameState.playerStats = null;
+                    k.go('menu');
+                } else {
+                    // Client: show confirmation dialog
+                    const confirmOverlay = k.add([
+                        k.rect(k.width(), k.height()),
+                        k.pos(0, 0),
+                        k.color(0, 0, 0),
+                        k.opacity(0.8),
+                        k.fixed(),
+                        k.z(3000),
+                        'confirmDialog'
+                    ]);
 
-            // Reset game state
-            gameState.currentFloor = 1;
-            gameState.currentRoom = 1;
-            gameState.playerStats = null;
-            k.go('menu');
+                    const confirmText = k.add([
+                        k.text('Leave party and return to menu?', { size: 20 }),
+                        k.pos(k.width() / 2, k.height() / 2 - 50),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    const yesButton = k.add([
+                        k.rect(100, 40),
+                        k.pos(k.width() / 2 - 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(50, 150, 50),
+                        k.outline(2, k.rgb(100, 200, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    k.add([
+                        k.text('Yes', { size: 16 }),
+                        k.pos(k.width() / 2 - 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3002),
+                        'confirmDialog'
+                    ]);
+
+                    const noButton = k.add([
+                        k.rect(100, 40),
+                        k.pos(k.width() / 2 + 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(150, 50, 50),
+                        k.outline(2, k.rgb(200, 100, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    k.add([
+                        k.text('No', { size: 16 }),
+                        k.pos(k.width() / 2 + 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3002),
+                        'confirmDialog'
+                    ]);
+
+                    yesButton.onClick(() => {
+                        k.get('confirmDialog').forEach(e => k.destroy(e));
+                        cleanupMultiplayer();
+                        gameState.currentFloor = 1;
+                        gameState.currentRoom = 1;
+                        gameState.playerStats = null;
+                        k.go('menu');
+                    });
+
+                    noButton.onClick(() => {
+                        k.get('confirmDialog').forEach(e => k.destroy(e));
+                    });
+                }
+            } else {
+                // Single player: just quit
+                gameState.currentFloor = 1;
+                gameState.currentRoom = 1;
+                gameState.playerStats = null;
+                k.go('menu');
+            }
         });
         
         // Toggle minimap with 'M' key
@@ -3844,8 +3878,6 @@ export function setupGameScene(k) {
 
         // Cleanup event handlers on scene leave (memory leak fix)
         k.onSceneLeave(() => {
-            console.log('[Game] Cleaning up event handlers...');
-
             // Cancel all update handlers with error protection
             eventHandlers.updates.forEach(handler => {
                 try {
@@ -3870,15 +3902,12 @@ export function setupGameScene(k) {
                     offMessage('room_transition');
                     offMessage('room_completed');
                     offMessage('game_over');
-                    console.log('[Game] Unregistered client message handlers');
                 } catch (err) {
                     console.warn('[Game] Error unregistering message handlers:', err);
                 }
                 // Reset the flag to allow re-registration
                 gameSceneMessageHandlersRegistered = false;
             }
-
-            console.log('[Game] Cleaned up', eventHandlers.updates.length, 'update handlers and', eventHandlers.keyPresses.length, 'keypress handlers');
         });
     });
 }

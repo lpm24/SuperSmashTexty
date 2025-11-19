@@ -59,7 +59,6 @@ export function initNetwork(inviteCode, isHost = true) {
         let peerConfig;
         if (isLocalhost) {
             // Localhost: use local PeerJS server
-            console.log('[NetworkSystem] Running on localhost - using local PeerJS server (localhost:9000)');
             peerConfig = {
                 debug: 3, // Maximum debug logging
                 host: 'localhost',
@@ -81,7 +80,6 @@ export function initNetwork(inviteCode, isHost = true) {
             };
         } else {
             // Production (GitHub Pages): use PeerJS cloud service
-            console.log('[NetworkSystem] Running on GitHub Pages - using PeerJS cloud service');
             peerConfig = {
                 debug: 2, // Moderate debug logging
                 // No host/port/path specified = uses PeerJS cloud service (cloud.peerjs.com)
@@ -106,7 +104,6 @@ export function initNetwork(inviteCode, isHost = true) {
             network.peer = new Peer(peerId, peerConfig);
 
             network.peer.on('open', (id) => {
-                console.log('Peer initialized with ID:', id);
                 network.peerId = id;
                 network.isInitialized = true;
 
@@ -142,7 +139,6 @@ export function initNetwork(inviteCode, isHost = true) {
                     setTimeout(() => {
                         // Generate a new invite code (just 6 digits, no prefix)
                         const newCode = generateInviteCode();
-                        console.log(`Retrying with new invite code: ${newCode} (without prefix)`);
 
                         // Recursively call initNetwork with new code
                         // This will create a NEW peer with `smash-${newCode}` format
@@ -168,7 +164,6 @@ export function initNetwork(inviteCode, isHost = true) {
             // Host listens for incoming connections
             if (isHost) {
                 network.peer.on('connection', (conn) => {
-                    console.log('Incoming connection from:', conn.peer);
                     handleIncomingConnection(conn);
                 });
             }
@@ -258,7 +253,6 @@ export function connectToHost(hostInviteCode) {
         conn.on('open', () => {
             isResolved = true;
             clearTimeout(connectionTimeout);
-            console.log('[NetworkSystem] Successfully connected to host!');
             network.hostConnection = conn;
             network.hostId = hostPeerId;
 
@@ -271,7 +265,6 @@ export function connectToHost(hostInviteCode) {
         });
 
         conn.on('close', () => {
-            console.log('[NetworkSystem] Disconnected from host');
             network.hostConnection = null;
             network.hostId = null;
 

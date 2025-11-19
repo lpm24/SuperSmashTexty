@@ -67,15 +67,12 @@ export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null
     } else if (isHost) {
         // Host: generate new game seed
         mpGame.gameSeed = Math.floor(Math.random() * 0xFFFFFFFF);
-        console.log(`[Multiplayer] Generated game seed: ${mpGame.gameSeed}`);
     }
 
     // Initialize floor RNG (will be reset when floor changes)
     mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
     mpGame.currentFloor = 1;
     mpGame.currentRoom = { x: 0, y: 0 };
-
-    console.log(`Multiplayer initialized - isHost: ${isHost}, localSlot: ${localSlot}, seed: ${mpGame.gameSeed}`);
 
     // Set up message handlers
     if (isHost) {
@@ -91,6 +88,12 @@ export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null
  * Set up message handlers for host
  */
 function setupHostHandlers() {
+    // Prevent duplicate handler registration
+    if (multiplayerHostHandlersRegistered) {
+        return;
+    }
+    multiplayerHostHandlersRegistered = true;
+
     // Handle player input from clients
     onMessage('player_input', (payload, fromPeerId) => {
         // Store input to be processed in game loop
@@ -178,17 +181,12 @@ function setupHostHandlers() {
             y: payload.y
         });
 
-        console.log('[Multiplayer] Host broadcasted enemy death to all clients');
     });
 
     // Handle re-sync requests from clients
     onMessage('resync_request', (payload, fromPeerId) => {
-        console.log('[Multiplayer] Re-sync requested by client:', fromPeerId);
-
         // Send full game state to requesting client immediately
         sendToPeer(fromPeerId, 'game_state', collectGameState());
-
-        console.log('[Multiplayer] Sent full game state re-sync to client:', fromPeerId);
     });
 
     // Handle level up queued from clients
@@ -204,10 +202,49 @@ function setupHostHandlers() {
 
         if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted level up queued for slot:', payload.slotIndex);
     });
+
+    // Handle upgrade selection from clients
+    onMessage('upgrade_selected', (payload, fromPeerId) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Received upgrade selection from client:', fromPeerId, 'slot:', payload.slotIndex, 'upgrade:', payload.upgradeKey);
+
+        // Apply upgrade to the player on host side
+        const player = mpGame.players.get(payload.slotIndex);
+        if (player && player.exists()) {
+            // Import applyUpgrade dynamically to avoid circular dependency
+            import('../systems/upgrades.js').then(({ applyUpgrade, recalculateAllUpgrades }) => {
+                applyUpgrade(player, payload.upgradeKey);
+                recalculateAllUpgrades(player);
+            });
+        }
+
+        // Broadcast to ALL clients (including back to sender) so everyone can apply the upgrade
+        broadcast('upgrade_selected', {
+            slotIndex: payload.slotIndex,
+            upgradeKey: payload.upgradeKey,
+            timestamp: Date.now()
+        });
+
+        if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted upgrade selection for slot:', payload.slotIndex);
+    });
+
+    // Handle synergy activation from clients
+    onMessage('synergy_activated', (payload, fromPeerId) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Received synergy activation from client:', fromPeerId, 'slot:', payload.slotIndex);
+
+        // Broadcast to ALL clients so everyone can apply the synergies
+        broadcast('synergy_activated', {
+            slotIndex: payload.slotIndex,
+            synergies: payload.synergies,
+            timestamp: Date.now()
+        });
+
+        if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted synergy activation for slot:', payload.slotIndex);
+    });
 }
 
-// Flag to prevent duplicate handler registration
+// Flags to prevent duplicate handler registration
 let multiplayerClientHandlersRegistered = false;
+let multiplayerHostHandlersRegistered = false;
 
 /**
  * Set up message handlers for client
@@ -215,11 +252,9 @@ let multiplayerClientHandlersRegistered = false;
 function setupClientHandlers() {
     // Prevent duplicate handler registration (memory leak fix)
     if (multiplayerClientHandlersRegistered) {
-        console.log('[Multiplayer] Client handlers already registered, skipping duplicate registration');
         return;
     }
     multiplayerClientHandlersRegistered = true;
-    console.log('[Multiplayer] Registering client message handlers');
 
     // Receive game state updates from host
     onMessage('game_state', (payload) => {
@@ -239,6 +274,10 @@ function setupClientHandlers() {
                             player.netTarget.y = playerState.y;
                         }
                         player.angle = playerState.angle || 0;
+                        // Also rotate the outline
+                        if (player.outline && player.outline.exists()) {
+                            player.outline.angle = player.angle;
+                        }
 
                         // Update health and maxHealth
                         if (playerState.maxHealth !== undefined) {
@@ -288,6 +327,39 @@ function setupClientHandlers() {
                         if (playerState.speed !== undefined) player.speed = playerState.speed;
                         if (playerState.damage !== undefined) player.damage = playerState.damage;
                         if (playerState.pickupRadius !== undefined) player.pickupRadius = playerState.pickupRadius;
+                    }
+                } else {
+                    // Update local player's HP from host (damage is host-authoritative)
+                    const localPlayer = mpGame.players.get(mpGame.localPlayerSlot);
+                    if (localPlayer && localPlayer.exists()) {
+                        // Sync HP (host is authoritative for damage)
+                        if (playerState.hp !== undefined && localPlayer.setHP) {
+                            localPlayer.setHP(playerState.hp);
+                        }
+                        if (playerState.maxHealth !== undefined) {
+                            localPlayer.maxHealth = playerState.maxHealth;
+                        }
+
+                        // Sync invulnerability state
+                        if (playerState.invulnerable !== undefined) {
+                            localPlayer.invulnerable = playerState.invulnerable;
+                        }
+                        if (playerState.invulnerableTime !== undefined) {
+                            localPlayer.invulnerableTime = playerState.invulnerableTime;
+                        }
+
+                        // Sync death state
+                        if (playerState.isDead !== undefined) {
+                            localPlayer.isDead = playerState.isDead;
+                            if (localPlayer.isDead) {
+                                localPlayer.canShoot = false;
+                                localPlayer.canMove = false;
+                                localPlayer.isShooting = false;
+                            } else {
+                                localPlayer.canShoot = true;
+                                localPlayer.canMove = true;
+                            }
+                        }
                     }
                 }
             });
@@ -514,15 +586,11 @@ function setupClientHandlers() {
                 }
             });
         }
-
-        console.log(`Damage: ${payload.damage}${payload.isCrit ? ' CRIT!' : ''} to ${payload.targetType} ${payload.targetId}`);
     });
 
     // Handle entity death events
     onMessage('entity_destroyed', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
-
-        console.log(`Entity destroyed: ${payload.entityType} ${payload.entityId} at (${payload.x}, ${payload.y})`);
 
         // Remove the entity from tracking and destroy it
         // Check all entity types: enemies, players, and pickups
@@ -563,8 +631,6 @@ function setupClientHandlers() {
     onMessage('players_revived', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
 
-        console.log('[Multiplayer] Received player revival event - reviving all dead players');
-
         // Revive all dead players
         mpGame.players.forEach((player, slotIndex) => {
             if (player && player.exists() && (player.hp() <= 0 || player.isDead)) {
@@ -572,11 +638,9 @@ function setupClientHandlers() {
                 player.setHP(player.maxHealth);
                 player.isDead = false;
 
-                // Re-enable input for local player
-                if (!player.isRemote) {
-                    player.canMove = true;
-                    player.canShoot = true;
-                }
+                // Re-enable movement and shooting (for all players)
+                player.canMove = true;
+                player.canShoot = true;
 
                 // Show revival effect
                 const reviveEffect = mpGame.k.add([
@@ -603,21 +667,15 @@ function setupClientHandlers() {
                 if (player.outline && player.outline.exists()) {
                     player.outline.opacity = 1;
                 }
-
-                console.log(`[Revival] Client: Player slot ${slotIndex} revived`);
             }
         });
     });
 
     // Handle game seed broadcast from host
     onMessage('game_seed', (payload) => {
-        console.log(`[Multiplayer] Received game seed from host: ${payload.seed}`);
-
         // Initialize RNG with seed from host
         mpGame.gameSeed = payload.seed;
         mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
-
-        console.log('[Multiplayer] Synchronized RNG with host');
     });
 
     // Receive pause state updates from host
@@ -653,7 +711,6 @@ function setupClientHandlers() {
 
     // Receive enemy split events from host
     onMessage('enemy_split', (payload) => {
-        console.log('[Multiplayer] Received enemy split event:', payload.count);
 
         // Update split enemy counter
         if (mpGame.k && mpGame.k.gameData && mpGame.k.gameData.incrementSplitEnemies) {
@@ -685,8 +742,6 @@ function setupClientHandlers() {
 
     // Receive player disconnect events from host
     onMessage('player_disconnected', (payload) => {
-        console.log('[Multiplayer] Received player disconnect event for slot:', payload.slotIndex);
-
         // Clean up the disconnected player's entity on this client
         const player = mpGame.players.get(payload.slotIndex);
         if (player && player.exists()) {
@@ -705,8 +760,19 @@ function setupClientHandlers() {
 
             // Remove from tracking
             mpGame.players.delete(payload.slotIndex);
+        }
+    });
 
-            console.log('[Multiplayer] Cleaned up disconnected player from slot', payload.slotIndex);
+    // Receive host quit event - return to menu
+    onMessage('host_quit', (payload) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Host quit to menu, returning to menu');
+
+        // Cleanup multiplayer state
+        cleanupMultiplayer();
+
+        // Reset game state and return to menu
+        if (mpGame.k) {
+            mpGame.k.go('menu');
         }
     });
 }
@@ -719,7 +785,6 @@ function setupClientHandlers() {
 export function registerPlayer(slotIndex, playerEntity) {
     mpGame.players.set(slotIndex, playerEntity);
     playerEntity.mpSlotIndex = slotIndex; // Store slot index on entity
-    console.log(`Registered player for slot ${slotIndex}`);
 }
 
 /**
@@ -729,7 +794,6 @@ export function registerPlayer(slotIndex, playerEntity) {
 export function handlePlayerDisconnect(slotIndex) {
     const player = mpGame.players.get(slotIndex);
     if (player && player.exists()) {
-        console.log(`[Multiplayer] Cleaning up disconnected player in slot ${slotIndex}`);
 
         // Clear pending level-ups
         if (player.pendingLevelUps) {
@@ -753,8 +817,6 @@ export function handlePlayerDisconnect(slotIndex) {
         if (mpGame.isHost) {
             broadcastPlayerDisconnect(slotIndex);
         }
-
-        console.log(`[Multiplayer] Disconnected player cleanup complete for slot ${slotIndex}`);
     }
 }
 
@@ -766,7 +828,6 @@ export function broadcastPlayerDisconnect(slotIndex) {
     if (!mpGame.isHost) return;
 
     broadcast('player_disconnected', { slotIndex });
-    console.log(`[Multiplayer] Broadcasted player disconnect for slot ${slotIndex}`);
 }
 
 /**
@@ -833,7 +894,6 @@ export function updateMultiplayer(dt) {
             });
 
             if (desyncDetected) {
-                console.log('[Multiplayer] Desync detected - requesting full re-sync from host');
                 requestResync();
             }
 
@@ -1080,10 +1140,9 @@ export function cleanupMultiplayer() {
     // Reset entity ID counter
     mpGame.nextEntityId = 1;
 
-    // Reset client handler registration flag (allows re-registration on reconnect)
+    // Reset handler registration flags (allows re-registration on reconnect)
     multiplayerClientHandlersRegistered = false;
-
-    console.log('Multiplayer session cleaned up');
+    multiplayerHostHandlersRegistered = false;
 }
 
 /**
@@ -1292,8 +1351,6 @@ export function broadcastRevivalEvent() {
     broadcast('players_revived', {
         timestamp: Date.now()
     });
-
-    console.log('[Multiplayer] Broadcasted player revival event');
 }
 
 /**
@@ -1310,8 +1367,18 @@ export function broadcastGameOver(runStats, currencyEarned) {
         currencyEarned: currencyEarned,
         timestamp: Date.now()
     });
+}
 
-    console.log('[Multiplayer] Broadcasted game over event');
+/**
+ * Broadcast host quit to menu to all clients (host only)
+ * All clients should return to menu when host quits
+ */
+export function broadcastHostQuit() {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('host_quit', {
+        timestamp: Date.now()
+    });
 }
 
 /**
@@ -1326,8 +1393,6 @@ export function broadcastPowerupWeaponApplied(powerupKey) {
         powerupKey: powerupKey,
         timestamp: Date.now()
     });
-
-    console.log('[Multiplayer] Broadcasted powerup weapon application:', powerupKey);
 }
 
 /**
@@ -1345,13 +1410,11 @@ export function broadcastUpgradeSelected(slotIndex, upgradeKey) {
             upgradeKey: upgradeKey,
             timestamp: Date.now()
         });
-        console.log('[Multiplayer] Host broadcasted upgrade selection:', upgradeKey, 'for slot:', slotIndex);
     } else {
         sendToHost('upgrade_selected', {
             slotIndex: slotIndex,
             upgradeKey: upgradeKey
         });
-        console.log('[Multiplayer] Client sent upgrade selection to host:', upgradeKey);
     }
 }
 
@@ -1370,13 +1433,11 @@ export function broadcastLevelUpQueued(slotIndex, level) {
             level: level,
             timestamp: Date.now()
         });
-        console.log('[Multiplayer] Host broadcasted level up queued:', level, 'for slot:', slotIndex);
     } else {
         sendToHost('level_up_queued', {
             slotIndex: slotIndex,
             level: level
         });
-        console.log('[Multiplayer] Client sent level up queued to host');
     }
 }
 
@@ -1395,13 +1456,11 @@ export function broadcastSynergyActivated(slotIndex, synergyKeys) {
             synergies: synergyKeys,
             timestamp: Date.now()
         });
-        console.log('[Multiplayer] Host broadcasted synergy activation:', synergyKeys, 'for slot:', slotIndex);
     } else {
         sendToHost('synergy_activated', {
             slotIndex: slotIndex,
             synergies: synergyKeys
         });
-        console.log('[Multiplayer] Client sent synergy activation to host');
     }
 }
 
@@ -1419,8 +1478,6 @@ export function broadcastPowerupExpired(slotIndex, powerupKey) {
         powerupKey: powerupKey,
         timestamp: Date.now()
     });
-
-    console.log('[Multiplayer] Broadcasted powerup expiration:', powerupKey, 'for slot:', slotIndex);
 }
 
 /**
@@ -1440,7 +1497,6 @@ export function setCurrentFloor(floor) {
     // Reset floor RNG with new seed based on floor
     const floorSeed = createSeed(mpGame.gameSeed, floor);
     mpGame.floorRng = new SeededRandom(floorSeed);
-    console.log(`[Multiplayer] Set floor ${floor}, seed: ${floorSeed}`);
 }
 
 /**
@@ -1492,8 +1548,6 @@ export function broadcastGameSeed() {
     broadcast('game_seed', {
         seed: mpGame.gameSeed
     });
-
-    console.log(`[Multiplayer] Broadcasted game seed: ${mpGame.gameSeed}`);
 }
 
 /**
@@ -1504,8 +1558,6 @@ export function broadcastPauseState(paused) {
     if (!mpGame.isHost) return;
 
     broadcast('pause_state', { paused });
-
-    console.log(`[Multiplayer] Broadcasted pause state: ${paused}`);
 }
 
 /**
@@ -1516,8 +1568,6 @@ export function sendPauseRequest(paused) {
     if (mpGame.isHost) return; // Host doesn't send requests to itself
 
     sendToHost('pause_request', { paused });
-
-    console.log(`[Multiplayer] Sent pause request to host: ${paused}`);
 }
 
 /**
@@ -1529,8 +1579,6 @@ export function sendEnemyDeath(deathData) {
     if (mpGame.isHost) return; // Host doesn't send to itself
 
     sendToHost('enemy_death', deathData);
-
-    console.log(`[Multiplayer] Client sent enemy death to host:`, deathData.entityId);
 }
 
 /**
@@ -1541,8 +1589,6 @@ export function broadcastRoomCompletion() {
     if (!mpGame.isHost) return;
 
     broadcast('room_completed', {});
-
-    console.log('[Multiplayer] Broadcasted room completion');
 }
 
 /**
@@ -1553,8 +1599,6 @@ export function broadcastXPGain(xpValue) {
     if (!mpGame.isHost) return;
 
     broadcast('xp_gain', { value: xpValue });
-
-    console.log('[Multiplayer] Broadcasted XP gain:', xpValue);
 }
 
 /**
@@ -1570,8 +1614,6 @@ export function broadcastRoomTransition(entryDirection, allPlayerStats = null) {
         entryDirection: entryDirection,
         allPlayerStats: allPlayerStats
     });
-
-    console.log('[Multiplayer] Broadcasted room transition with entry direction:', entryDirection, 'and player stats for', allPlayerStats?.length || 0, 'players');
 }
 
 /**
@@ -1583,8 +1625,6 @@ export function broadcastEnemySplit(splitCount) {
     if (!mpGame.isHost) return;
 
     broadcast('enemy_split', { count: splitCount });
-
-    console.log('[Multiplayer] Broadcasted enemy split:', splitCount);
 }
 
 /**
@@ -1598,11 +1638,9 @@ export function broadcastPlayerDeath(slotIndex) {
     if (mpGame.isHost) {
         // Host broadcasts to all clients
         broadcast('player_death', { slotIndex });
-        console.log('[Multiplayer] Host broadcasted player death for slot:', slotIndex);
     } else {
         // Client sends to host
         sendToHost('player_death', { slotIndex });
-        console.log('[Multiplayer] Client sent player death to host for slot:', slotIndex);
     }
 }
 
@@ -1614,5 +1652,4 @@ export function requestResync() {
     if (mpGame.isHost) return; // Host doesn't request resyncs
 
     sendToHost('resync_request', { timestamp: Date.now() });
-    console.log('[Multiplayer] Client requested full game state re-sync');
 }

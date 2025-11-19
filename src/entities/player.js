@@ -36,6 +36,7 @@ export function createPlayer(k, x, y, characterKey = null) {
         k.anchor('center'),
         k.color(0, 0, 0), // Black outline
         k.scale(1.15), // Slightly larger
+        k.rotate(0), // Enable rotation
         k.z(-1), // Behind the player
         'playerOutline'
     ]);
@@ -45,6 +46,7 @@ export function createPlayer(k, x, y, characterKey = null) {
         k.pos(x, y),
         k.anchor('center'),
         k.color(...charData.color),
+        k.rotate(0), // Enable rotation
         k.area(),
         k.health(charData.stats.health),
         'player'

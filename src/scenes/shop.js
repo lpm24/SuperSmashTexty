@@ -335,9 +335,11 @@ export function setupShopScene(k) {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
 
-                                    // Refresh shop and reset purchasing flag
+                                    // Refresh shop and reset purchasing flag with delay to prevent double-purchase
                                     refreshShop();
-                                    isPurchasing = false;
+                                    k.wait(0.2, () => {
+                                        isPurchasing = false;
+                                    });
                                 } else if (result && result.reason === 'insufficientCurrency') {
                                     // Play purchase error sound
                                     playPurchaseError();
@@ -382,9 +384,11 @@ export function setupShopScene(k) {
                                         if (successMsg.exists()) k.destroy(successMsg);
                                     });
 
-                                    // Refresh shop and reset purchasing flag
+                                    // Refresh shop and reset purchasing flag with delay to prevent double-purchase
                                     refreshShop();
-                                    isPurchasing = false;
+                                    k.wait(0.2, () => {
+                                        isPurchasing = false;
+                                    });
                                 } else {
                                     // Play purchase error sound
                                     playPurchaseError();

@@ -3,7 +3,7 @@
  * Manages multiplayer party state and joining
  */
 
-import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode } from './metaProgression.js';
+import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode, getPermanentUpgradeLevel } from './metaProgression.js';
 import {
     initNetwork,
     connectToHost,
@@ -43,10 +43,32 @@ export async function initParty(k = null) {
         party.kaplayInstance = k;
     }
 
-    // Set local player info in slot 1
-    party.slots[0].playerName = getPlayerName();
-    party.slots[0].inviteCode = getInviteCode();
-    party.slots[0].selectedCharacter = getSelectedCharacter();
+    // Only set local player info in slot 0 if we're the host
+    // For clients, their slot info is set by party_sync from the host
+    if (party.isHost) {
+        const playerName = getPlayerName();
+        const inviteCode = getInviteCode();
+        const selectedCharacter = getSelectedCharacter();
+
+        party.slots[0].playerId = 'local';
+        party.slots[0].playerName = playerName || 'Player'; // Fallback if name not set
+        party.slots[0].inviteCode = inviteCode || '000000'; // Fallback if code not set
+        party.slots[0].selectedCharacter = selectedCharacter || 'survivor'; // Fallback if character not set
+        party.slots[0].isLocal = true;
+        party.slots[0].permanentUpgradeLevels = {
+            startingHealth: getPermanentUpgradeLevel('startingHealth'),
+            startingDamage: getPermanentUpgradeLevel('startingDamage'),
+            startingSpeed: getPermanentUpgradeLevel('startingSpeed')
+        };
+
+        console.log('[PartySystem] Host player initialized in slot 0:', {
+            name: party.slots[0].playerName,
+            code: party.slots[0].inviteCode,
+            character: party.slots[0].selectedCharacter
+        });
+    } else {
+        console.log('[PartySystem] Client mode - preserving existing slot assignments');
+    }
 
     // Initialize network as host so other players can connect
     // This is needed because we display the invite code in the UI,
@@ -99,21 +121,31 @@ export function setupNetworkHandlers() {
             payload.playerName || 'Player',
             payload.inviteCode || '000000',
             payload.selectedCharacter || 'survivor',
-            fromPeerId
+            fromPeerId,
+            payload.permanentUpgradeLevels || null
         );
 
         if (slotIndex !== null) {
             // Send party sync to the new player
-            sendToPeer(fromPeerId, 'party_sync', {
+            const partySyncData = {
                 slots: party.slots.map(slot => ({
                     playerId: slot.playerId,
                     playerName: slot.playerName,
                     inviteCode: slot.inviteCode,
                     selectedCharacter: slot.selectedCharacter,
+                    permanentUpgradeLevels: slot.permanentUpgradeLevels,
                     isLocal: false // All remote for the client
                 })),
                 yourSlotIndex: slotIndex
+            };
+
+            console.log('[PartySystem] Sending party_sync to new player:', {
+                hostName: partySyncData.slots[0].playerName,
+                hostCharacter: partySyncData.slots[0].selectedCharacter,
+                newPlayerSlot: slotIndex
             });
+
+            sendToPeer(fromPeerId, 'party_sync', partySyncData);
 
             // Send immediate game state if in-game (don't wait for next broadcast cycle)
             // This helps clients joining mid-game see entities immediately
@@ -231,7 +263,7 @@ export function addPlayerToParty(playerName, inviteCode) {
  * @param {string} peerId - Peer ID of the joining player
  * @returns {number|null} Slot index if successful, null if party full
  */
-function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, peerId) {
+function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, peerId, permanentUpgradeLevels = null) {
     // Find first empty slot
     for (let i = 1; i < party.slots.length; i++) {
         if (party.slots[i].playerId === null) {
@@ -240,6 +272,7 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
             party.slots[i].inviteCode = inviteCode;
             party.slots[i].selectedCharacter = selectedCharacter;
             party.slots[i].peerId = peerId;
+            party.slots[i].permanentUpgradeLevels = permanentUpgradeLevels;
             party.peerIdToSlot.set(peerId, i);
             return i;
         }
@@ -253,6 +286,13 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
  * @returns {Promise<boolean>} True if successfully joined
  */
 export async function joinPartyAsClient(hostInviteCode) {
+    // Save local player info before clearing (for restoration on failure)
+    const savedLocalPlayer = {
+        playerName: getPlayerName(),
+        inviteCode: getInviteCode(),
+        selectedCharacter: getSelectedCharacter()
+    };
+
     try {
         // Always clear party slots when joining as client - they'll be repopulated by party_sync
         console.log('[PartySystem] Joining as client - clearing all party slots');
@@ -292,18 +332,73 @@ export async function joinPartyAsClient(hostInviteCode) {
         // Connect to host
         await connectToHost(hostInviteCode);
 
-        // Send our player info including selected character
+        // Send our player info including selected character and permanent upgrades
         sendToHost('join_request', {
-            playerName: getPlayerName(),
-            inviteCode: getInviteCode(),
-            selectedCharacter: getSelectedCharacter()
+            playerName: savedLocalPlayer.playerName,
+            inviteCode: savedLocalPlayer.inviteCode,
+            selectedCharacter: savedLocalPlayer.selectedCharacter,
+            permanentUpgradeLevels: {
+                startingHealth: getPermanentUpgradeLevel('startingHealth'),
+                startingDamage: getPermanentUpgradeLevel('startingDamage'),
+                startingSpeed: getPermanentUpgradeLevel('startingSpeed')
+            }
         });
 
         return true;
     } catch (err) {
         console.error('Failed to join party:', err);
+
+        // Restore local player to solo party state on failure
+        console.log('[PartySystem] Restoring local player after join failure');
+        restoreLocalPlayerToSoloParty(savedLocalPlayer);
+
         return false;
     }
+}
+
+/**
+ * Restore local player to solo party state (after failed/cancelled join)
+ * @param {Object} playerInfo - Saved player info {playerName, inviteCode, selectedCharacter}
+ */
+function restoreLocalPlayerToSoloParty(playerInfo) {
+    // Disconnect network if still trying to connect as client
+    if (party.networkInitialized && !party.isHost) {
+        import('./networkSystem.js').then(({ disconnect: disconnectNetwork }) => {
+            disconnectNetwork();
+        });
+    }
+
+    // Reset to host state
+    party.isHost = true;
+    party.hostInviteCode = null;
+    party.networkInitialized = false;
+
+    // Clear all slots
+    for (let i = 0; i < party.slots.length; i++) {
+        party.slots[i] = {
+            playerId: null,
+            playerName: null,
+            inviteCode: null,
+            selectedCharacter: null,
+            isLocal: false,
+            peerId: null
+        };
+    }
+
+    // Restore local player in slot 0
+    party.slots[0] = {
+        playerId: 'local',
+        playerName: playerInfo.playerName || getPlayerName(),
+        inviteCode: playerInfo.inviteCode || getInviteCode(),
+        selectedCharacter: playerInfo.selectedCharacter || getSelectedCharacter(),
+        isLocal: true,
+        peerId: null
+    };
+
+    // Re-initialize as host (will restart network)
+    initParty(party.kaplayInstance).catch(err => {
+        console.warn('[PartySystem] Failed to re-initialize as host:', err);
+    });
 }
 
 /**
@@ -312,7 +407,12 @@ export async function joinPartyAsClient(hostInviteCode) {
 function setupClientHandlers() {
     // Receive party state from host
     onMessage('party_sync', (payload) => {
-        console.log('[PartySystem] Received party sync:', payload);
+        console.log('[PartySystem] Received party sync:', {
+            hostName: payload.slots[0].playerName,
+            hostCharacter: payload.slots[0].selectedCharacter,
+            yourSlot: payload.yourSlotIndex,
+            totalSlots: payload.slots.filter(s => s.playerId !== null).length
+        });
 
         // Update our party state
         party.slots = payload.slots;
@@ -323,12 +423,16 @@ function setupClientHandlers() {
             console.log(`[PartySystem] Marked slot ${payload.yourSlotIndex} as local`);
         }
 
-        // Mark host's slot (slot 0) with host name
+        // Mark host's slot (slot 0) as remote
         party.slots[0].isLocal = false;
 
-        // Debug: log party size after sync
+        // Debug: log party size and host info after sync
         const partySize = party.slots.filter(s => s.playerId !== null).length;
-        console.log(`[PartySystem] Party size after sync: ${partySize}`, party.slots);
+        console.log(`[PartySystem] Party synced successfully:`, {
+            partySize,
+            hostInSlot0: party.slots[0].playerName,
+            localSlot: payload.yourSlotIndex
+        });
     });
 
     // Handle party updates
@@ -368,9 +472,21 @@ function setupClientHandlers() {
     // Handle host disconnect
     onConnectionChange((event) => {
         if (event === 'host_disconnect') {
-            alert('Host disconnected');
-            // Reset party state
-            clearRemotePlayers();
+            console.log('[PartySystem] Host disconnected - returning to solo party');
+            alert('Host disconnected - returning to main menu');
+
+            // Restore local player to solo party state
+            const savedLocalPlayer = {
+                playerName: getPlayerName(),
+                inviteCode: getInviteCode(),
+                selectedCharacter: getSelectedCharacter()
+            };
+            restoreLocalPlayerToSoloParty(savedLocalPlayer);
+
+            // Return to main menu
+            if (party.kaplayInstance) {
+                party.kaplayInstance.go('menu');
+            }
         }
     });
 }
@@ -387,6 +503,7 @@ function broadcastPartyUpdate() {
             playerName: slot.playerName,
             inviteCode: slot.inviteCode,
             selectedCharacter: slot.selectedCharacter,
+            permanentUpgradeLevels: slot.permanentUpgradeLevels,
             isLocal: false // Always false for remote players
         }))
     });
@@ -414,11 +531,46 @@ function handlePlayerDisconnect(peerId) {
         // Clean up player entity from the game (destroys entity, clears pending level-ups, broadcasts to clients)
         cleanupDisconnectedPlayer(slotIndex);
 
-        // Remove from party
-        removePlayerFromParty(slotIndex);
+        // Remove from party and shift remaining players up
+        removePlayerFromPartyAndShift(slotIndex);
         party.peerIdToSlot.delete(peerId);
         broadcastPartyUpdate();
     }
+}
+
+/**
+ * Remove player from party and shift remaining players up to fill the gap
+ * @param {number} slotIndex - Slot to remove (1-3, can't remove slot 0)
+ */
+function removePlayerFromPartyAndShift(slotIndex) {
+    if (slotIndex <= 0 || slotIndex >= party.slots.length) return;
+
+    console.log(`[PartySystem] Removing player from slot ${slotIndex} and shifting remaining players up`);
+
+    // Shift all players above this slot down by one
+    for (let i = slotIndex; i < party.slots.length - 1; i++) {
+        const nextSlot = party.slots[i + 1];
+
+        // Move next slot to current slot
+        party.slots[i] = { ...nextSlot };
+
+        // Update peer ID mapping if this slot has a peer
+        if (nextSlot.peerId) {
+            party.peerIdToSlot.set(nextSlot.peerId, i);
+        }
+    }
+
+    // Clear the last slot
+    party.slots[party.slots.length - 1] = {
+        playerId: null,
+        playerName: null,
+        inviteCode: null,
+        selectedCharacter: null,
+        isLocal: false,
+        peerId: null
+    };
+
+    console.log('[PartySystem] Slots after shift:', party.slots.map((s, i) => `${i}: ${s.playerName || 'empty'}`));
 }
 
 /**

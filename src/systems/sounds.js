@@ -340,90 +340,83 @@ export function playGenericFire() {
 // ==================== IMPACT SOUNDS ====================
 
 /**
- * Enemy hit sound
+ * Enemy hit sound - soft pop/thump
  */
 export function playEnemyHit() {
   const variation = Math.random();
 
   if (variation < 0.25) {
-    // Thud 1
-    playTone(vary(120, 0.3), 0.08, 'square', 0.16, {
-      attack: 0.001,
-      decay: 0.05,
-      pitchBend: 0.5
+    // Soft pop 1
+    playTone(vary(280, 0.2), 0.06, 'sine', 0.12, {
+      attack: 0.002,
+      decay: 0.04,
+      pitchBend: 0.2
     });
   } else if (variation < 0.5) {
-    // Thud 2
-    playTone(vary(100, 0.3), 0.09, 'sawtooth', 0.16, {
-      attack: 0.001,
-      decay: 0.06,
-      pitchBend: 0.6
+    // Soft pop 2
+    playTone(vary(320, 0.2), 0.05, 'triangle', 0.12, {
+      attack: 0.002,
+      decay: 0.035,
+      pitchBend: 0.15
     });
   } else if (variation < 0.75) {
-    // Impact 1
-    playTone(vary(140, 0.3), 0.07, 'square', 0.16, {
-      attack: 0.001,
-      decay: 0.04,
-      pitchBend: 0.4
-    });
-    playNoise(0.05, 0.1, {
-      attack: 0.001,
-      decay: 0.03,
-      filterFreq: vary(1200, 0.4)
+    // Soft thump 1
+    playTone(vary(240, 0.2), 0.07, 'sine', 0.14, {
+      attack: 0.003,
+      decay: 0.05,
+      pitchBend: 0.25
     });
   } else {
-    // Impact 2
-    playTone(vary(160, 0.3), 0.06, 'triangle', 0.16, {
-      attack: 0.001,
-      decay: 0.04,
-      pitchBend: 0.3
+    // Soft thump 2
+    playTone(vary(360, 0.2), 0.05, 'triangle', 0.10, {
+      attack: 0.002,
+      decay: 0.03,
+      pitchBend: 0.1
     });
   }
 }
 
 /**
- * Player damage sound
+ * Player damage sound - softer but noticeable
  */
 export function playPlayerHit() {
   const variation = Math.random();
 
   if (variation < 0.33) {
-    // Harsh impact 1
-    playTone(vary(80, 0.2), 0.15, 'sawtooth', 0.25, {
-      attack: 0.001,
-      decay: 0.1,
-      pitchBend: 0.4
+    // Soft impact 1
+    playTone(vary(180, 0.2), 0.10, 'triangle', 0.18, {
+      attack: 0.003,
+      decay: 0.07,
+      pitchBend: 0.2
     });
-    playNoise(0.12, 0.2, {
-      attack: 0.001,
-      decay: 0.08,
-      filterType: 'lowpass',
-      filterFreq: vary(1000, 0.3)
+    playTone(vary(400, 0.2), 0.06, 'sine', 0.10, {
+      attack: 0.005,
+      decay: 0.04,
+      pitchBend: 0.1
     });
   } else if (variation < 0.66) {
-    // Harsh impact 2
-    playTone(vary(70, 0.2), 0.18, 'square', 0.25, {
-      attack: 0.001,
-      decay: 0.12,
-      pitchBend: 0.5
+    // Soft impact 2
+    playTone(vary(160, 0.2), 0.12, 'triangle', 0.18, {
+      attack: 0.003,
+      decay: 0.08,
+      pitchBend: 0.25
     });
-    playTone(vary(200, 0.3), 0.08, 'triangle', 0.15, {
+    playTone(vary(320, 0.2), 0.07, 'sine', 0.12, {
       attack: 0.005,
       decay: 0.05,
-      pitchBend: 0.3
+      pitchBend: 0.15
     });
   } else {
-    // Harsh impact 3
-    playTone(vary(90, 0.2), 0.16, 'sawtooth', 0.25, {
-      attack: 0.001,
-      decay: 0.11,
-      pitchBend: 0.6
+    // Soft impact 3
+    playTone(vary(200, 0.2), 0.11, 'triangle', 0.18, {
+      attack: 0.003,
+      decay: 0.08,
+      pitchBend: 0.3
     });
-    playNoise(0.1, 0.18, {
-      attack: 0.001,
-      decay: 0.07,
-      filterType: 'bandpass',
-      filterFreq: vary(800, 0.4)
+    playTone(vary(440, 0.2), 0.05, 'sine', 0.08, {
+      attack: 0.005,
+      decay: 0.03,
+      pitchBend: 0.1
     });
   }
 }

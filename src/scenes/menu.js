@@ -1,7 +1,6 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode } from '../systems/partySystem.js';
-import { isHost } from '../systems/multiplayerGame.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import {
@@ -228,10 +227,10 @@ export function setupMenuScene(k) {
 
         const partyPanelX = 20;
         const partyPanelY = 20;
-        const partyPanelWidth = 188;
-        const slotHeight = 24; // Reduced from 32 to 24
-        const slotSpacing = 3; // Reduced from 4 to 3
-        const titlePadding = 10; // Small padding at top instead of 35
+        const partyPanelWidth = 228;
+        const slotHeight = 26;
+        const slotSpacing = 3;
+        const titlePadding = 11;
         const partyPanelHeight = titlePadding + (slotHeight * 4) + (slotSpacing * 3) + 60; // No title, just slots + invite area
 
         // Party panel background
@@ -280,7 +279,7 @@ export function setupMenuScene(k) {
 
                 // Slot number
                 const slotNum = k.add([
-                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.BODY }),
+                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.BODY + 2 }),
                     k.pos(partyPanelX + 20, slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -295,8 +294,8 @@ export function setupMenuScene(k) {
                 if (!slot.isEmpty) {
                     const charData = CHARACTER_UNLOCKS[slot.selectedCharacter] || CHARACTER_UNLOCKS['survivor'];
                     const charIcon = k.add([
-                        k.text(charData.char, { size: UI_TEXT_SIZES.BODY }),
-                        k.pos(partyPanelX + 38, slotY + slotHeight / 2),
+                        k.text(charData.char, { size: UI_TEXT_SIZES.BODY + 2 }),
+                        k.pos(partyPanelX + 40, slotY + slotHeight / 2),
                         k.anchor('left'),
                         k.color(...charData.color),
                         k.outline(1.5, k.rgb(255, 255, 255)),
@@ -309,8 +308,8 @@ export function setupMenuScene(k) {
 
                 // Player name or "Empty Slot"
                 const nameText = k.add([
-                    k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(partyPanelX + (slot.isEmpty ? 45 : 55), slotY + slotHeight / 2),
+                    k.text(slot.playerName, { size: UI_TEXT_SIZES.SMALL + 2 }),
+                    k.pos(partyPanelX + (slot.isEmpty ? 48 : 60), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
                     k.outline(1.5, k.rgb(255, 255, 255)),
@@ -320,10 +319,10 @@ export function setupMenuScene(k) {
                 ]);
                 elementsForThisSlot.push(nameText);
 
-                // "You" indicator for local player
+                // Star indicator for local player
                 if (slot.isLocal) {
                     const youText = k.add([
-                        k.text('(You)', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                        k.text('★', { size: UI_TEXT_SIZES.LABEL }),
                         k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
                         k.anchor('right'),
                         k.color(...UI_COLORS.GOLD),
@@ -349,6 +348,12 @@ export function setupMenuScene(k) {
             if (lastPartyCheck >= 1.0) { // Check every second
                 lastPartyCheck = 0;
                 updatePartySlots();
+
+                // Update start button state based on current party state
+                // Note: We'll update this after playButton is created
+                if (typeof updateStartButtonState === 'function') {
+                    updateStartButtonState();
+                }
             }
         });
 
@@ -357,7 +362,7 @@ export function setupMenuScene(k) {
 
         // Label on the left
         k.add([
-            k.text('Invite Code:', { size: UI_TEXT_SIZES.SMALL }),
+            k.text('Invite Code:', { size: UI_TEXT_SIZES.SMALL + 2 }),
             k.pos(partyPanelX + 10, inviteCodeY),
             k.anchor('left'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -370,7 +375,7 @@ export function setupMenuScene(k) {
 
         // Invite code display (updates when code becomes available)
         const inviteCodeDisplay = k.add([
-            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL }),
+            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL + 2 }),
             k.pos(partyPanelX + partyPanelWidth - 10, inviteCodeY),
             k.anchor('right'),
             k.color(inviteCode === 'OFFLINE' ? [...UI_COLORS.TEXT_DISABLED] : [...UI_COLORS.GOLD]),
@@ -393,15 +398,15 @@ export function setupMenuScene(k) {
         });
 
         // Join Party button (moved up since we removed a line)
-        const joinButtonY = inviteCodeY + 25;
+        const joinButtonY = inviteCodeY + 28;
         const joinButton = createMenuButton(
             k,
             'JOIN PARTY',
             partyPanelX + partyPanelWidth / 2,
             joinButtonY,
-            120,
-            30,
-            UI_TEXT_SIZES.SMALL
+            132,
+            33,
+            UI_TEXT_SIZES.SMALL + 2
         );
 
         joinButton.onClick(() => {
@@ -570,8 +575,8 @@ export function setupMenuScene(k) {
 
         // Main buttons
         const playButton = createMenuButton(
-            k, 'Start Game', centerX, buttonStartY,
-            350, 55, UI_TEXT_SIZES.HEADER
+            k, 'Play', centerX, buttonStartY,
+            350, 55, UI_TEXT_SIZES.TITLE
         );
         playButton.onClick(() => {
             if (playButton.disabled) return; // Don't allow clicks on disabled button
@@ -587,22 +592,32 @@ export function setupMenuScene(k) {
             k.go('game', { resetState: true });
         });
 
-        // Disable start game button if in a party but not the host
-        const partySize = getPartySize();
-        if (partySize > 1 && !isHost()) {
-            playButton.setDisabled(true);
+        // Function to update start button state based on party status
+        function updateStartButtonState() {
+            const party = getParty();
+            const partySize = getPartySize();
+
+            // Disable start button if:
+            // - In a party (size > 1) AND not the host
+            // Enable button if:
+            // - Solo play (size == 1) OR is the host
+            const shouldDisable = partySize > 1 && !party.isHost;
+            playButton.setDisabled(shouldDisable);
         }
 
+        // Initial button state check
+        updateStartButtonState();
+
         const characterButton = createMenuButton(
-            k, 'Character Select', centerX, buttonStartY + buttonSpacing,
-            350, 50, UI_TEXT_SIZES.BUTTON
+            k, 'Character', centerX, buttonStartY + buttonSpacing,
+            350, 50, UI_TEXT_SIZES.HEADER
         );
         characterButton.onClick(() => {
             playMenuSelect();
             k.go('characterSelect');
         });
 
-        // Selected character display (to the right of Character Select button)
+        // Selected character display (to the right of Character Select button) - clickable
         const selectedCharKey = getSelectedCharacter();
         const selectedCharData = CHARACTER_UNLOCKS[selectedCharKey];
 
@@ -612,19 +627,20 @@ export function setupMenuScene(k) {
             const charDisplayY = buttonStartY + buttonSpacing;
             const charDisplaySize = 50;
 
-            // Character background
-            k.add([
+            // Character background (clickable)
+            const charDisplayBg = k.add([
                 k.rect(charDisplaySize, charDisplaySize),
                 k.pos(charDisplayX, charDisplayY),
                 k.anchor('center'),
                 k.color(...UI_COLORS.BG_MEDIUM),
                 k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                k.area(),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_BACKGROUND)
             ]);
 
             // Character icon
-            k.add([
+            const charDisplayIcon = k.add([
                 k.text(selectedCharData.char, { size: 36 }),
                 k.pos(charDisplayX, charDisplayY),
                 k.anchor('center'),
@@ -633,15 +649,24 @@ export function setupMenuScene(k) {
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
 
-            // Character name below
-            k.add([
-                k.text(selectedCharData.name, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(charDisplayX, charDisplayY + 35),
-                k.anchor('center'),
-                k.color(...(isCharUnlocked ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
+            // Click handler for character display
+            charDisplayBg.onClick(() => {
+                playMenuSelect();
+                k.go('characterSelect');
+            });
+
+            // Hover effects
+            charDisplayBg.onHoverUpdate(() => {
+                charDisplayBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                charDisplayBg.outline.color = k.rgb(...UI_COLORS.SECONDARY);
+                charDisplayIcon.scale = k.vec2(1.1);
+            });
+
+            charDisplayBg.onHoverEnd(() => {
+                charDisplayBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                charDisplayBg.outline.color = k.rgb(...UI_COLORS.BORDER);
+                charDisplayIcon.scale = k.vec2(1);
+            });
         }
 
         const shopButton = createMenuButton(

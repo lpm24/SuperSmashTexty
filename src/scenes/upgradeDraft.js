@@ -51,10 +51,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         upgradeRng = getUpgradeRNG(playerIndex, playerLevel);
     }
     const upgrades = getRandomUpgrades(3, player, upgradeRng);
-    
-    // Debug: Log that we're creating the draft
-    console.log('Creating upgrade draft with', upgrades.length, 'upgrades');
-    
+
     // Create overlay background
     const overlay = k.add([
         k.rect(k.width(), k.height()),
@@ -80,10 +77,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         k.z(UI_Z_LAYERS.MODAL + 1),
         'upgradeUI'
     ]);
-    
-    // Debug: Test if title is visible
-    console.log('Title created at', k.width() / 2, 80);
-    
+
     // Create upgrade cards
     const cardWidth = 200;
     const cardHeight = 150;

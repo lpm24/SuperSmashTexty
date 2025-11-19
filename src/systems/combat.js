@@ -103,6 +103,30 @@ export function setupCombatSystem(k, player) {
     k.onUpdate(() => {
         if (k.paused) return;
 
+        // Update player rotation based on mouse/aim (always, even when not shooting)
+        if (!player.isRemote) {
+            const mousePos = k.mousePos();
+            const toMouse = k.vec2(
+                mousePos.x - player.pos.x,
+                mousePos.y - player.pos.y
+            );
+            const distance = toMouse.len();
+            if (distance > 0) {
+                // Convert to degrees for Kaplay's rotate component
+                const aimAngleDeg = Math.atan2(toMouse.y, toMouse.x) * (180 / Math.PI);
+                player.angle = aimAngleDeg;
+                if (player.outline && player.outline.exists()) {
+                    player.outline.angle = aimAngleDeg;
+                }
+            }
+        } else if (player.aimAngle !== undefined) {
+            // Remote player rotation from network (already in degrees)
+            player.angle = player.aimAngle;
+            if (player.outline && player.outline.exists()) {
+                player.outline.angle = player.aimAngle;
+            }
+        }
+
         // Don't allow shooting if canShoot is false (e.g., player is dead)
         if (player.canShoot === false) {
             player.isShooting = false; // Track shooting state for multiplayer
