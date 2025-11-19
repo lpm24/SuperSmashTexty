@@ -19,7 +19,7 @@ import { PROGRESSION_CONFIG } from '../config/constants.js';
 import { playLevelUp } from './sounds.js';
 
 // Multiplayer imports
-import { broadcastLevelUpQueued } from './multiplayerGame.js';
+import { broadcastLevelUpQueued, isHost } from './multiplayerGame.js';
 
 export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null, isMultiplayer = false) {
     let levelUpInProgress = false;
@@ -53,7 +53,7 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
 
     // Handle level up
     function handleLevelUp(k, player, level) {
-        // Don't show if already paused (prevents double prompts)
+        // Don't process if already paused (prevents issues)
         if (k.paused && !isMultiplayer) {
             levelUpInProgress = false;
             return;
@@ -77,48 +77,39 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             k.z(1000) // High z-index to show above other UI
         ]);
 
-        // In multiplayer, check if room is safe (no enemies)
-        if (isMultiplayer) {
-            const enemies = k.get('enemy');
-            const bosses = k.get('boss');
-            const isSafe = enemies.length === 0 && bosses.length === 0;
+        // In multiplayer: HOST queues locally and broadcasts, CLIENT only broadcasts
+        // Clients will queue when they receive the broadcast back from the host
+        if (isMultiplayer && player.slotIndex !== undefined) {
+            // Broadcast to notify everyone (including clients)
+            broadcastLevelUpQueued(player.slotIndex, level);
 
-            if (isSafe) {
-                // Safe! Show upgrade draft immediately
-                k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
-                    k.destroy(notification);
-                    // Show upgrade draft (pass level for proper RNG seeding)
-                    const playerName = player.playerName || (player.isRemote ? `Player ${player.slotIndex + 1}` : 'You');
-                    showUpgradeDraft(k, player, () => {
-                        // Callback when upgrade is selected
-                        levelUpInProgress = false;
-                    }, playerName, level);
-                });
-            } else {
-                // Not safe - queue level up for after room clear
+            // Only host queues locally - clients will queue when receiving broadcast
+            if (isHost()) {
                 player.pendingLevelUps.push(level);
-
-                // Broadcast level up queued event in multiplayer
-                if (isMultiplayer && player.slotIndex !== undefined) {
-                    broadcastLevelUpQueued(player.slotIndex, level);
-                }
-
-                k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION * 2, () => {
-                    if (notification.exists()) k.destroy(notification);
-                    levelUpInProgress = false;
-                });
             }
         } else {
-            // Single player: show upgrade draft after notification
-            k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
-                k.destroy(notification);
-                // Show upgrade draft (pass level for proper RNG seeding)
-                showUpgradeDraft(k, player, () => {
-                    // Callback when upgrade is selected
-                    levelUpInProgress = false;
-                }, null, level);
-            });
+            // Single player: queue locally
+            player.pendingLevelUps.push(level);
         }
+
+        k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
+            if (notification.exists()) k.destroy(notification);
+            levelUpInProgress = false;
+        });
     }
+
+    // Return function to manually trigger upgrade selection
+    return {
+        processPendingLevelUp: () => {
+            if (player.pendingLevelUps.length > 0 && !levelUpInProgress) {
+                levelUpInProgress = true;
+                const level = player.pendingLevelUps.shift(); // Take first pending level
+                const playerName = player.playerName || (player.isRemote ? `Player ${player.slotIndex + 1}` : 'You');
+                showUpgradeDraft(k, player, () => {
+                    levelUpInProgress = false;
+                }, isMultiplayer ? playerName : null, level);
+            }
+        }
+    };
 }
 

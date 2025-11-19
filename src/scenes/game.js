@@ -732,7 +732,7 @@ export function setupGameScene(k) {
 
         // Setup systems
         setupCombatSystem(k, player);
-        setupProgressionSystem(k, player, reviveAllPlayers, partySize > 1);
+        const progressionSystem = setupProgressionSystem(k, player, reviveAllPlayers, partySize > 1);
         
         // Re-apply synergies if loading from saved state
         if (gameState.playerStats && gameState.playerStats.selectedUpgrades) {
@@ -1250,6 +1250,70 @@ export function setupGameScene(k) {
                 activeBuffIcons.push(bg, icon, stackText);
             });
         }
+
+        // ==========================================
+        // LEVEL UP BUTTON (Bottom Right)
+        // ==========================================
+        const levelUpButtonSize = 50;
+        const levelUpButtonX = k.width() - levelUpButtonSize - 20;
+        const levelUpButtonY = k.height() - levelUpButtonSize - 20;
+
+        const levelUpButtonBg = k.add([
+            k.rect(levelUpButtonSize, levelUpButtonSize),
+            k.pos(levelUpButtonX, levelUpButtonY),
+            k.color(100, 200, 255), // Light blue background
+            k.opacity(0.9),
+            k.outline(3, k.rgb(255, 255, 255)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 5)
+        ]);
+
+        const levelUpButtonText = k.add([
+            k.text('+', { size: 36 }),
+            k.pos(levelUpButtonX + levelUpButtonSize / 2, levelUpButtonY + levelUpButtonSize / 2),
+            k.anchor('center'),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 6)
+        ]);
+
+        // Badge for showing count > 1 (top-right corner of button)
+        const levelUpCountBadgeSize = 20;
+        const levelUpCountBadgeX = levelUpButtonX + levelUpButtonSize - levelUpCountBadgeSize / 2;
+        const levelUpCountBadgeY = levelUpButtonY - levelUpCountBadgeSize / 2;
+
+        const levelUpCountBadge = k.add([
+            k.circle(levelUpCountBadgeSize / 2),
+            k.pos(levelUpCountBadgeX, levelUpCountBadgeY),
+            k.anchor('center'),
+            k.color(255, 50, 50), // Red badge
+            k.outline(2, k.rgb(255, 255, 255)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 7)
+        ]);
+
+        const levelUpCountText = k.add([
+            k.text('2', { size: 12 }),
+            k.pos(levelUpCountBadgeX, levelUpCountBadgeY),
+            k.anchor('center'),
+            k.color(255, 255, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.OVERLAY + 8)
+        ]);
+
+        // Initially hide level up button (only show when player has pending level ups)
+        levelUpButtonBg.hidden = true;
+        levelUpButtonText.hidden = true;
+        levelUpCountBadge.hidden = true;
+        levelUpCountText.hidden = true;
+
+        // Click handler for level up button
+        levelUpButtonBg.onClick(() => {
+            if (progressionSystem && player.pendingLevelUps && player.pendingLevelUps.length > 0) {
+                progressionSystem.processPendingLevelUp();
+            }
+        });
 
         // ==========================================
         // TOOLTIP SYSTEM

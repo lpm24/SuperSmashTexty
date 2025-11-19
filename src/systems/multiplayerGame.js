@@ -190,6 +190,20 @@ function setupHostHandlers() {
 
         console.log('[Multiplayer] Sent full game state re-sync to client:', fromPeerId);
     });
+
+    // Handle level up queued from clients
+    onMessage('level_up_queued', (payload, fromPeerId) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Received level up queued from client:', fromPeerId, 'slot:', payload.slotIndex, 'level:', payload.level);
+
+        // Broadcast to ALL clients so everyone knows about the level up
+        broadcast('level_up_queued', {
+            slotIndex: payload.slotIndex,
+            level: payload.level,
+            timestamp: Date.now()
+        });
+
+        if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted level up queued for slot:', payload.slotIndex);
+    });
 }
 
 // Flag to prevent duplicate handler registration
