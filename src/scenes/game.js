@@ -2750,16 +2750,20 @@ export function setupGameScene(k) {
 
                     // In multiplayer, give XP to all players (shared XP)
                     if (partySize > 1) {
-                        // Give XP to all players on host
-                        players.forEach(p => {
-                            if (p.exists() && !p.isDead && p.addXP) {
-                                p.addXP(pickup.value);
-                            }
-                        });
-
-                        // Broadcast XP gain to clients so they get it too
+                        // HOST: Only give XP to local host player
+                        // Remote players will get XP from the broadcast
                         if (isHost()) {
+                            players.forEach(p => {
+                                // Only give to local players (slotIndex matches local slot)
+                                if (p.exists() && !p.isDead && p.addXP && p.slotIndex === getParty().localSlot) {
+                                    p.addXP(pickup.value);
+                                }
+                            });
+                            // Broadcast XP gain to clients
                             broadcastXPGain(pickup.value);
+                        } else {
+                            // CLIENT: Give XP to local client player (handled by xp_gain broadcast)
+                            // Don't add XP here - will be added when receiving broadcast
                         }
                     } else {
                         // Single player: just give to local player
