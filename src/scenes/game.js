@@ -28,8 +28,8 @@ import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory } from '../systems/roomGeneration.js';
-import { checkAndApplySynergies } from '../systems/synergies.js';
-import { UPGRADES, recalculateAllUpgrades } from '../systems/upgrades.js';
+import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
+import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
@@ -39,7 +39,7 @@ import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
 import { POWERUP_WEAPONS } from '../systems/powerupWeapons.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
-import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon } from '../systems/powerupWeapons.js';
+import { rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
 import { initMultiplayerGame, registerPlayer, registerEnemy, registerPickup, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, requestResync, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued } from '../systems/multiplayerGame.js';
 import { onMessage } from '../systems/networkSystem.js';
@@ -1374,7 +1374,7 @@ export function setupGameScene(k) {
             if (!hovering) {
                 hideTooltip();
             }
-        });
+        }));
 
         // Boss HUD elements (only shown when boss exists)
         const bossNameText = k.add([
@@ -1498,7 +1498,7 @@ export function setupGameScene(k) {
         }));
 
         // Update HUD
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             const currentHP = player.exists() ? player.hp() : 0;
             const healthPercent = player.maxHealth > 0 ? currentHP / player.maxHealth : 1;
 
@@ -1873,12 +1873,12 @@ export function setupGameScene(k) {
                 bossShieldBar.hidden = true;
                 bossShieldText.hidden = true;
             }
-        });
+        }));
 
         // ==========================================
         // NEW ARCHITECTURE: Continuous sync of player entity to PlayerState
         // ==========================================
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
             const playerState = state.getPlayer(localPlayerId);
@@ -1919,7 +1919,7 @@ export function setupGameScene(k) {
 
             // Update state time
             state.updateTime(k.dt());
-        });
+        }));
 
         // ==========================================
         // NEW ARCHITECTURE: Sync room/floor state
@@ -1940,7 +1940,7 @@ export function setupGameScene(k) {
         // ==========================================
         // Start collecting inputs for the local player each frame
         // (Running in parallel with legacy input for now)
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (k.paused) return;
 
             // Get input manager
@@ -1960,7 +1960,7 @@ export function setupGameScene(k) {
                     firing: playerInput.firing
                 });
             }
-        });
+        }));
 
         // ==========================================
         // LEGACY STATE (keeping for now)
@@ -2068,10 +2068,10 @@ export function setupGameScene(k) {
         
         // Track room start time for entrance door exclusion (after first frame)
         let roomStartTimeSet = false;
-        
-        k.onUpdate(() => {
+
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (k.paused || roomCompleted) return;
-            
+
             // Set room start time on first update
             if (!roomStartTimeSet) {
                 roomStartTime = k.time();
@@ -2378,10 +2378,10 @@ export function setupGameScene(k) {
                     }
                 }
             }
-        });
-        
+        }));
+
         // Update enemy death handling
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (k.paused) return;
             
             k.get('enemy').forEach(enemy => {
@@ -2644,10 +2644,10 @@ export function setupGameScene(k) {
                     });
                 }
             });
-        });
-        
+        }));
+
         // Handle XP pickup magnetization and collection
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
             k.get('xpPickup').forEach(pickup => {
@@ -2768,10 +2768,10 @@ export function setupGameScene(k) {
                     k.destroy(pickup);
                 }
             });
-        });
+        }));
 
         // Handle currency pickup magnetization and collection
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
             k.get('currencyPickup').forEach(pickup => {
@@ -2942,11 +2942,11 @@ export function setupGameScene(k) {
                     k.destroy(pickup);
                 }
             });
-        });
+        }));
 
         // Handle door interaction (proximity-based)
         let doorEntered = false;
-        k.onUpdate(() => {
+        eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused || doorEntered) return;
 
             // In multiplayer, only HOST checks for door transitions
@@ -2995,7 +2995,7 @@ export function setupGameScene(k) {
                     }
                 }
             });
-        });
+        }));
 
         // Spawn reward pickups when room is cleared
         function spawnRoomClearRewards() {
@@ -3666,14 +3666,14 @@ export function setupGameScene(k) {
         });
         
         // Toggle minimap with 'M' key
-        k.onKeyPress('m', () => {
+        eventHandlers.keyPresses.push(k.onKeyPress('m', () => {
             if (gameState.minimap && !k.paused) {
                 gameState.minimap.toggle();
             }
-        });
+        }));
 
         // Pause
-        k.onKeyPress('escape', () => {
+        eventHandlers.keyPresses.push(k.onKeyPress('escape', () => {
             // Don't allow pause menu if upgrade draft is showing
             if (isUpgradeDraftActive()) {
                 return; // Prevent escape key from interfering with upgrade selection
@@ -3697,6 +3697,20 @@ export function setupGameScene(k) {
                 k.paused = !k.paused;
                 updatePauseUI(k.paused);
             }
+        }));
+
+        // Cleanup event handlers on scene leave (memory leak fix)
+        k.onSceneLeave(() => {
+            console.log('[Game] Cleaning up event handlers...');
+            // Cancel all update handlers
+            eventHandlers.updates.forEach(handler => {
+                if (handler && handler.cancel) handler.cancel();
+            });
+            // Cancel all keypress handlers
+            eventHandlers.keyPresses.forEach(handler => {
+                if (handler && handler.cancel) handler.cancel();
+            });
+            console.log('[Game] Cleaned up', eventHandlers.updates.length, 'update handlers and', eventHandlers.keyPresses.length, 'keypress handlers');
         });
     });
 }

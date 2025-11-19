@@ -26,7 +26,8 @@
       "Bash(taskkill:*)",
       "Bash(git checkout:*)",
       "Bash(npm install:*)",
-      "Bash(npx gh-pages -d dist)"
+      "Bash(npx gh-pages -d dist)",
+      "Bash(node:*)"
     ],
     "deny": [],
     "ask": []

@@ -92,6 +92,9 @@ export class InputManager {
         this.mouseX = 0;
         this.mouseY = 0;
         this.mousePressed = false;
+
+        // Event handler references for cleanup (memory leak fix)
+        this.eventHandlers = [];
     }
 
     /**
@@ -113,27 +116,27 @@ export class InputManager {
         const movementKeys = ['w', 'a', 's', 'd', 'up', 'down', 'left', 'right'];
 
         movementKeys.forEach(key => {
-            k.onKeyPress(key, () => {
+            this.eventHandlers.push(k.onKeyPress(key, () => {
                 this.keysPressed.add(key);
-            });
+            }));
 
-            k.onKeyRelease(key, () => {
+            this.eventHandlers.push(k.onKeyRelease(key, () => {
                 this.keysPressed.delete(key);
-            });
+            }));
         });
 
         // Pause
-        k.onKeyPress('escape', () => {
+        this.eventHandlers.push(k.onKeyPress('escape', () => {
             this.onPausePressed();
-        });
+        }));
 
         // Interact (for doors, etc.)
-        k.onKeyPress('space', () => {
+        this.eventHandlers.push(k.onKeyPress('space', () => {
             this.onInteractPressed();
-        });
-        k.onKeyPress('e', () => {
+        }));
+        this.eventHandlers.push(k.onKeyPress('e', () => {
             this.onInteractPressed();
-        });
+        }));
     }
 
     /**
@@ -142,18 +145,18 @@ export class InputManager {
     setupMouseListeners() {
         const k = this.k;
 
-        k.onMouseMove((pos) => {
+        this.eventHandlers.push(k.onMouseMove((pos) => {
             this.mouseX = pos.x;
             this.mouseY = pos.y;
-        });
+        }));
 
-        k.onMousePress(() => {
+        this.eventHandlers.push(k.onMousePress(() => {
             this.mousePressed = true;
-        });
+        }));
 
-        k.onMouseRelease(() => {
+        this.eventHandlers.push(k.onMouseRelease(() => {
             this.mousePressed = false;
-        });
+        }));
     }
 
     /**
@@ -287,6 +290,14 @@ export class InputManager {
      * Clear input state
      */
     clear() {
+        // Cancel all event handlers (memory leak fix)
+        this.eventHandlers.forEach(handler => {
+            if (handler && handler.cancel) {
+                handler.cancel();
+            }
+        });
+        this.eventHandlers = [];
+
         this.frameNumber = 0;
         this.inputQueues.clear();
         this.currentInputs.clear();
