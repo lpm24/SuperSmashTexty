@@ -17,7 +17,7 @@ import { getEnemyDefinition } from '../data/enemies.js';
 
 // System imports
 import { getSmartMoveDirection, getPerimeterMoveDirection } from '../systems/pathfinding.js';
-import { registerEnemy, isHost, isMultiplayerActive, broadcastEnemySplit } from '../systems/multiplayerGame.js';
+import { registerEnemy, isHost, isMultiplayerActive, broadcastEnemySplit, broadcastDeathEvent } from '../systems/multiplayerGame.js';
 
 export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     const baseConfig = getEnemyDefinition(type);
@@ -1078,6 +1078,17 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     
     // Handle special death mechanics
     enemy.onDeath(() => {
+        // In multiplayer, broadcast death event from host
+        if (isMultiplayerActive() && isHost() && enemy.mpEntityId) {
+            broadcastDeathEvent({
+                entityId: enemy.mpEntityId,
+                entityType: 'enemy',
+                x: enemy.pos.x,
+                y: enemy.pos.y,
+                xpDropped: enemy.xpValue
+            });
+        }
+
         // Slime splitting - only spawn on host in multiplayer to avoid desyncs
         if (enemy.splits && enemy.hp() <= 0) {
             // In multiplayer, only host spawns split enemies and broadcasts them

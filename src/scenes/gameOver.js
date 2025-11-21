@@ -1,6 +1,8 @@
 // Game over scene
 import { getCurrency, getCurrencyName, getSaveData } from '../systems/metaProgression.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
+import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
+import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -133,9 +135,16 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Restart prompt
+        // Restart prompt - different text for host vs client in multiplayer
+        const inMultiplayer = isMultiplayerActive();
+        const isHostPlayer = isHost();
+
+        const restartText = inMultiplayer && !isHostPlayer
+            ? 'Waiting for Host to Restart...'
+            : 'Press SPACE to Restart';
+
         k.add([
-            k.text('Press SPACE to Restart', { size: UI_TEXT_SIZES.HEADER }),
+            k.text(restartText, { size: UI_TEXT_SIZES.HEADER }),
             k.pos(k.width() / 2, k.height() - 60),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_TERTIARY),
@@ -151,9 +160,29 @@ export function setupGameOverScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
-        
+
+        // Listen for restart signal from host (clients only)
+        if (inMultiplayer && !isHostPlayer) {
+            onMessage('game_restart', () => {
+                playMenuSelect();
+                offMessage('game_restart');
+                k.go('game', { resetState: true });
+            });
+        }
+
         k.onKeyPress('space', () => {
+            // In multiplayer, only host can trigger restart
+            if (inMultiplayer && !isHostPlayer) {
+                return; // Client waits for host signal
+            }
+
             playMenuSelect();
+
+            // Broadcast restart to clients before going to game
+            if (inMultiplayer && isHostPlayer) {
+                broadcast('game_restart', {});
+            }
+
             // Reset game state when restarting
             k.go('game', { resetState: true });
         });
@@ -165,6 +194,10 @@ export function setupGameOverScene(k) {
 
         k.onKeyPress('escape', () => {
             playMenuNav();
+            // Clean up message listener
+            if (inMultiplayer && !isHostPlayer) {
+                offMessage('game_restart');
+            }
             // Return to menu
             k.go('menu');
         });

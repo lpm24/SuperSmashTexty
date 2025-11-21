@@ -42,8 +42,8 @@ import { createMinimap } from '../systems/minimap.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit } from '../systems/multiplayerGame.js';
-import { onMessage, offMessage, getNetworkInfo } from '../systems/networkSystem.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP } from '../systems/multiplayerGame.js';
+import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 
 // Config imports
 import { PICKUP_CONFIG } from '../config/constants.js';
@@ -86,21 +86,31 @@ let gameSceneMessageHandlersRegistered = false;
 // Apply permanent upgrades to player
 // If upgradeLevels is provided, use those; otherwise use local storage (for local player)
 function applyPermanentUpgrades(k, player, upgradeLevels = null) {
+    // For remote players (upgradeLevels provided), use 0 as fallback to avoid using wrong player's data
+    // For local player (upgradeLevels null), read from local storage
+    const useLocalStorage = upgradeLevels === null;
+
     // Apply starting health upgrades
-    const healthLevel = upgradeLevels?.startingHealth ?? getPermanentUpgradeLevel('startingHealth');
+    const healthLevel = useLocalStorage
+        ? getPermanentUpgradeLevel('startingHealth')
+        : (upgradeLevels?.startingHealth || 0);
     if (healthLevel > 0) {
         player.maxHealth += healthLevel * 10;
         player.setHP(player.maxHealth); // Full health
     }
 
     // Apply starting damage upgrades
-    const damageLevel = upgradeLevels?.startingDamage ?? getPermanentUpgradeLevel('startingDamage');
+    const damageLevel = useLocalStorage
+        ? getPermanentUpgradeLevel('startingDamage')
+        : (upgradeLevels?.startingDamage || 0);
     if (damageLevel > 0) {
         player.projectileDamage += damageLevel;
     }
 
     // Apply starting speed upgrades
-    const speedLevel = upgradeLevels?.startingSpeed ?? getPermanentUpgradeLevel('startingSpeed');
+    const speedLevel = useLocalStorage
+        ? getPermanentUpgradeLevel('startingSpeed')
+        : (upgradeLevels?.startingSpeed || 0);
     if (speedLevel > 0) {
         player.speed += speedLevel * 10;
     }
@@ -216,7 +226,58 @@ export function setupGameScene(k) {
         if (currentFloor > runStats.floorsReached) {
             runStats.floorsReached = currentFloor;
         }
-        
+
+        // Floor names (TV station tiers)
+        const floorNames = {
+            1: 'Public Access',
+            2: 'Local Affiliate',
+            3: 'Cable Network',
+            4: 'Premium Channel',
+            5: 'Streaming Giant',
+            6: 'Global Broadcast',
+            7: 'Galactic Signal'
+        };
+        const getFloorName = (floor) => floorNames[floor] || `Network ${floor}`;
+
+        // Show floor title when entering a new floor (room 1)
+        if (currentRoom === 1) {
+            const floorTitle = k.add([
+                k.text(`Floor ${currentFloor}`, { size: 32 }),
+                k.pos(k.width() / 2, k.height() / 3),
+                k.anchor('center'),
+                k.color(255, 255, 255),
+                k.opacity(1),
+                k.fixed(),
+                k.z(3000)
+            ]);
+
+            const floorSubtitle = k.add([
+                k.text(getFloorName(currentFloor), { size: 20 }),
+                k.pos(k.width() / 2, k.height() / 3 + 40),
+                k.anchor('center'),
+                k.color(200, 200, 255),
+                k.opacity(1),
+                k.fixed(),
+                k.z(3000)
+            ]);
+
+            // Fade out after delay
+            k.wait(2, () => {
+                if (floorTitle.exists()) {
+                    floorTitle.onUpdate(() => {
+                        floorTitle.opacity -= 0.02;
+                        if (floorTitle.opacity <= 0) k.destroy(floorTitle);
+                    });
+                }
+                if (floorSubtitle.exists()) {
+                    floorSubtitle.onUpdate(() => {
+                        floorSubtitle.opacity -= 0.02;
+                        if (floorSubtitle.opacity <= 0) k.destroy(floorSubtitle);
+                    });
+                }
+            });
+        }
+
         // Calculate player spawn position based on entry direction
         // If entering from a door, spawn at that door position
         // Otherwise (new game), spawn at center
@@ -253,6 +314,12 @@ export function setupGameScene(k) {
             player = createPlayer(k, playerSpawnX, playerSpawnY);
             // Restore stats
             Object.assign(player, gameState.playerStats);
+            // CRITICAL: Local player is NEVER remote - host's saved stats may have isRemote: true
+            const wasRemote = player.isRemote;
+            player.isRemote = false;
+            if (wasRemote) {
+                console.log('[Room Transition] Fixed isRemote flag - local player was incorrectly marked as remote');
+            }
             // Restore health to current HP (not max)
             player.setHP(gameState.playerStats.currentHP || player.maxHealth);
             // Restore synergy tracking
@@ -269,6 +336,25 @@ export function setupGameScene(k) {
             // CRITICAL: Recalculate all upgrades to ensure they're properly applied
             if (player.upgradeStacks && Object.keys(player.upgradeStacks).length > 0) {
                 recalculateAllUpgrades(player);
+            }
+
+            // CRITICAL: Reset control flags after room transition
+            // If player is alive, ensure they can move and shoot
+            if (!player.isDead) {
+                player.canMove = true;
+                player.canShoot = true;
+                player.opacity = 1;
+                if (player.outline && player.outline.exists()) {
+                    player.outline.opacity = 1;
+                }
+            } else {
+                // Player is dead - set death visual state
+                player.canMove = false;
+                player.canShoot = false;
+                player.opacity = 0.5;
+                if (player.outline && player.outline.exists()) {
+                    player.outline.opacity = 0.5;
+                }
             }
         } else {
             // New game - create fresh player
@@ -325,6 +411,11 @@ export function setupGameScene(k) {
                         const savedStats = gameState.allPlayerStats.find(stats => stats.slotIndex === index);
                         if (savedStats) {
                             Object.assign(remotePlayer, savedStats);
+                            
+                            // IMPORTANT: Re-affirm isRemote after restoring stats, as host's isRemote status (false)
+                            // can overwrite the client's setting for the remote player object.
+                            remotePlayer.isRemote = true; 
+                            
                             remotePlayer.setHP(savedStats.currentHP || remotePlayer.maxHealth);
 
                             // Restore synergy tracking
@@ -343,6 +434,25 @@ export function setupGameScene(k) {
                             if (remotePlayer.upgradeStacks && Object.keys(remotePlayer.upgradeStacks).length > 0) {
                                 recalculateAllUpgrades(remotePlayer);
                             }
+
+                            // CRITICAL: Reset control flags after room transition
+                            // If player is alive, ensure they can move and shoot
+                            if (!remotePlayer.isDead) {
+                                remotePlayer.canMove = true;
+                                remotePlayer.canShoot = true;
+                                remotePlayer.opacity = 1;
+                                if (remotePlayer.outline && remotePlayer.outline.exists()) {
+                                    remotePlayer.outline.opacity = 1;
+                                }
+                            } else {
+                                // Player is dead - set death visual state
+                                remotePlayer.canMove = false;
+                                remotePlayer.canShoot = false;
+                                remotePlayer.opacity = 0.5;
+                                if (remotePlayer.outline && remotePlayer.outline.exists()) {
+                                    remotePlayer.outline.opacity = 0.5;
+                                }
+                            }
                         }
                     } else {
                         // No saved stats - apply permanent upgrades to new remote player
@@ -360,6 +470,48 @@ export function setupGameScene(k) {
                     // Register remote player
                     registerPlayer(index, remotePlayer);
                     players.push(remotePlayer);
+
+                    // Add onDeath callback for remote players (host only) to check game over
+                    if (party.isHost) {
+                        remotePlayer.onDeath(() => {
+                            // Set death state
+                            remotePlayer.isDead = true;
+                            remotePlayer.canMove = false;
+                            remotePlayer.canShoot = false;
+                            remotePlayer.opacity = 0.5;
+                            if (remotePlayer.outline && remotePlayer.outline.exists()) {
+                                remotePlayer.outline.opacity = 0.5;
+                            }
+
+                            // Check if all players are dead
+                            const anyPlayerAlive = players.some(p =>
+                                p.exists() && p.hp() > 0 && !p.isDead
+                            );
+
+                            if (!anyPlayerAlive) {
+                                // All players dead - trigger game over
+                                const currencyEarned = calculateCurrencyEarned(runStats);
+                                const fullRunStats = {
+                                    ...runStats,
+                                    level: player.level,
+                                    currencyEarned: currencyEarned
+                                };
+                                updateRunStats(fullRunStats);
+                                addCurrency(currencyEarned);
+                                checkAchievements(k);
+
+                                if (isMultiplayerActive()) {
+                                    broadcastGameOver(runStats, currencyEarned);
+                                    cleanupMultiplayer();
+                                }
+
+                                k.go('gameOver', {
+                                    runStats: { ...runStats },
+                                    currencyEarned: currencyEarned
+                                });
+                            }
+                        });
+                    }
 
                     // Add name tag above remote player
                     const nameTag = k.add([
@@ -462,6 +614,18 @@ export function setupGameScene(k) {
                         }
                     }
 
+                    // Sync floor number - check if we're advancing to a new floor
+                    if (data.currentFloor && data.currentFloor !== gameState.currentFloor) {
+                        console.log(`[Multiplayer] Floor advancement: ${gameState.currentFloor} -> ${data.currentFloor}`);
+                        gameState.currentFloor = data.currentFloor;
+                        // Clear floor map so it regenerates for the new floor
+                        gameState.floorMap = null;
+                        gameState.entryDirection = null; // Start from center on new floor
+                    } else if (data.gridDirection && gameState.floorMap) {
+                        // Sync floor map position with host (normal room transition)
+                        gameState.floorMap.moveToRoom(data.gridDirection);
+                    }
+
                     // Prevent duplicate transitions
                     if (doorEntered) return;
                     doorEntered = true;
@@ -532,7 +696,11 @@ export function setupGameScene(k) {
 
                 // Listen for upgrade selection from host/clients
                 onMessage('upgrade_selected', (data) => {
-                    // Find the player who selected the upgrade
+                    // Skip if this is our own upgrade - we already applied it locally in upgradeDraft
+                    if (data.slotIndex === localSlot) {
+                        return;
+                    }
+                    // Find the player who selected the upgrade (remote player)
                     const upgradingPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (upgradingPlayer && upgradingPlayer.exists()) {
                         // Apply upgrade locally (stats will sync via game_state but this is immediate)
@@ -544,7 +712,11 @@ export function setupGameScene(k) {
 
                 // Listen for level up queued events
                 onMessage('level_up_queued', (data) => {
-                    // Find the player who leveled up
+                    // Skip if this is our own level up - we already queued it locally
+                    if (data.slotIndex === localSlot) {
+                        return;
+                    }
+                    // Find the player who leveled up (remote player)
                     const leveledPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (leveledPlayer && leveledPlayer.exists()) {
                         // Initialize pendingLevelUps if needed
@@ -560,7 +732,11 @@ export function setupGameScene(k) {
 
                 // Listen for synergy activation
                 onMessage('synergy_activated', (data) => {
-                    // Find the player who activated synergies
+                    // Skip if this is our own synergy - we already applied it locally
+                    if (data.slotIndex === localSlot) {
+                        return;
+                    }
+                    // Find the player who activated synergies (remote player)
                     const synergyPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (synergyPlayer && synergyPlayer.exists()) {
                         // Apply synergies immediately
@@ -637,8 +813,9 @@ export function setupGameScene(k) {
             players.forEach((p, index) => {
                 // Check if player is dead (hp <= 0 or destroyed)
                 if ((p.exists() && p.hp() <= 0) || (p.exists() && p.isDead)) {
-                    // Revive player
-                    p.setHP(p.maxHealth);
+                    // Revive player at 5% health (can be upgraded later)
+                    const reviveHealth = Math.max(1, Math.floor(p.maxHealth * 0.05));
+                    p.setHP(reviveHealth);
                     p.isDead = false;
 
                     // Re-enable movement and shooting (for all players, including remote ones on host)
@@ -688,7 +865,23 @@ export function setupGameScene(k) {
         // Setup systems
         setupCombatSystem(k, player);
         const progressionSystem = setupProgressionSystem(k, player, reviveAllPlayers, partySize > 1);
-        
+
+        // CRITICAL: Final safety check - ensure local player has controls enabled if alive
+        // This runs after all initialization to guarantee player can move and shoot
+        if (!player.isDead) {
+            player.canMove = true;
+            player.canShoot = true;
+        }
+
+        // Apply any pending XP accumulated while in upgrade draft screen (multiplayer)
+        if (partySize > 1) {
+            const pendingXP = getAndClearPendingXP();
+            if (pendingXP > 0 && player.addXP) {
+                console.log('[Multiplayer] Applying pending XP:', pendingXP);
+                player.addXP(pendingXP);
+            }
+        }
+
         // Re-apply synergies if loading from saved state
         if (gameState.playerStats && gameState.playerStats.selectedUpgrades) {
             // Wait a frame to ensure player is fully initialized
@@ -2258,7 +2451,7 @@ export function setupGameScene(k) {
 
                         // Register boss for multiplayer
                         if (isMultiplayerActive() && isHost()) {
-                            registerEnemy(boss, { type: bossType, floor: currentFloor });
+                            registerEnemy(boss, { type: bossType, floor: currentFloor, isBoss: true });
                         }
 
                         // Play boss spawn sound
@@ -2815,61 +3008,7 @@ export function setupGameScene(k) {
                         player.addXP(pickup.value);
                     }
 
-                    // Animate pickup flying to XP bar
-                    const flyingPickup = k.add([
-                        k.text('+', { size: 12 }),
-                        k.pos(pickup.pos.x, pickup.pos.y),
-                        k.color(100, 200, 255), // Light blue to match XP pickup color
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                    ]);
-
-                    // Target: center of XP bar
-                    const targetX = k.width() / 2;
-                    const targetY = xpBarY + xpBarHeight / 2;
-
-                    // Animate to target over 0.4 seconds
-                    const duration = 0.4;
-                    let elapsed = 0;
-                    const startX = pickup.pos.x;
-                    const startY = pickup.pos.y;
-
-                    flyingPickup.onUpdate(() => {
-                        elapsed += k.dt();
-                        const progress = Math.min(elapsed / duration, 1);
-
-                        // Ease-in interpolation
-                        const eased = progress * progress;
-                        flyingPickup.pos.x = startX + (targetX - startX) * eased;
-                        flyingPickup.pos.y = startY + (targetY - startY) * eased;
-
-                        // Fade and scale down as it approaches
-                        flyingPickup.opacity = 1 - progress * 0.5;
-                        flyingPickup.scale = k.vec2(1 - progress * 0.5);
-
-                        if (progress >= 1) {
-                            k.destroy(flyingPickup);
-                            // Pulse XP bar on pickup collection
-                            xpBarFill.color = k.rgb(150, 230, 255); // Bright light blue pulse
-                            k.wait(0.1, () => {
-                                if (xpBarFill.exists()) {
-                                    xpBarFill.color = k.rgb(100, 200, 255); // Return to normal light blue
-                                }
-                            });
-                        }
-                    });
-
-                    // Broadcast pickup collection to clients (if host)
-                    if (isMultiplayerActive() && isHost() && pickup.mpEntityId) {
-                        broadcastDeathEvent({
-                            entityId: pickup.mpEntityId,
-                            entityType: 'pickup',
-                            x: pickup.pos.x,
-                            y: pickup.pos.y
-                        });
-                    }
-
-                    k.destroy(pickup);
+                    pickup.isFlyingToUI = true;
                 }
             });
         }));
@@ -2943,60 +3082,12 @@ export function setupGameScene(k) {
                     // Currency is persistent across the run, so just add once
                     addCurrency(pickup.value); // Add currency to persistent storage
 
-                    // Animate pickup flying to credit counter
-                    const flyingCoin = k.add([
-                        k.text('$', { size: 10 }),
-                        k.pos(pickup.pos.x, pickup.pos.y),
-                        k.color(255, 215, 0),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                    ]);
-
-                    // Target: credit icon position
-                    const targetX = k.width() - 20;
-                    const targetY = 20;
-
-                    // Animate to target over 0.5 seconds
-                    const duration = 0.5;
-                    let elapsed = 0;
-                    const startX = pickup.pos.x;
-                    const startY = pickup.pos.y;
-
-                    flyingCoin.onUpdate(() => {
-                        elapsed += k.dt();
-                        const progress = Math.min(elapsed / duration, 1);
-
-                        // Ease-in interpolation
-                        const eased = progress * progress;
-                        flyingCoin.pos.x = startX + (targetX - startX) * eased;
-                        flyingCoin.pos.y = startY + (targetY - startY) * eased;
-
-                        // Keep visible throughout flight
-                        flyingCoin.opacity = 1;
-
-                        if (progress >= 1) {
-                            k.destroy(flyingCoin);
-                            // Pulse credit counter on collection
-                            creditIcon.scale = k.vec2(1.3);
-                            creditText.scale = k.vec2(1.2);
-                            k.wait(0.15, () => {
-                                if (creditIcon.exists()) creditIcon.scale = k.vec2(1);
-                                if (creditText.exists()) creditText.scale = k.vec2(1);
-                            });
-                        }
-                    });
-
-                    // Broadcast pickup collection to clients (if host)
-                    if (isMultiplayerActive() && isHost() && pickup.mpEntityId) {
-                        broadcastDeathEvent({
-                            entityId: pickup.mpEntityId,
-                            entityType: 'pickup',
-                            x: pickup.pos.x,
-                            y: pickup.pos.y
-                        });
+                    // Broadcast currency gain to clients
+                    if (isMultiplayerActive()) {
+                        broadcastCurrencyGain(pickup.value);
                     }
 
-                    k.destroy(pickup);
+                    pickup.isFlyingToUI = true;
                 }
             });
 
@@ -3068,6 +3159,64 @@ export function setupGameScene(k) {
             });
         }));
 
+        // Track door progress circle for multiplayer
+        let doorProgressCircle = null;
+        let doorProgressBg = null;
+        let doorProgressTime = 0;
+        let doorProgressDoor = null;
+        let doorProgressIsForced = false;
+        const DOOR_PROGRESS_DURATION = 0.5; // seconds when all players present
+        const DOOR_FORCE_DURATION = 10; // seconds when only host (force advance)
+
+        // Client-side: listen for door progress updates from host
+        if (isMultiplayerActive() && !isHost()) {
+            onMessage('door_progress', (data) => {
+                if (data.clear) {
+                    // Clear progress UI
+                    if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                    if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+                    doorProgressBg = null;
+                    doorProgressCircle = null;
+                    return;
+                }
+
+                // Create UI if it doesn't exist
+                if (!doorProgressBg || !doorProgressBg.exists()) {
+                    doorProgressBg = k.add([
+                        k.circle(20),
+                        k.pos(data.doorX, data.doorY - 30),
+                        k.anchor('center'),
+                        k.color(80, 80, 80),
+                        k.opacity(0.8),
+                        k.z(200),
+                        'doorProgress'
+                    ]);
+
+                    doorProgressCircle = k.add([
+                        k.circle(18),
+                        k.pos(data.doorX, data.doorY - 30),
+                        k.anchor('center'),
+                        k.color(data.isForced ? 255 : 100, data.isForced ? 200 : 255, data.isForced ? 0 : 100),
+                        k.opacity(0),
+                        k.z(201),
+                        'doorProgress'
+                    ]);
+                }
+
+                // Update progress visual
+                if (doorProgressCircle && doorProgressCircle.exists()) {
+                    doorProgressCircle.opacity = data.progress;
+                    doorProgressCircle.scale = k.vec2(data.progress, data.progress);
+                    // Update color if mode changed
+                    doorProgressCircle.color = k.rgb(
+                        data.isForced ? 255 : 100,
+                        data.isForced ? 200 : 255,
+                        data.isForced ? 0 : 100
+                    );
+                }
+            });
+        }
+
         // Handle door interaction (proximity-based)
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused || doorEntered) return;
@@ -3082,35 +3231,106 @@ export function setupGameScene(k) {
                 // Only interact with exit doors (not spawn doors, not blocked doors)
                 if (!door.open || doorEntered || door.isSpawnDoor || door.blocked) return;
 
-                // In multiplayer, check if ALL players are within range of ANY open door
+                // In multiplayer, check player positions
                 if (partySize > 1) {
-                    // Check if all alive players are within range of this door
-                    const allPlayersInRange = players.every(p => {
-                        if (!p.exists()) return true; // Skip non-existent players
-                        if (p.isDead || p.hp() <= 0) return true; // Skip dead players
+                    let hostInRange = false;
+                    let allPlayersInRange = true;
+
+                    players.forEach((p, index) => {
+                        if (!p.exists()) return;
+                        if (p.isDead || p.hp() <= 0) return;
 
                         const distance = k.vec2(
                             p.pos.x - door.pos.x,
                             p.pos.y - door.pos.y
                         ).len();
 
-                        return distance <= 40;
+                        const inRange = distance <= 40;
+                        if (index === 0) hostInRange = inRange;
+                        if (!inRange) allPlayersInRange = false;
                     });
 
-                    // Only allow transition if all players are in range
-                    if (allPlayersInRange) {
-                        doorEntered = true;
-                        playDoorOpen();
-                        handleDoorEntry(door.direction);
+                    const shouldShowProgress = allPlayersInRange || hostInRange;
+                    const isForced = hostInRange && !allPlayersInRange;
+                    const duration = isForced ? DOOR_FORCE_DURATION : DOOR_PROGRESS_DURATION;
+
+                    if (shouldShowProgress) {
+                        // Reset if new door or mode changed
+                        if (doorProgressDoor !== door || doorProgressIsForced !== isForced) {
+                            doorProgressTime = 0;
+                            doorProgressDoor = door;
+                            doorProgressIsForced = isForced;
+
+                            if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                            if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+
+                            doorProgressBg = k.add([
+                                k.circle(20),
+                                k.pos(door.pos.x, door.pos.y - 30),
+                                k.anchor('center'),
+                                k.color(80, 80, 80),
+                                k.opacity(0.8),
+                                k.z(200),
+                                'doorProgress'
+                            ]);
+
+                            doorProgressCircle = k.add([
+                                k.circle(18),
+                                k.pos(door.pos.x, door.pos.y - 30),
+                                k.anchor('center'),
+                                k.color(isForced ? 255 : 100, isForced ? 200 : 255, isForced ? 0 : 100),
+                                k.opacity(0),
+                                k.z(201),
+                                'doorProgress'
+                            ]);
+                        }
+
+                        doorProgressTime += k.dt();
+                        const progress = Math.min(doorProgressTime / duration, 1);
+
+                        if (doorProgressCircle && doorProgressCircle.exists()) {
+                            doorProgressCircle.opacity = progress;
+                            doorProgressCircle.scale = k.vec2(progress, progress);
+                        }
+
+                        // Broadcast to clients
+                        if (isMultiplayerActive()) {
+                            broadcast('door_progress', {
+                                doorX: door.pos.x,
+                                doorY: door.pos.y,
+                                progress: progress,
+                                isForced: isForced
+                            });
+                        }
+
+                        if (progress >= 1) {
+                            doorEntered = true;
+                            playDoorOpen();
+                            if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                            if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+                            doorProgressDoor = null;
+                            if (isMultiplayerActive()) {
+                                broadcast('door_progress', { progress: 0, clear: true });
+                            }
+                            handleDoorEntry(door.direction);
+                        }
+                    } else if (doorProgressDoor === door) {
+                        doorProgressTime = 0;
+                        doorProgressDoor = null;
+                        doorProgressIsForced = false;
+                        if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                        if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+                        if (isMultiplayerActive()) {
+                            broadcast('door_progress', { progress: 0, clear: true });
+                        }
                     }
                 } else {
-                    // Single player: check if local player is near door
+                    // Single player: instant transition
                     const distance = k.vec2(
                         player.pos.x - door.pos.x,
                         player.pos.y - door.pos.y
                     ).len();
 
-                    // Auto-enter if very close (within 40 pixels)
                     if (distance <= 40) {
                         doorEntered = true;
                         playDoorOpen();
@@ -3118,6 +3338,11 @@ export function setupGameScene(k) {
                     }
                 }
             });
+
+            if (!doorProgressDoor && doorProgressBg && doorProgressBg.exists()) {
+                k.destroy(doorProgressBg);
+                k.destroy(doorProgressCircle);
+            }
         }));
 
         // Spawn reward pickups when room is cleared
@@ -3278,6 +3503,19 @@ export function setupGameScene(k) {
                 }
             });
 
+            // Special handling for boss rooms: unblock the north door for floor advancement
+            // Boss rooms have all doors blocked initially since there are no unvisited rooms
+            if (isBossRoom) {
+                const northDoor = spawnDoors.find(d => d.direction === 'north');
+                if (northDoor && northDoor.exists()) {
+                    northDoor.blocked = false;
+                    northDoor.open = true;
+                    northDoor.isSpawnDoor = false;
+                    northDoor.isFloorExit = true; // Mark as floor exit for visual distinction
+                    northDoor.updateVisual();
+                }
+            }
+
             // Update minimap to reflect room clear
             if (gameState.minimap) {
                 gameState.minimap.update();
@@ -3316,7 +3554,7 @@ export function setupGameScene(k) {
                 if (!p.exists()) return null;
 
                 return {
-                    slotIndex: index, // Track which slot this player belongs to
+                    slotIndex: p.slotIndex !== undefined ? p.slotIndex : index, // Use player's actual slot
                     playerName: p.playerName,
                     isRemote: p.isRemote || false,
                     isDead: p.isDead || false,
@@ -3331,6 +3569,10 @@ export function setupGameScene(k) {
                     projectileDamage: p.projectileDamage,
                     pickupRadius: p.pickupRadius,
                     xpMultiplier: p.xpMultiplier || 1,
+                    // Character abilities
+                    dodgeChance: p.dodgeChance || 0,
+                    damageReduction: p.damageReduction || 0,
+                    fireDotMultiplier: p.fireDotMultiplier || 1,
                     // Advanced weapon stats
                     projectileCount: p.projectileCount || 1,
                     piercing: p.piercing || 0,
@@ -3355,7 +3597,13 @@ export function setupGameScene(k) {
                     baseFireRate: p.baseFireRate,
                     baseProjectileSpeed: p.baseProjectileSpeed,
                     // Pending level ups (preserve across room transitions)
-                    pendingLevelUps: p.pendingLevelUps || []
+                    pendingLevelUps: p.pendingLevelUps || [],
+                    // Powerup weapon state
+                    powerupWeapon: p.powerupWeapon || null,
+                    powerupAmmo: p.powerupAmmo !== undefined ? p.powerupAmmo : null,
+                    powerupDuration: p.powerupDuration !== undefined ? p.powerupDuration : null,
+                    originalWeapon: p.originalWeapon || null,
+                    weaponKey: p.weaponKey
                 };
             }).filter(stats => stats !== null);
 
@@ -3378,14 +3626,15 @@ export function setupGameScene(k) {
             // ==========================================
             // FLOOR MAP NAVIGATION
             // ==========================================
+            // Map door direction to grid direction (needed for broadcast)
+            const doorToGridDirection = {
+                'north': 'up',
+                'south': 'down',
+                'east': 'right'
+            };
+            const gridDirection = doorToGridDirection[direction];
+
             if (gameState.floorMap) {
-                // Map door direction to grid direction
-                const doorToGridDirection = {
-                    'north': 'up',
-                    'south': 'down',
-                    'east': 'right'
-                };
-                const gridDirection = doorToGridDirection[direction];
 
                 if (gridDirection) {
                     // Try to move in the floor map
@@ -3407,7 +3656,8 @@ export function setupGameScene(k) {
 
                 // Check if we need to advance to next floor (boss defeated)
                 // In the new system, we advance floors after defeating boss
-                if (currentRoomNode && currentRoomNode.isBossRoom && currentRoomNode.cleared) {
+                const isFloorAdvancement = currentRoomNode && currentRoomNode.isBossRoom && currentRoomNode.cleared;
+                if (isFloorAdvancement) {
                     currentFloor++;
 
                     // Check for character unlocks based on floor completion
@@ -3427,9 +3677,10 @@ export function setupGameScene(k) {
                         }
                     });
 
-                    // Reset floor map for new floor
+                    // Reset floor map and room counter for new floor
                     gameState.floorMap = null;
                     gameState.entryDirection = null; // Start from center on new floor
+                    currentRoom = 1; // Reset room counter for new floor
 
                     // Update new state system for floor transition
                     state.nextFloor();
@@ -3484,7 +3735,7 @@ export function setupGameScene(k) {
 
             // In multiplayer, broadcast room transition to sync spawn positions and player stats
             if (isMultiplayerActive() && isHost()) {
-                broadcastRoomTransition(gameState.entryDirection, gameState.allPlayerStats);
+                broadcastRoomTransition(gameState.entryDirection, gameState.allPlayerStats, gridDirection, currentFloor);
             }
 
             // Restart game scene with new room/floor

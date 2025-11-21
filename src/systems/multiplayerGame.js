@@ -6,6 +6,7 @@
 import { getParty, getPartySize, getLocalPlayer } from './partySystem.js';
 import { broadcast, sendToHost, sendToPeer, onMessage, getNetworkInfo } from './networkSystem.js';
 import { createEnemy } from '../entities/enemy.js';
+import { createBoss } from '../entities/boss.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
 import { SeededRandom, createSeed } from '../utils/seededRandom.js';
 
@@ -35,7 +36,8 @@ const mpGame = {
     floorRng: null, // SeededRandom instance for floor generation
     roomRng: null, // SeededRandom instance for room generation
     currentFloor: 1, // Track current floor for seed generation
-    currentRoom: { x: 0, y: 0 } // Track current room for seed generation
+    currentRoom: { x: 0, y: 0 }, // Track current room for seed generation
+    pendingXP: 0 // XP accumulated while player was in upgrade draft screen
 };
 
 /**
@@ -213,6 +215,12 @@ function setupHostHandlers() {
             // Import applyUpgrade dynamically to avoid circular dependency
             import('../systems/upgrades.js').then(({ applyUpgrade, recalculateAllUpgrades }) => {
                 applyUpgrade(player, payload.upgradeKey);
+                // Track the upgrade in upgradeStacks for proper persistence
+                if (!player.upgradeStacks) player.upgradeStacks = {};
+                player.upgradeStacks[payload.upgradeKey] = (player.upgradeStacks[payload.upgradeKey] || 0) + 1;
+                // Track in selectedUpgrades for synergy detection
+                if (!player.selectedUpgrades) player.selectedUpgrades = new Set();
+                player.selectedUpgrades.add(payload.upgradeKey);
                 recalculateAllUpgrades(player);
             });
         }
@@ -298,16 +306,24 @@ function setupClientHandlers() {
                         // Update death state
                         if (playerState.isDead !== undefined) {
                             player.isDead = playerState.isDead;
-                            // Disable shooting and movement for dead players
+                            // Set state based on alive/dead
                             if (player.isDead) {
                                 player.canShoot = false;
                                 player.canMove = false;
                                 player.isShooting = false;
+                                // Death visual state
+                                player.opacity = 0.5;
+                                if (player.outline && player.outline.exists()) {
+                                    player.outline.opacity = 0.5;
+                                }
                             } else {
-                                // Re-enable for alive players (if not remote controlled)
-                                if (!player.isRemote) {
-                                    player.canShoot = true;
-                                    player.canMove = true;
+                                // Re-enable for alive players
+                                player.canShoot = true;
+                                player.canMove = true;
+                                // Alive visual state
+                                player.opacity = 1;
+                                if (player.outline && player.outline.exists()) {
+                                    player.outline.opacity = 1;
                                 }
                             }
                         }
@@ -355,9 +371,19 @@ function setupClientHandlers() {
                                 localPlayer.canShoot = false;
                                 localPlayer.canMove = false;
                                 localPlayer.isShooting = false;
+                                // Death visual state
+                                localPlayer.opacity = 0.5;
+                                if (localPlayer.outline && localPlayer.outline.exists()) {
+                                    localPlayer.outline.opacity = 0.5;
+                                }
                             } else {
                                 localPlayer.canShoot = true;
                                 localPlayer.canMove = true;
+                                // Alive visual state - restore full opacity
+                                localPlayer.opacity = 1;
+                                if (localPlayer.outline && localPlayer.outline.exists()) {
+                                    localPlayer.outline.opacity = 1;
+                                }
                             }
                         }
                     }
@@ -458,6 +484,11 @@ function setupClientHandlers() {
                             }
                         }
                     }
+
+                    // Update isFlyingToUI state
+                    if (pickupState.isFlyingToUI !== undefined) {
+                        existing.isFlyingToUI = pickupState.isFlyingToUI;
+                    }
                 }
             });
 
@@ -477,14 +508,30 @@ function setupClientHandlers() {
 
         // Host tells clients to spawn a new entity with full creation parameters
         if (payload.entityType === 'enemy') {
-            const enemy = createEnemy(
-                mpGame.k,
-                payload.x,
-                payload.y,
-                payload.type,
-                payload.floor
-            );
+            let enemy;
+            if (payload.isBoss) {
+                // Create boss entity
+                enemy = createBoss(
+                    mpGame.k,
+                    payload.x,
+                    payload.y,
+                    payload.type,
+                    payload.floor
+                );
+            } else {
+                // Create regular enemy
+                enemy = createEnemy(
+                    mpGame.k,
+                    payload.x,
+                    payload.y,
+                    payload.type,
+                    payload.floor
+                );
+            }
             enemy.mpEntityId = payload.id;
+            if (payload.isBossMinion) {
+                enemy.isBossMinion = true;
+            }
             mpGame.enemies.set(payload.id, enemy);
             // Removed console.log for performance
         } else if (payload.entityType === 'xpPickup') {
@@ -627,6 +674,15 @@ function setupClientHandlers() {
         // The host will spawn pickups and broadcast them separately
     });
 
+    // Handle boss enrage events
+    onMessage('boss_enrage', (payload) => {
+        if (!mpGame.k) return;
+        const boss = mpGame.enemies.get(payload.networkId);
+        if (boss && boss.exists() && boss.enrage) {
+            boss.enrage();
+        }
+    });
+
     // Handle player revival events
     onMessage('players_revived', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
@@ -634,13 +690,16 @@ function setupClientHandlers() {
         // Revive all dead players
         mpGame.players.forEach((player, slotIndex) => {
             if (player && player.exists() && (player.hp() <= 0 || player.isDead)) {
-                // Revive player
-                player.setHP(player.maxHealth);
+                // Revive player at 5% health (can be upgraded later)
+                const reviveHealth = Math.max(1, Math.floor(player.maxHealth * 0.05));
+                player.setHP(reviveHealth);
                 player.isDead = false;
 
-                // Re-enable movement and shooting (for all players)
-                player.canMove = true;
-                player.canShoot = true;
+                // Re-enable movement and shooting only for the local player
+                if (slotIndex === mpGame.localPlayerSlot) {
+                    player.canMove = true;
+                    player.canShoot = true;
+                }
 
                 // Show revival effect
                 const reviveEffect = mpGame.k.add([
@@ -699,14 +758,25 @@ function setupClientHandlers() {
     onMessage('xp_gain', (payload) => {
         if (MP_DEBUG) console.log('[Multiplayer] Received XP gain from host:', payload.value);
 
-        // Give XP to all local players
-        if (mpGame.players) {
-            mpGame.players.forEach((p, slot) => {
-                if (p && p.exists() && !p.isDead && p.addXP) {
-                    p.addXP(payload.value);
-                }
-            });
+        // Give XP to local player
+        const localPlayer = mpGame.players.get(mpGame.localPlayerSlot);
+        if (localPlayer && localPlayer.exists() && !localPlayer.isDead && localPlayer.addXP) {
+            localPlayer.addXP(payload.value);
+        } else {
+            // Player doesn't exist (in upgrade draft screen) - accumulate pending XP
+            mpGame.pendingXP += payload.value;
+            if (MP_DEBUG) console.log('[Multiplayer] Accumulated pending XP:', mpGame.pendingXP);
         }
+    });
+
+    // Receive currency gain from host
+    onMessage('currency_gain', (payload) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Received currency gain from host:', payload.value);
+
+        // Import addCurrency dynamically to avoid circular dependency
+        import('../systems/metaProgression.js').then(({ addCurrency }) => {
+            addCurrency(payload.value);
+        });
     });
 
     // Receive enemy split events from host
@@ -1034,7 +1104,8 @@ function collectGameState() {
                 x: Number(pickup.pos.x),
                 y: Number(pickup.pos.y),
                 type: String(pickup.pickupType || 'xp'),
-                magnetizing: Boolean(pickup.magnetizing || false)
+                magnetizing: Boolean(pickup.magnetizing || false),
+                isFlyingToUI: Boolean(pickup.isFlyingToUI || false)
             };
 
             // Include target player slot if magnetizing
@@ -1174,7 +1245,9 @@ export function registerEnemy(enemy, creationParams = {}) {
         x: enemy.pos.x,
         y: enemy.pos.y,
         type: creationParams.type || 'basic',
-        floor: creationParams.floor || 1
+        floor: creationParams.floor || 1,
+        isBoss: creationParams.isBoss || false,
+        isBossMinion: creationParams.isBossMinion || false
     });
 
     return entityId;
@@ -1338,6 +1411,18 @@ export function broadcastDeathEvent(params) {
         y: Number(params.y),
         xpDropped: params.xpDropped !== undefined ? Number(params.xpDropped) : 0,
         currencyDropped: params.currencyDropped !== undefined ? Number(params.currencyDropped) : 0
+    });
+}
+
+/**
+ * Broadcast a boss enrage event to all clients (host only)
+ * @param {string|number} bossNetworkId - The network ID of the boss that is enraged
+ */
+export function broadcastBossEnrage(bossNetworkId) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('boss_enrage', {
+        networkId: bossNetworkId,
     });
 }
 
@@ -1602,17 +1687,39 @@ export function broadcastXPGain(xpValue) {
 }
 
 /**
+ * Broadcast currency gain to all clients (host only)
+ * Called when currency is collected so all players gain currency
+ */
+export function broadcastCurrencyGain(currencyValue) {
+    if (!mpGame.isHost) return;
+
+    broadcast('currency_gain', { value: currencyValue });
+}
+
+/**
+ * Get and clear any pending XP accumulated while player was in upgrade draft
+ * @returns {number} Pending XP amount (0 if none)
+ */
+export function getAndClearPendingXP() {
+    const pending = mpGame.pendingXP;
+    mpGame.pendingXP = 0;
+    return pending;
+}
+
+/**
  * Broadcast room transition to all clients (host only)
  * Called when transitioning to a new room to sync spawn positions and player stats
  * @param {string} entryDirection - Direction players will enter from ('north', 'south', 'east', 'west', or null)
  * @param {Array} allPlayerStats - Stats for all players to restore after transition
  */
-export function broadcastRoomTransition(entryDirection, allPlayerStats = null) {
+export function broadcastRoomTransition(entryDirection, allPlayerStats = null, gridDirection = null, currentFloor = null) {
     if (!mpGame.isHost) return;
 
     broadcast('room_transition', {
         entryDirection: entryDirection,
-        allPlayerStats: allPlayerStats
+        allPlayerStats: allPlayerStats,
+        gridDirection: gridDirection,
+        currentFloor: currentFloor
     });
 }
 

@@ -18,7 +18,7 @@ import { createProjectile } from './projectile.js';
 import { getBossDefinition } from '../data/bosses.js';
 
 // Multiplayer imports
-import { isMultiplayerActive, isHost, registerEnemy } from '../systems/multiplayerGame.js';
+import { isMultiplayerActive, isHost, registerEnemy, broadcastDeathEvent, broadcastBossEnrage } from '../systems/multiplayerGame.js';
 
 export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) {
     const baseConfig = getBossDefinition(type);
@@ -79,6 +79,19 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
     // Initialize enraged state for Twin Guardians
     if (type === 'twinGuardianMelee' || type === 'twinGuardianRanged') {
         boss.enraged = false;
+        boss.enrage = function() {
+            if (this.enraged) return;
+            this.enraged = true;
+            this.speed = Math.floor(this.speed * 1.5);
+            if (this.type === 'twinGuardianMelee') {
+                this.chargeCooldownTimer = 0;
+                this.meleeDamage = Math.floor(this.meleeDamage * 1.25);
+            } else { // Ranged
+                this.fireRate = this.fireRate * 1.5;
+                this.projectileDamage = Math.floor(this.projectileDamage * 1.25);
+            }
+            this.color = k.rgb(255, 200, 0);
+        }
     }
     
     // Armor properties
@@ -909,6 +922,19 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
 
     // Mark as not dead initially
     boss.isDead = false;
+
+    boss.onDeath(() => {
+        // In multiplayer, broadcast death event from host
+        if (isMultiplayerActive() && isHost() && boss.mpEntityId) {
+            broadcastDeathEvent({
+                entityId: boss.mpEntityId,
+                entityType: 'boss',
+                x: boss.pos.x,
+                y: boss.pos.y,
+                xpDropped: boss.xpValue
+            });
+        }
+    });
     
     // Swarm Queen death explosion handler
     if (type === 'swarmQueen') {
@@ -932,6 +958,12 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
     // Initialize visual
     boss.updateVisual();
 
+    // Multiplayer: Register boss for network sync if host
+    if (isMultiplayerActive() && isHost()) {
+        registerEnemy(boss, { type, floor, isBoss: true });
+        boss.enemyType = type; // Store type for sync
+    }
+
     return boss;
 }
 
@@ -951,22 +983,20 @@ export function createTwinGuardians(k, door1, door2, floor = 1, rng = null) {
     meleeGuardian.onDeath(() => {
         if (rangedGuardian && rangedGuardian.exists() && !rangedGuardian.enraged) {
             // Enrage the ranged guardian
-            rangedGuardian.enraged = true;
-            rangedGuardian.speed = Math.floor(rangedGuardian.speed * 1.5); // +50% speed
-            rangedGuardian.fireRate = rangedGuardian.fireRate * 1.5; // +50% attack speed
-            rangedGuardian.projectileDamage = Math.floor(rangedGuardian.projectileDamage * 1.25); // +25% damage
-            rangedGuardian.color = k.rgb(255, 200, 0); // Yellow/orange when enraged
+            rangedGuardian.enrage();
+            if (isMultiplayerActive() && isHost()) {
+                broadcastBossEnrage(rangedGuardian.networkId);
+            }
         }
     });
 
     rangedGuardian.onDeath(() => {
         if (meleeGuardian && meleeGuardian.exists() && !meleeGuardian.enraged) {
             // Enrage the melee guardian
-            meleeGuardian.enraged = true;
-            meleeGuardian.speed = Math.floor(meleeGuardian.speed * 1.5); // +50% speed
-            meleeGuardian.chargeCooldownTimer = 0; // Reset charge cooldown
-            meleeGuardian.meleeDamage = Math.floor(meleeGuardian.meleeDamage * 1.25); // +25% damage
-            meleeGuardian.color = k.rgb(255, 200, 0); // Yellow/orange when enraged
+            meleeGuardian.enrage();
+            if (isMultiplayerActive() && isHost()) {
+                broadcastBossEnrage(meleeGuardian.networkId);
+            }
         }
     });
     

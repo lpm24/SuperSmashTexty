@@ -1,5 +1,5 @@
 import { isValidInviteCode } from '../systems/nameGenerator.js';
-import { joinPartyAsClient } from '../systems/partySystem.js';
+import { joinPartyAsClient, restoreLocalPlayerToSoloParty, getPlayerName, getInviteCode, getSelectedCharacter } from '../systems/partySystem.js';
 import { playMenuNav, playMenuSelect } from '../systems/sounds.js';
 import {
     UI_TEXT_SIZES,
@@ -13,6 +13,14 @@ import {
  */
 export function initJoinPartyScene(k) {
     k.scene('joinParty', () => {
+        // Save original party state before any join attempt
+        const originalState = {
+            name: getPlayerName(),
+            inviteCode: getInviteCode(),
+            character: getSelectedCharacter()
+        };
+        let joinCancelled = false;
+
         // Background
         k.add([
             k.rect(k.width(), k.height()),
@@ -121,7 +129,10 @@ export function initJoinPartyScene(k) {
         // Escape key to cancel (works even during join attempt)
         k.onKeyPress('escape', () => {
             playMenuNav();
-            isJoining = false; // Cancel any ongoing join attempt
+            joinCancelled = true;
+            isJoining = false;
+            // Restore original party state
+            restoreLocalPlayerToSoloParty(originalState);
             k.go('menu');
         });
 
@@ -153,13 +164,19 @@ export function initJoinPartyScene(k) {
                 const success = await joinPartyAsClient(code);
 
                 if (success) {
+                    // Check if join was cancelled while waiting
+                    if (joinCancelled) {
+                        return;
+                    }
                     playMenuSelect();
                     errorMsg.text = 'Successfully joined party!';
                     errorMsg.color = k.rgb(...UI_COLORS.SUCCESS);
 
                     // Wait a moment then go to menu (now in party)
                     k.wait(1, () => {
-                        k.go('menu');
+                        if (!joinCancelled) {
+                            k.go('menu');
+                        }
                     });
                 } else {
                     isJoining = false;
@@ -201,7 +218,10 @@ export function initJoinPartyScene(k) {
 
         cancelButton.onClick(() => {
             playMenuNav();
-            isJoining = false; // Cancel any ongoing join attempt
+            joinCancelled = true;
+            isJoining = false;
+            // Restore original party state
+            restoreLocalPlayerToSoloParty(originalState);
             k.go('menu');
         });
 

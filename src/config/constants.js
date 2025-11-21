@@ -52,9 +52,9 @@ export const PLAYER_CONFIG = {
 // =============================================================================
 
 export const PROGRESSION_CONFIG = {
-    // XP & Leveling
-    BASE_XP_TO_NEXT_LEVEL: 10,
-    XP_SCALING_FACTOR: 1.5, // Multiplier per level for XP requirements
+    // XP & Leveling (flattened curve: higher early, lower scaling)
+    BASE_XP_TO_NEXT_LEVEL: 15,
+    XP_SCALING_FACTOR: 1.25, // Multiplier per level for XP requirements
 
     // Starting stats
     STARTING_LEVEL: 1,

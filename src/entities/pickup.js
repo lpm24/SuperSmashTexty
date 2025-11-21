@@ -22,6 +22,7 @@ export function createXPPickup(k, x, y, value) {
     pickup.magnetizing = false; // Whether this pickup is being pulled toward player
     pickup.magnetizeSpeed = 0; // Current magnetization speed (for acceleration)
     pickup.targetPlayer = null; // Reference to player being magnetized to
+    pickup.isFlyingToUI = false;
 
     // Bounce physics
     pickup.velocityY = -150 - Math.random() * 100; // Initial upward velocity (randomized)
@@ -33,6 +34,17 @@ export function createXPPickup(k, x, y, value) {
     // Visual effect - slight pulsing
     let pulseDir = 1;
     pickup.onUpdate(() => {
+        if (pickup.isFlyingToUI) {
+            const targetPos = k.vec2(k.width() / 2, k.height() - 18); // XP bar position
+            const dir = targetPos.sub(pickup.pos);
+            if (dir.len() < 10) {
+                k.destroy(pickup);
+            } else {
+                pickup.pos = pickup.pos.add(dir.unit().scale(1000 * k.dt()));
+            }
+            return;
+        }
+
         if (k.paused) {
             // Still allow animation during pause for visual feedback
             const pulse = Math.sin(pickup.age * PICKUP_CONFIG.XP_PULSE_SPEED) * PICKUP_CONFIG.XP_PULSE_AMOUNT;
@@ -144,6 +156,7 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
     pickup.magnetizing = false;
     pickup.magnetizeSpeed = 0;
     pickup.targetPlayer = null;
+    pickup.isFlyingToUI = false;
 
     // Bounce physics
     pickup.velocityY = -150 - Math.random() * 100; // Initial upward velocity (randomized)
@@ -154,6 +167,17 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
 
     // Visual effect - slight pulsing with rotation
     pickup.onUpdate(() => {
+        if (pickup.isFlyingToUI) {
+            const targetPos = k.vec2(k.width() - 20, 20); // Currency UI position
+            const dir = targetPos.sub(pickup.pos);
+            if (dir.len() < 10) {
+                k.destroy(pickup);
+            } else {
+                pickup.pos = pickup.pos.add(dir.unit().scale(1000 * k.dt()));
+            }
+            return;
+        }
+        
         if (k.paused) {
             // Still allow animation during pause for visual feedback
             const pulse = Math.sin(pickup.age * PICKUP_CONFIG.CURRENCY_PULSE_SPEED) * PICKUP_CONFIG.CURRENCY_PULSE_AMOUNT;

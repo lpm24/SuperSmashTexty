@@ -206,6 +206,9 @@ export function getLocalPlayer() {
     return party.slots[0];
 }
 
+// Re-export helper functions from metaProgression for convenience
+export { getPlayerName, getInviteCode, getSelectedCharacter };
+
 /**
  * Get party size (number of players)
  * @returns {number} Number of players in party
@@ -360,7 +363,7 @@ export async function joinPartyAsClient(hostInviteCode) {
  * Restore local player to solo party state (after failed/cancelled join)
  * @param {Object} playerInfo - Saved player info {playerName, inviteCode, selectedCharacter}
  */
-function restoreLocalPlayerToSoloParty(playerInfo) {
+export function restoreLocalPlayerToSoloParty(playerInfo) {
     // Disconnect network if still trying to connect as client
     if (party.networkInitialized && !party.isHost) {
         import('./networkSystem.js').then(({ disconnect: disconnectNetwork }) => {

@@ -77,16 +77,13 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             k.z(1000) // High z-index to show above other UI
         ]);
 
-        // In multiplayer: HOST queues locally and broadcasts, CLIENT only broadcasts
-        // Clients will queue when they receive the broadcast back from the host
+        // In multiplayer: queue locally and broadcast to sync with others
         if (isMultiplayer && player.slotIndex !== undefined) {
-            // Broadcast to notify everyone (including clients)
+            // Broadcast to notify everyone
             broadcastLevelUpQueued(player.slotIndex, level);
 
-            // Only host queues locally - clients will queue when receiving broadcast
-            if (isHost()) {
-                player.pendingLevelUps.push(level);
-            }
+            // Both host and client queue locally for their own player
+            player.pendingLevelUps.push(level);
         } else {
             // Single player: queue locally
             player.pendingLevelUps.push(level);

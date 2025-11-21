@@ -848,6 +848,12 @@ export function setupCombatSystem(k, player) {
         }
 
         // Host or singleplayer: process damage
+        // Check for dodge chance (The Scout ability)
+        if (player.dodgeChance && Math.random() < player.dodgeChance) {
+            // Dodged! No damage taken
+            return;
+        }
+
         // Play player hit sound
         playPlayerHit();
 
@@ -859,7 +865,7 @@ export function setupCombatSystem(k, player) {
                 baseDamage = miniboss.meleeDamage;
             }
         }
-        const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, 0);
+        const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
 
         // Set invulnerability frames (don't reset timer if already invulnerable)

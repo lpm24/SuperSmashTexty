@@ -520,9 +520,10 @@ export class FloorMap {
  * @returns {FloorMap} Generated floor map
  */
 export function generateFloorMap(floor, rng = null) {
-    // Adjust grid size based on floor for progression
-    const width = Math.min(5 + Math.floor(floor / 3), 8); // 5-8 columns
-    const height = Math.min(3 + Math.floor(floor / 5), 5); // 3-5 rows
+    // Adjust grid size based on floor for more complex layouts per floor
+    // Floor 1: 4x3 (small), Floor 2: 5x3, Floor 3: 6x4, etc.
+    const width = Math.min(3 + floor, 10); // 4-10 columns
+    const height = Math.min(2 + Math.floor(floor / 2), 6); // 3-6 rows
 
     const floorMap = new FloorMap(floor, width, height, rng);
     floorMap.debugPrint();

@@ -162,6 +162,7 @@ export function createPlayer(k, x, y, characterKey = null) {
     // Control flags
     player.canMove = true; // Can the player move? (set to false on death)
     player.canShoot = true; // Can the player shoot? (set to false on death)
+    player.isDead = false; // Is the player dead?
 
     // Movement
     let moveDir = k.vec2(0, 0);
