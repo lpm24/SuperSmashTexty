@@ -360,27 +360,28 @@ export function setupCombatSystem(k, player) {
         }
     });
 
-    // Collision: Projectile hits Wall (check obstacle piercing)
+    // Collision: Projectile hits Wall (consolidated handler)
     k.onCollide('projectile', 'wall', (projectile, wall) => {
         if (k.paused) return;
-        
-        // Explosive projectiles are handled separately
+
+        // Handle explosive projectiles
         if (projectile.isExplosive) {
+            explodeProjectile(k, projectile, projectile.pos.x, projectile.pos.y);
             return;
         }
-        
+
         // Check if projectile has already hit this obstacle (for obstacle piercing)
         if (projectile.piercedObstacles && projectile.piercedObstacles.has(wall)) {
             return; // Already hit this obstacle
         }
-        
+
         // Check if projectile can pierce obstacles
         if (projectile.obstaclePiercing > 0) {
             // Track this obstacle for piercing
             if (projectile.piercedObstacles) {
                 projectile.piercedObstacles.add(wall);
             }
-            
+
             // Destroy projectile if it can't pierce anymore obstacles
             // If obstaclePiercing = n, projectile can hit n+1 obstacles total
             if (projectile.piercedObstacles.size > (projectile.obstaclePiercing || 0)) {
@@ -1073,15 +1074,6 @@ export function setupCombatSystem(k, player) {
 
         // Set contact cooldown
         orb.contactCooldown = orb.contactCooldownDuration || 0.2;
-    });
-
-    // Collision: Explosive Projectile hits Wall
-    k.onCollide('projectile', 'wall', (projectile, wall) => {
-        if (k.paused) return;
-        if (!projectile.isExplosive) return; // Only handle explosive projectiles here
-
-        // Explode on wall impact
-        explodeProjectile(k, projectile, projectile.pos.x, projectile.pos.y);
     });
 }
 

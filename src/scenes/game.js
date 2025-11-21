@@ -42,7 +42,7 @@ import { createMinimap } from '../systems/minimap.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 
 // Config imports
@@ -765,6 +765,94 @@ export function setupGameScene(k) {
         // Filter out null entries from players array for iteration
         // But keep the array slot-indexed for direct access
         const activePlayers = players.filter(p => p !== null);
+
+        // ==========================================
+        // EMOTES: Display emotes above player heads
+        // ==========================================
+
+        // Function to show emote above a player
+        function showEmote(targetPlayer, emoteType) {
+            if (!targetPlayer || !targetPlayer.exists()) return;
+
+            const emoteChar = emoteType === 'exclamation' ? '!' : '♥';
+            const emoteColor = emoteType === 'exclamation' ? [255, 255, 0] : [255, 100, 150];
+
+            // Create emote text
+            const emote = k.add([
+                k.text(emoteChar, { size: 24 }),
+                k.pos(targetPlayer.pos.x, targetPlayer.pos.y - 50),
+                k.anchor('center'),
+                k.color(...emoteColor),
+                k.opacity(1),
+                k.z(1000),
+                'emote'
+            ]);
+
+            // Animate: float up and fade out
+            let elapsed = 0;
+            const duration = 1.5;
+
+            emote.onUpdate(() => {
+                elapsed += k.dt();
+
+                // Follow player horizontally, float up
+                emote.pos.x = targetPlayer.pos.x;
+                emote.pos.y = targetPlayer.pos.y - 50 - (elapsed * 30);
+
+                // Scale animation (pop in, then shrink)
+                if (elapsed < 0.2) {
+                    emote.scale = k.vec2(1 + elapsed * 2);
+                } else {
+                    emote.scale = k.vec2(1.4 - (elapsed - 0.2) * 0.3);
+                }
+
+                // Fade out in last portion
+                if (elapsed > duration * 0.6) {
+                    emote.opacity = 1 - ((elapsed - duration * 0.6) / (duration * 0.4));
+                }
+
+                // Remove when done
+                if (elapsed >= duration) {
+                    k.destroy(emote);
+                }
+            });
+        }
+
+        // Key handlers for emotes (local player only)
+        k.onKeyPress('q', () => {
+            if (player.isDead) return;
+
+            // Show locally
+            showEmote(player, 'exclamation');
+
+            // Broadcast to others in multiplayer
+            if (isMultiplayerActive()) {
+                broadcastEmote(player.slotIndex, 'exclamation');
+            }
+        });
+
+        k.onKeyPress('e', () => {
+            if (player.isDead) return;
+
+            // Show locally
+            showEmote(player, 'heart');
+
+            // Broadcast to others in multiplayer
+            if (isMultiplayerActive()) {
+                broadcastEmote(player.slotIndex, 'heart');
+            }
+        });
+
+        // Handle emotes from other players in multiplayer
+        if (partySize > 1) {
+            onMessage('player_emote', (data) => {
+                // Find the player who sent the emote
+                const emotingPlayer = players[data.slotIndex];
+                if (emotingPlayer && emotingPlayer.exists()) {
+                    showEmote(emotingPlayer, data.emoteType);
+                }
+            });
+        }
 
         // ==========================================
         // NEW ARCHITECTURE: Sync player entity with PlayerState

@@ -205,6 +205,12 @@ function setupHostHandlers() {
         if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted level up queued for slot:', payload.slotIndex);
     });
 
+    // Handle emote from clients - rebroadcast to all
+    onMessage('player_emote', (payload, fromPeerId) => {
+        // Rebroadcast emote to all clients (including sender for consistency)
+        broadcast('player_emote', payload);
+    });
+
     // Handle upgrade selection from clients
     onMessage('upgrade_selected', (payload, fromPeerId) => {
         if (MP_DEBUG) console.log('[Multiplayer] Received upgrade selection from client:', fromPeerId, 'slot:', payload.slotIndex, 'upgrade:', payload.upgradeKey);
@@ -1704,6 +1710,19 @@ export function getAndClearPendingXP() {
     const pending = mpGame.pendingXP;
     mpGame.pendingXP = 0;
     return pending;
+}
+
+/**
+ * Broadcast emote to all players
+ * @param {number} slotIndex - Player slot showing emote
+ * @param {string} emoteType - Type of emote ('exclamation' or 'heart')
+ */
+export function broadcastEmote(slotIndex, emoteType) {
+    if (mpGame.isHost) {
+        broadcast('player_emote', { slotIndex, emoteType });
+    } else {
+        sendToHost('player_emote', { slotIndex, emoteType });
+    }
 }
 
 /**
