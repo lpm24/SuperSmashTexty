@@ -444,12 +444,55 @@ export function setupCombatSystem(k, player) {
         }
     });
 
-    // Collision: Projectile hits Enemy
+    // Collision: Projectile hits Enemy (consolidated handler for all projectile types)
     k.onCollide('projectile', 'enemy', (projectile, enemy) => {
         if (k.paused) return;
 
         // Only player projectiles can hit enemies (enemy/boss projectiles pass through)
         if (projectile.isEnemyProjectile || projectile.isBossProjectile) {
+            return;
+        }
+
+        // Handle explosive projectiles
+        if (projectile.isExplosive) {
+            explodeProjectile(k, projectile, enemy.pos.x, enemy.pos.y);
+            return;
+        }
+
+        // Handle chain lightning projectiles
+        if (projectile.isChainLightning) {
+            // Check if already hit this enemy
+            if (projectile.chainedEnemies && projectile.chainedEnemies.has(enemy)) {
+                return;
+            }
+
+            // Only host deals damage in multiplayer
+            if (!isMultiplayerActive() || isHost()) {
+                // Calculate damage (reduces per jump)
+                const jumpCount = projectile.chainJumps || 0;
+                const damageReduction = 1 - (projectile.chainDamageReduction || 0.15) * jumpCount;
+                const finalDamage = Math.floor(projectile.damage * Math.max(0.1, damageReduction));
+
+                // Deal damage
+                if (enemy.takeDamage) {
+                    enemy.takeDamage(finalDamage);
+                } else {
+                    enemy.hurt(finalDamage);
+                }
+            }
+
+            // Track this enemy (visual tracking on all clients)
+            if (projectile.chainedEnemies) {
+                projectile.chainedEnemies.add(enemy);
+            }
+
+            // Chain to next enemy if jumps remaining (visual chaining on all clients)
+            if (projectile.chainJumps < projectile.maxJumps) {
+                chainToNextEnemy(k, projectile, enemy);
+            } else {
+                // No more jumps, destroy projectile
+                k.destroy(projectile);
+            }
             return;
         }
 
@@ -545,58 +588,114 @@ export function setupCombatSystem(k, player) {
         });
     });
     
-    // Collision: Explosive Projectile hits Boss
+    // Collision: Projectile hits Boss (consolidated handler for all projectile types)
     k.onCollide('projectile', 'boss', (projectile, boss) => {
         if (k.paused) return;
-        if (!projectile.isExplosive) return; // Only handle explosive projectiles here
-        
-        // Explode on impact
-        explodeProjectile(k, projectile, boss.pos.x, boss.pos.y);
-    });
-    
-    // Collision: Chain Lightning Projectile hits Boss
-    k.onCollide('projectile', 'boss', (projectile, boss) => {
-        if (k.paused) return;
-        if (!projectile.isChainLightning) return; // Only handle chain lightning here
 
-        // Check if already hit this boss
-        if (projectile.chainedEnemies && projectile.chainedEnemies.has(boss)) {
+        // Handle explosive projectiles
+        if (projectile.isExplosive) {
+            explodeProjectile(k, projectile, boss.pos.x, boss.pos.y);
             return;
         }
 
-        // Only host deals damage in multiplayer
-        if (!isMultiplayerActive() || isHost()) {
-            // Calculate damage (reduces per jump)
-            const jumpCount = projectile.chainJumps || 0;
-            const damageReduction = 1 - (projectile.chainDamageReduction || 0.15) * jumpCount;
-            const finalDamage = Math.floor(projectile.damage * Math.max(0.1, damageReduction));
-
-            // Deal damage
-            if (boss.takeDamage) {
-                boss.takeDamage(finalDamage);
-            } else {
-                boss.hurt(finalDamage);
+        // Handle chain lightning projectiles
+        if (projectile.isChainLightning) {
+            // Check if already hit this boss
+            if (projectile.chainedEnemies && projectile.chainedEnemies.has(boss)) {
+                return;
             }
+
+            // Only host deals damage in multiplayer
+            if (!isMultiplayerActive() || isHost()) {
+                // Calculate damage (reduces per jump)
+                const jumpCount = projectile.chainJumps || 0;
+                const damageReduction = 1 - (projectile.chainDamageReduction || 0.15) * jumpCount;
+                const finalDamage = Math.floor(projectile.damage * Math.max(0.1, damageReduction));
+
+                // Deal damage
+                if (boss.takeDamage) {
+                    boss.takeDamage(finalDamage);
+                } else {
+                    boss.hurt(finalDamage);
+                }
+            }
+
+            // Track this boss (visual tracking on all clients)
+            if (projectile.chainedEnemies) {
+                projectile.chainedEnemies.add(boss);
+            }
+
+            // Chain to next enemy if jumps remaining
+            k.wait(0.01, () => {
+                if (!projectile.exists()) return;
+                if (projectile.chainJumps < projectile.maxJumps) {
+                    chainToNextEnemy(k, projectile, boss);
+                } else {
+                    k.destroy(projectile);
+                }
+            });
+            return;
         }
 
-        // Track this boss (visual tracking on all clients)
-        if (projectile.chainedEnemies) {
-            projectile.chainedEnemies.add(boss);
+        // Handle regular projectiles
+        // Check if this projectile has already hit this boss (for piercing)
+        if (projectile.piercedEnemies && projectile.piercedEnemies.has(boss)) {
+            return;
         }
-        
-        // Chain to next enemy if jumps remaining
-        // Use a small delay to ensure collision detection works properly
-        k.wait(0.01, () => {
-            if (!projectile.exists()) return;
-            if (projectile.chainJumps < projectile.maxJumps) {
-                chainToNextEnemy(k, projectile, boss);
-            } else {
-                // No more jumps, destroy projectile
+
+        // In multiplayer, only host deals damage
+        if (isMultiplayerActive() && !isHost()) {
+            spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
+            const knockbackDir = k.vec2(boss.pos.x - projectile.pos.x, boss.pos.y - projectile.pos.y);
+            spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
+
+            if (projectile.piercedEnemies) {
+                projectile.piercedEnemies.add(boss);
+            }
+            if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
                 k.destroy(projectile);
             }
+            return;
+        }
+
+        // Host or singleplayer: deal damage
+        if (boss.takeDamage) {
+            boss.takeDamage(projectile.damage);
+        } else {
+            boss.hurt(projectile.damage);
+        }
+
+        // Apply fire DoT
+        if (projectile.burnDamage && projectile.burnDuration) {
+            boss.burnDamage = projectile.burnDamage;
+            boss.burnDuration = projectile.burnDuration;
+            boss.burnTimer = 0;
+        }
+
+        spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
+
+        if (projectile.piercedEnemies) {
+            projectile.piercedEnemies.add(boss);
+        }
+
+        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+            k.destroy(projectile);
+        }
+
+        // Knockback
+        const knockbackDir = k.vec2(boss.pos.x - projectile.pos.x, boss.pos.y - projectile.pos.y);
+        if (knockbackDir.len() > 0) {
+            applySafeKnockback(k, boss, knockbackDir.unit(), COMBAT_CONFIG.KNOCKBACK_BOSS_FROM_PROJECTILE);
+        }
+
+        spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
+
+        boss.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
+        k.wait(0.1, () => {
+            if (boss.exists()) boss.updateVisual();
         });
     });
-    
+
     // Collision: Projectile hits Miniboss
     k.onCollide('projectile', 'miniboss', (projectile, miniboss) => {
         if (k.paused) return;
@@ -669,92 +768,6 @@ export function setupCombatSystem(k, player) {
             if (miniboss.exists()) {
                 // Restore miniboss color (will be updated by updateVisual if armor/shield changed)
                 miniboss.updateVisual();
-            }
-        });
-    });
-    
-    // Collision: Projectile hits Boss (with armor system - regular projectiles)
-    k.onCollide('projectile', 'boss', (projectile, boss) => {
-        if (k.paused) return;
-
-        // Skip special weapon types (handled separately)
-        if (projectile.isExplosive || projectile.isChainLightning) {
-            return;
-        }
-
-        // Check if this projectile has already hit this boss (for piercing)
-        if (projectile.piercedEnemies && projectile.piercedEnemies.has(boss)) {
-            return; // Already hit this boss
-        }
-
-        // In multiplayer, only host deals damage
-        // Clients just show visual effects
-        if (isMultiplayerActive() && !isHost()) {
-            // Client: show visual feedback only
-            spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
-            const knockbackDir = k.vec2(boss.pos.x - projectile.pos.x, boss.pos.y - projectile.pos.y);
-            spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
-
-            // Track for piercing and destroy projectile as needed
-            if (projectile.piercedEnemies) {
-                projectile.piercedEnemies.add(boss);
-            }
-            if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
-                k.destroy(projectile);
-            }
-            return; // Skip damage dealing on client
-        }
-
-        // Host or singleplayer: deal damage
-        // Use boss's takeDamage method which handles armor
-        if (boss.takeDamage) {
-            boss.takeDamage(projectile.damage);
-        } else {
-            // Fallback to regular damage if takeDamage not available
-            boss.hurt(projectile.damage);
-        }
-
-        // Apply fire DoT if projectile has burn effect
-        if (projectile.burnDamage && projectile.burnDuration) {
-            boss.burnDamage = projectile.burnDamage;
-            boss.burnDuration = projectile.burnDuration;
-            boss.burnTimer = 0;
-        }
-
-        // Spawn blood splatter particle effect
-        spawnBloodSplatter(k, boss.pos.x, boss.pos.y, { isCrit: projectile.isCrit });
-
-        // Track this boss for piercing
-        if (projectile.piercedEnemies) {
-            projectile.piercedEnemies.add(boss);
-        }
-
-        // Destroy projectile if it can't pierce anymore
-        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
-            k.destroy(projectile);
-        }
-
-        // Knockback boss away from projectile direction
-        const knockbackDir = k.vec2(
-            boss.pos.x - projectile.pos.x,
-            boss.pos.y - projectile.pos.y
-        );
-        const knockbackDist = knockbackDir.len();
-        if (knockbackDist > 0) {
-            const normalized = knockbackDir.unit();
-            const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_BOSS_FROM_PROJECTILE;
-            applySafeKnockback(k, boss, normalized, knockbackAmount);
-        }
-
-        // Spawn hit impact particle effect
-        spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
-        
-        // Visual feedback (different color for crits)
-        boss.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
-        k.wait(0.1, () => {
-            if (boss.exists()) {
-                // Restore boss color (will be updated by updateVisual if armor changed)
-                boss.updateVisual();
             }
         });
     });
@@ -1061,75 +1074,33 @@ export function setupCombatSystem(k, player) {
         // Set contact cooldown
         orb.contactCooldown = orb.contactCooldownDuration || 0.2;
     });
-    
-    // Collision: Explosive Projectile hits Enemy (separate handler for priority)
-    k.onCollide('projectile', 'enemy', (projectile, enemy) => {
-        if (k.paused) return;
-        if (!projectile.isExplosive) return; // Only handle explosive projectiles here
-        
-        // Explode on impact
-        explodeProjectile(k, projectile, enemy.pos.x, enemy.pos.y);
-    });
-    
+
     // Collision: Explosive Projectile hits Wall
     k.onCollide('projectile', 'wall', (projectile, wall) => {
         if (k.paused) return;
         if (!projectile.isExplosive) return; // Only handle explosive projectiles here
-        
+
         // Explode on wall impact
         explodeProjectile(k, projectile, projectile.pos.x, projectile.pos.y);
-    });
-    
-    // Collision: Chain Lightning Projectile hits Enemy (separate handler for priority)
-    k.onCollide('projectile', 'enemy', (projectile, enemy) => {
-        if (k.paused) return;
-        if (!projectile.isChainLightning) return; // Only handle chain lightning here
-        
-        // Check if already hit this enemy
-        if (projectile.chainedEnemies && projectile.chainedEnemies.has(enemy)) {
-            return;
-        }
-
-        // Only host deals damage in multiplayer
-        if (!isMultiplayerActive() || isHost()) {
-            // Calculate damage (reduces per jump)
-            const jumpCount = projectile.chainJumps || 0;
-            const damageReduction = 1 - (projectile.chainDamageReduction || 0.15) * jumpCount;
-            const finalDamage = Math.floor(projectile.damage * Math.max(0.1, damageReduction));
-
-            // Deal damage
-            if (enemy.takeDamage) {
-                enemy.takeDamage(finalDamage);
-            } else {
-                enemy.hurt(finalDamage);
-            }
-        }
-
-        // Track this enemy (visual tracking on all clients)
-        if (projectile.chainedEnemies) {
-            projectile.chainedEnemies.add(enemy);
-        }
-
-        // Chain to next enemy if jumps remaining (visual chaining on all clients)
-        if (projectile.chainJumps < projectile.maxJumps) {
-            chainToNextEnemy(k, projectile, enemy);
-        } else {
-            // No more jumps, destroy projectile
-            k.destroy(projectile);
-        }
     });
 }
 
 // Initialize orbital weapons
 function initializeOrbitalWeapons(k, player) {
-    if (!player.orbitalOrbs) {
-        player.orbitalOrbs = [];
-        player.orbitalAngles = [];
+    // Clean up any existing orbs first to prevent accumulation
+    if (player.orbitalOrbs && player.orbitalOrbs.length > 0) {
+        player.orbitalOrbs.forEach(orb => {
+            if (orb && orb.exists()) k.destroy(orb);
+        });
     }
-    
+
+    // Reset arrays
+    player.orbitalOrbs = [];
+    player.orbitalAngles = [];
+
     const orbCount = player.projectileCount || 1;
     const orbitRadius = player.orbitRadius || WEAPON_CONFIG.BASE_ORBIT_RADIUS;
-    
+
     // Create initial orbs
     for (let i = 0; i < orbCount; i++) {
         const angle = (360 / orbCount) * i; // Evenly space orbs

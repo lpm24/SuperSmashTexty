@@ -369,7 +369,8 @@ export function setupGameScene(k) {
         // ==========================================
         const party = getParty();
         const networkInfo = getNetworkInfo();
-        let players = [player]; // Array of all player entities
+        // Initialize players array indexed by slot (not by push order)
+        let players = new Array(party.maxSlots || 4).fill(null);
 
         if (partySize > 1 && networkInfo.isInitialized) {
             // Find local player slot
@@ -390,8 +391,9 @@ export function setupGameScene(k) {
             const localOffsetX = localSlot * 30;
             player.pos.x = playerSpawnX + localOffsetX;
 
-            // Register local player
+            // Register local player at their slot index
             registerPlayer(localSlot, player);
+            players[localSlot] = player;
 
             // Spawn additional players for other party members
             party.slots.forEach((slot, index) => {
@@ -467,9 +469,9 @@ export function setupGameScene(k) {
                     // Note: reviveAllPlayers callback is passed as null here, will be handled globally
                     setupProgressionSystem(k, remotePlayer, null, true);
 
-                    // Register remote player
+                    // Register remote player at their slot index
                     registerPlayer(index, remotePlayer);
-                    players.push(remotePlayer);
+                    players[index] = remotePlayer;
 
                     // Add onDeath callback for remote players (host only) to check game over
                     if (party.isHost) {
@@ -485,7 +487,7 @@ export function setupGameScene(k) {
 
                             // Check if all players are dead
                             const anyPlayerAlive = players.some(p =>
-                                p.exists() && p.hp() > 0 && !p.isDead
+                                p && p.exists() && p.hp() > 0 && !p.isDead
                             );
 
                             if (!anyPlayerAlive) {
@@ -688,9 +690,8 @@ export function setupGameScene(k) {
                     // Apply powerup to all players (client-side visual update)
                     // The actual weapon stats will be synced via game_state
                     players.forEach(p => {
-                        if (p.exists()) {
-                            applyPowerupWeapon(p, data.powerupKey);
-                        }
+                        if (!p || !p.exists()) return;
+                        applyPowerupWeapon(p, data.powerupKey);
                     });
                 });
 
@@ -755,7 +756,15 @@ export function setupGameScene(k) {
                 });
                 } // End of handler registration guard
             }
+        } else {
+            // Single player mode - add player at slot 0
+            player.slotIndex = 0;
+            players[0] = player;
         }
+
+        // Filter out null entries from players array for iteration
+        // But keep the array slot-indexed for direct access
+        const activePlayers = players.filter(p => p !== null);
 
         // ==========================================
         // NEW ARCHITECTURE: Sync player entity with PlayerState
@@ -811,6 +820,7 @@ export function setupGameScene(k) {
 
             let revivedCount = 0;
             players.forEach((p, index) => {
+                if (!p) return; // Skip null entries
                 // Check if player is dead (hp <= 0 or destroyed)
                 if ((p.exists() && p.hp() <= 0) || (p.exists() && p.isDead)) {
                     // Revive player at 5% health (can be upgraded later)
@@ -2938,11 +2948,10 @@ export function setupGameScene(k) {
             } else {
                 // In multiplayer, check near ALL players
                 players.forEach(p => {
-                    if (p.exists() && !p.isDead) {
-                        spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
-                            if (pickup.is && pickup.is('xpPickup')) nearbyPickups.add(pickup);
-                        });
-                    }
+                    if (!p || !p.exists() || p.isDead) return;
+                    spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
+                        if (pickup.is && pickup.is('xpPickup')) nearbyPickups.add(pickup);
+                    });
                 });
             }
 
@@ -2960,7 +2969,7 @@ export function setupGameScene(k) {
                 if (partySize > 1) {
                     // Check all players to find the closest one
                     players.forEach(p => {
-                        if (!p.exists() || p.isDead) return;
+                        if (!p || !p.exists() || p.isDead) return;
                         const dist = k.vec2(
                             p.pos.x - pickup.pos.x,
                             p.pos.y - pickup.pos.y
@@ -3027,11 +3036,10 @@ export function setupGameScene(k) {
                 });
             } else {
                 players.forEach(p => {
-                    if (p.exists() && !p.isDead) {
-                        spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
-                            if (pickup.is && pickup.is('currencyPickup')) nearbyPickups.add(pickup);
-                        });
-                    }
+                    if (!p || !p.exists() || p.isDead) return;
+                    spatialGrids.pickups.getNearby(p.pos.x, p.pos.y, pickupCheckRadius).forEach(pickup => {
+                        if (pickup.is && pickup.is('currencyPickup')) nearbyPickups.add(pickup);
+                    });
                 });
             }
 
@@ -3049,7 +3057,7 @@ export function setupGameScene(k) {
                 if (partySize > 1) {
                     // Check all players to find the closest one
                     players.forEach(p => {
-                        if (!p.exists() || p.isDead) return;
+                        if (!p || !p.exists() || p.isDead) return;
                         const dist = k.vec2(
                             p.pos.x - pickup.pos.x,
                             p.pos.y - pickup.pos.y
@@ -3237,7 +3245,7 @@ export function setupGameScene(k) {
                     let allPlayersInRange = true;
 
                     players.forEach((p, index) => {
-                        if (!p.exists()) return;
+                        if (!p || !p.exists()) return;
                         if (p.isDead || p.hp() <= 0) return;
 
                         const distance = k.vec2(
@@ -3421,6 +3429,7 @@ export function setupGameScene(k) {
             const levelUpQueue = [];
 
             players.forEach((p) => {
+                if (!p) return; // Skip null entries
                 if (p.exists() && p.pendingLevelUps && p.pendingLevelUps.length > 0) {
                     p.pendingLevelUps.forEach(level => {
                         levelUpQueue.push({ player: p, level: level });
@@ -3551,7 +3560,7 @@ export function setupGameScene(k) {
         function handleDoorEntry(direction) {
             // Save ALL players' stats before transitioning (critical for multiplayer)
             gameState.allPlayerStats = players.map((p, index) => {
-                if (!p.exists()) return null;
+                if (!p || !p.exists()) return null;
 
                 return {
                     slotIndex: p.slotIndex !== undefined ? p.slotIndex : index, // Use player's actual slot
@@ -3777,7 +3786,7 @@ export function setupGameScene(k) {
 
                 // Check if any other players are still alive (host only)
                 const anyPlayerAlive = players.some(p =>
-                    p.exists() && p.hp() > 0 && !p.isDead
+                    p && p.exists() && p.hp() > 0 && !p.isDead
                 );
 
                 if (anyPlayerAlive) {

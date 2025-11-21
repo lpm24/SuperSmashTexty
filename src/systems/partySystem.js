@@ -534,8 +534,9 @@ function handlePlayerDisconnect(peerId) {
         // Clean up player entity from the game (destroys entity, clears pending level-ups, broadcasts to clients)
         cleanupDisconnectedPlayer(slotIndex);
 
-        // Remove from party and shift remaining players up
-        removePlayerFromPartyAndShift(slotIndex);
+        // Remove from party WITHOUT shifting - shifting during gameplay breaks slot indices
+        // Just clear the slot so remaining players keep their original slot indices
+        removePlayerFromParty(slotIndex);
         party.peerIdToSlot.delete(peerId);
         broadcastPartyUpdate();
     }

@@ -622,8 +622,8 @@ function setupClientHandlers() {
             damageText.opacity -= 1.25 * mpGame.k.dt();
         });
 
-        // Flash the target entity if we have it
-        const target = mpGame.enemies.get(payload.targetId) || mpGame.players.get(payload.targetId);
+        // Flash the target entity if we have it (enemies only - players keyed by slotIndex)
+        const target = mpGame.enemies.get(payload.targetId);
         if (target && target.exists()) {
             const originalColor = target.color;
             target.color = mpGame.k.rgb(255, 255, 255); // White flash
@@ -640,9 +640,9 @@ function setupClientHandlers() {
         if (!mpGame.k) return; // Need kaplay instance
 
         // Remove the entity from tracking and destroy it
-        // Check all entity types: enemies, players, and pickups
+        // Check enemies and pickups only - players have separate death handling
+        // NOTE: Do NOT check mpGame.players here as it's keyed by slotIndex, not entityId
         const entity = mpGame.enemies.get(payload.entityId) ||
-                      mpGame.players.get(payload.entityId) ||
                       mpGame.pickups.get(payload.entityId);
 
         if (entity && entity.exists()) {
