@@ -185,8 +185,8 @@ export const PICKUP_CONFIG = {
     CURRENCY_COLOR: [255, 215, 0], // Gold
 
     // Magnetization
-    MAGNETIZE_SPEED: 200, // Speed at which pickups move toward player when magnetized (pixels/second)
-    MAGNETIZE_ACCELERATION: 50, // Acceleration of magnetized pickups (pixels/second²)
+    MAGNETIZE_SPEED: 800, // Max speed at which pickups move toward player when magnetized (pixels/second)
+    MAGNETIZE_ACCELERATION: 600, // Acceleration of magnetized pickups (pixels/second²)
     COLLECTION_RADIUS: 20, // Distance at which pickups are automatically collected
 };
 

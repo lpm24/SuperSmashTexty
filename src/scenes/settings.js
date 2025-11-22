@@ -629,12 +629,17 @@ export function setupSettingsScene(k) {
                 });
                 
                 // Show Screen Shake
-                currentY = addToggle(k, 'Show Screen Shake', settings.visual.showScreenShake, currentY, (value) => {
+                currentY = addToggle(k, 'Screen Shake', settings.visual.showScreenShake, currentY, (value) => {
                     updateSetting('visual', 'showScreenShake', value);
                 });
-                
+
+                // Show Hit Freeze
+                currentY = addToggle(k, 'Hit Freeze', settings.visual.showHitFreeze, currentY, (value) => {
+                    updateSetting('visual', 'showHitFreeze', value);
+                });
+
                 // Show Damage Numbers
-                currentY = addToggle(k, 'Show Damage Numbers', settings.visual.showDamageNumbers, currentY, (value) => {
+                currentY = addToggle(k, 'Damage Numbers', settings.visual.showDamageNumbers, currentY, (value) => {
                     updateSetting('visual', 'showDamageNumbers', value);
                 });
                 

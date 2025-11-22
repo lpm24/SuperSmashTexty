@@ -200,22 +200,22 @@ export function playSMGFire() {
   const variation = Math.random();
 
   if (variation < 0.33) {
-    playTone(vary(250, 0.3), 0.05, 'square', 0.12, {
-      attack: 0.001,
-      decay: 0.03,
-      pitchBend: 0.4
-    });
-  } else if (variation < 0.66) {
-    playTone(vary(280, 0.3), 0.04, 'sawtooth', 0.12, {
+    playTone(vary(220, 0.3), 0.04, 'triangle', 0.08, {
       attack: 0.001,
       decay: 0.025,
       pitchBend: 0.5
     });
-  } else {
-    playTone(vary(230, 0.3), 0.06, 'square', 0.12, {
+  } else if (variation < 0.66) {
+    playTone(vary(240, 0.3), 0.035, 'sine', 0.09, {
       attack: 0.001,
-      decay: 0.04,
-      pitchBend: 0.3
+      decay: 0.02,
+      pitchBend: 0.6
+    });
+  } else {
+    playTone(vary(200, 0.3), 0.045, 'triangle', 0.08, {
+      attack: 0.001,
+      decay: 0.03,
+      pitchBend: 0.4
     });
   }
 }
@@ -224,22 +224,20 @@ export function playSMGFire() {
  * Shotgun fire sound (deep boom with noise)
  */
 export function playShotgunFire() {
-  const variation = Math.random();
-
-  // Low frequency boom
-  const freq = vary(80, 0.15);
-  playTone(freq, 0.15, 'sawtooth', 0.25, {
-    attack: 0.001,
-    decay: 0.1,
-    pitchBend: 0.3
+  // Soft thump - much more pleasant
+  const freq = vary(60, 0.15);
+  playTone(freq, 0.1, 'sine', 0.12, {
+    attack: 0.002,
+    decay: 0.08,
+    pitchBend: 0.4
   });
 
-  // Noise burst
-  playNoise(vary(0.12, 0.2), vary(0.2, 0.3), {
-    attack: 0.001,
-    decay: 0.08,
+  // Gentle noise - reduced volume and filtered lower
+  playNoise(vary(0.04, 0.2), vary(0.12, 0.2), {
+    attack: 0.002,
+    decay: 0.06,
     filterType: 'lowpass',
-    filterFreq: vary(1500, 0.4)
+    filterFreq: vary(800, 0.3)
   });
 }
 
@@ -247,19 +245,17 @@ export function playShotgunFire() {
  * Sniper fire sound (sharp, high-impact)
  */
 export function playSniperFire() {
-  const variation = Math.random();
-
-  // High frequency crack
-  playTone(vary(400, 0.2), 0.06, 'square', 0.2, {
+  // Clean crack with triangle wave
+  playTone(vary(350, 0.2), 0.05, 'triangle', 0.12, {
     attack: 0.001,
-    decay: 0.04,
-    pitchBend: 0.2
+    decay: 0.03,
+    pitchBend: 0.3
   });
 
   // Low frequency thump
-  playTone(vary(60, 0.15), 0.12, 'sine', 0.18, {
+  playTone(vary(50, 0.15), 0.1, 'sine', 0.1, {
     attack: 0.001,
-    decay: 0.08,
+    decay: 0.07,
     pitchBend: 0.5
   });
 }
@@ -280,19 +276,17 @@ export function playFlamethrowerFire() {
  * Explosive launcher sound
  */
 export function playExplosiveFire() {
-  const variation = Math.random();
-
-  // Deep thump
-  playTone(vary(70, 0.2), 0.2, 'sawtooth', 0.22, {
-    attack: 0.001,
-    decay: 0.15,
+  // Deep thump - softer
+  playTone(vary(55, 0.2), 0.15, 'sine', 0.1, {
+    attack: 0.002,
+    decay: 0.12,
     pitchBend: 0.4
   });
 
-  // Mid-range boom
-  playTone(vary(120, 0.2), 0.15, 'square', 0.18, {
+  // Mid-range whomp - triangle for smoothness
+  playTone(vary(100, 0.2), 0.12, 'triangle', 0.08, {
     attack: 0.005,
-    decay: 0.1,
+    decay: 0.08,
     pitchBend: 0.5
   });
 }
@@ -301,21 +295,19 @@ export function playExplosiveFire() {
  * Chain lightning sound
  */
 export function playChainLightningFire() {
-  const variation = Math.random();
-
-  // Electric zap - ascending pitch
-  playTone(vary(300, 0.3), 0.12, 'sawtooth', 0.18, {
-    attack: 0.001,
-    decay: 0.08,
-    pitchBend: 1.8
-  });
-
-  // High frequency crackle
-  playNoise(vary(0.1, 0.3), 0.15, {
+  // Electric zap - ascending pitch, softer
+  playTone(vary(250, 0.3), 0.08, 'triangle', 0.1, {
     attack: 0.001,
     decay: 0.06,
-    filterType: 'highpass',
-    filterFreq: vary(3000, 0.4)
+    pitchBend: 1.6
+  });
+
+  // Subtle crackle - much quieter
+  playNoise(vary(0.03, 0.3), 0.08, {
+    attack: 0.001,
+    decay: 0.04,
+    filterType: 'bandpass',
+    filterFreq: vary(2000, 0.4)
   });
 }
 

@@ -679,6 +679,12 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
                 const finalMove = applyObstacleAvoidance(moveAmount);
                 enemy.pos.x += finalMove.x;
                 enemy.pos.y += finalMove.y;
+
+                // Keep in bounds (prevent backpedaling off screen)
+                const margin = 20;
+                const enemySize = enemy.size || 12;
+                enemy.pos.x = k.clamp(enemy.pos.x, margin + enemySize, k.width() - margin - enemySize);
+                enemy.pos.y = k.clamp(enemy.pos.y, margin + enemySize, k.height() - margin - enemySize);
             }
             return;
         }

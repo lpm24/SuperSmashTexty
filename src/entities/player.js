@@ -166,64 +166,113 @@ export function createPlayer(k, x, y, characterKey = null) {
 
     // Movement
     let moveDir = k.vec2(0, 0);
+    let windowHasFocus = document.hasFocus();
+    // Track keys that need to be released before accepting input again
+    let keysNeedRelease = { w: false, s: false, a: false, d: false, up: false, down: false, left: false, right: false };
 
     // Expose moveDir on player object for multiplayer input reading
     player.moveDir = moveDir;
 
     k.onKeyDown(['w', 'up'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote || !windowHasFocus) return;
+        if (keysNeedRelease.w || keysNeedRelease.up) return;
         moveDir.y = -1;
-        player.moveDir = moveDir; // Update reference
+        player.moveDir = moveDir;
     });
 
     k.onKeyDown(['s', 'down'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote || !windowHasFocus) return;
+        if (keysNeedRelease.s || keysNeedRelease.down) return;
         moveDir.y = 1;
-        player.moveDir = moveDir; // Update reference
+        player.moveDir = moveDir;
     });
 
     k.onKeyDown(['a', 'left'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote || !windowHasFocus) return;
+        if (keysNeedRelease.a || keysNeedRelease.left) return;
         moveDir.x = -1;
-        player.moveDir = moveDir; // Update reference
+        player.moveDir = moveDir;
     });
 
     k.onKeyDown(['d', 'right'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote || !windowHasFocus) return;
+        if (keysNeedRelease.d || keysNeedRelease.right) return;
         moveDir.x = 1;
-        player.moveDir = moveDir; // Update reference
+        player.moveDir = moveDir;
     });
-    
+
     k.onKeyRelease(['w', 'up'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote) return;
+        keysNeedRelease.w = false;
+        keysNeedRelease.up = false;
         if (!k.isKeyDown('s') && !k.isKeyDown('down')) {
             moveDir.y = 0;
-            player.moveDir = moveDir; // Update reference
+            player.moveDir = moveDir;
         }
     });
 
     k.onKeyRelease(['s', 'down'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote) return;
+        keysNeedRelease.s = false;
+        keysNeedRelease.down = false;
         if (!k.isKeyDown('w') && !k.isKeyDown('up')) {
             moveDir.y = 0;
-            player.moveDir = moveDir; // Update reference
+            player.moveDir = moveDir;
         }
     });
 
     k.onKeyRelease(['a', 'left'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote) return;
+        keysNeedRelease.a = false;
+        keysNeedRelease.left = false;
         if (!k.isKeyDown('d') && !k.isKeyDown('right')) {
             moveDir.x = 0;
-            player.moveDir = moveDir; // Update reference
+            player.moveDir = moveDir;
         }
     });
 
     k.onKeyRelease(['d', 'right'], () => {
-        if (player.isRemote) return; // Skip input for remote players
+        if (player.isRemote) return;
+        keysNeedRelease.d = false;
+        keysNeedRelease.right = false;
         if (!k.isKeyDown('a') && !k.isKeyDown('left')) {
             moveDir.x = 0;
-            player.moveDir = moveDir; // Update reference
+            player.moveDir = moveDir;
         }
+    });
+
+    // Stop movement when window loses focus
+    const handleBlur = () => {
+        if (player.isRemote) return;
+        windowHasFocus = false;
+        moveDir.x = 0;
+        moveDir.y = 0;
+        player.moveDir = moveDir;
+        player.isShooting = false;
+        // Only mark keys that are currently held as needing release
+        keysNeedRelease = {
+            w: k.isKeyDown('w'),
+            s: k.isKeyDown('s'),
+            a: k.isKeyDown('a'),
+            d: k.isKeyDown('d'),
+            up: k.isKeyDown('up'),
+            down: k.isKeyDown('down'),
+            left: k.isKeyDown('left'),
+            right: k.isKeyDown('right')
+        };
+    };
+
+    const handleFocus = () => {
+        windowHasFocus = true;
+    };
+
+    window.addEventListener('blur', handleBlur);
+    window.addEventListener('focus', handleFocus);
+
+    // Clean up listeners when player is destroyed
+    player.onDestroy(() => {
+        window.removeEventListener('blur', handleBlur);
+        window.removeEventListener('focus', handleFocus);
     });
 
     // Update movement and immunity frames

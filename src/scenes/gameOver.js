@@ -1,8 +1,9 @@
-// Game over scene
+// Game over scene - TV Station themed with currency bucket animation
 import { getCurrency, getCurrencyName, getSaveData } from '../systems/metaProgression.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
+import { ENEMY_TYPES } from '../data/enemies.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -10,158 +11,520 @@ import {
     UI_TERMS
 } from '../config/uiConfig.js';
 
+// TV Station themed enemy names
+const TV_ENEMY_NAMES = {
+    rusher: 'Intern',
+    shooter: 'Security',
+    zombie: 'Overnight Editor',
+    slime: 'Coffee Spill',
+    bat: 'Studio Fly',
+    charger: 'Line Producer',
+    turret: 'Teleprompter',
+    heavyTank: 'Executive Producer',
+    zippy: 'PA',
+    exploder: 'Pyrotechnics',
+    orbiter: 'Drone Operator',
+    mage: 'VFX Artist',
+    shieldBearer: 'Bodyguard',
+    golem: 'Mascot Suit',
+    wraith: 'Ghost Writer',
+    spawner: 'Casting Director',
+    buffer: 'Hype Man',
+    healer: 'Makeup Artist',
+    teleporter: 'Stage Manager',
+    freezer: 'AC Tech',
+    leech: 'Talent Agent',
+    basic: 'Crew Member',
+    tank: 'Camera Op',
+    fast: 'Runner',
+    brute: 'Boom Operator',
+    sentinel: 'Head of Security',
+    berserker: 'Method Actor',
+    guardian: 'Union Rep',
+    warlock: 'Network Exec',
+    gatekeeper: 'Studio Head',
+    swarmQueen: 'HR Director',
+    twinGuardian: 'The Twins',
+    twinGuardianMelee: 'Twin (Melee)',
+    twinGuardianRanged: 'Twin (Ranged)'
+};
+
+// Get enemy character for display
+function getEnemyChar(type) {
+    return ENEMY_TYPES[type]?.char || 'E';
+}
+
+// Get enemy color for display
+function getEnemyColor(type) {
+    return ENEMY_TYPES[type]?.color || [255, 100, 100];
+}
+
+// Currency icons for variety (gold themed)
+const CURRENCY_ICONS = ['$', '¢', '£', '¥', '€'];
+
+// Award definitions
+const AWARDS = [
+    {
+        id: 'slayer',
+        title: 'Slayer',
+        check: (stats) => stats.kills || 0,
+        color: [255, 100, 100]
+    },
+    {
+        id: 'collector',
+        title: 'Hoarder',
+        check: (stats) => stats.creditsPickedUp || 0,
+        color: [255, 255, 100]
+    },
+    {
+        id: 'bossBuster',
+        title: 'Boss Buster',
+        check: (stats) => stats.bossesKilled || 0,
+        color: [255, 150, 50]
+    }
+];
+
 export function setupGameOverScene(k) {
     k.scene('gameOver', (args) => {
         const runStats = args?.runStats || {
             floorsReached: 1,
             roomsCleared: 0,
             enemiesKilled: 0,
-            bossesKilled: 0
+            bossesKilled: 0,
+            killsByType: {}
         };
         const currencyEarned = args?.currencyEarned || 0;
         const totalCurrency = getCurrency();
         const saveData = getSaveData();
         const currencyName = getCurrencyName();
-        
+        const partyStats = args?.partyStats || [];
+
+        // Calculate total credits from all players
+        const totalTeamCredits = partyStats.length > 0
+            ? partyStats.reduce((sum, p) => sum + (p.creditsPickedUp || 0), 0)
+            : currencyEarned;
+
         // Background overlay
         k.add([
             k.rect(k.width(), k.height()),
             k.pos(0, 0),
             k.anchor('topleft'),
-            k.color(...UI_COLORS.BG_DARK),
-            k.opacity(0.95),
+            k.color(30, 20, 20),
+            k.opacity(0.98),
             k.fixed(),
             k.z(UI_Z_LAYERS.OVERLAY)
         ]);
 
         // Title
         k.add([
-            k.text('Game Over', { size: 48 }),
-            k.pos(k.width() / 2, 80),
+            k.text('BROADCAST TERMINATED', { size: 36 }),
+            k.pos(k.width() / 2, 30),
             k.anchor('center'),
             k.color(...UI_COLORS.DANGER),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
-        
-        // Run Statistics
-        const statsY = 160;
-        const statsSpacing = 30;
-        
-        k.add([
-            k.text('Run Statistics', { size: UI_TEXT_SIZES.HEADER }),
-            k.pos(k.width() / 2, statsY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
 
+        // Run stats summary
         k.add([
-            k.text(`${UI_TERMS.FLOOR}s Reached: ${runStats.floorsReached}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() / 2, statsY + statsSpacing),
-            k.anchor('center'),
-            k.color(...UI_COLORS.INFO),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
-
-        k.add([
-            k.text(`${UI_TERMS.ROOM}s Cleared: ${runStats.roomsCleared}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() / 2, statsY + statsSpacing * 2),
-            k.anchor('center'),
-            k.color(...UI_COLORS.INFO),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
-
-        k.add([
-            k.text(`Enemies Killed: ${runStats.enemiesKilled}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() / 2, statsY + statsSpacing * 3),
-            k.anchor('center'),
-            k.color(...UI_COLORS.INFO),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
-
-        if (runStats.bossesKilled > 0) {
-            k.add([
-                k.text(`Bosses Defeated: ${runStats.bossesKilled}`, { size: UI_TEXT_SIZES.LABEL }),
-                k.pos(k.width() / 2, statsY + statsSpacing * 4),
-                k.anchor('center'),
-                k.color(...UI_COLORS.BOSS_NAME),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.MODAL)
-            ]);
-        }
-
-        // Currency earned
-        const currencyY = statsY + statsSpacing * (runStats.bossesKilled > 0 ? 6 : 5);
-        k.add([
-            k.text(`${currencyName} Earned: +${currencyEarned}`, { size: UI_TEXT_SIZES.BUTTON }),
-            k.pos(k.width() / 2, currencyY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.SUCCESS),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
-
-        k.add([
-            k.text(`Total ${currencyName}: ${totalCurrency}`, { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(k.width() / 2, currencyY + 30),
-            k.anchor('center'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.MODAL)
-        ]);
-        
-        // Lifetime stats (optional, can be expanded)
-        const lifetimeY = currencyY + 80;
-        k.add([
-            k.text('Lifetime Stats', { size: UI_TEXT_SIZES.BUTTON }),
-            k.pos(k.width() / 2, lifetimeY),
+            k.text(`Floor ${runStats.floorsReached} | ${runStats.roomsCleared} Rooms | ${runStats.enemiesKilled} Kills`, { size: 16 }),
+            k.pos(k.width() / 2, 58),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
+        // Calculate awards
+        const awardWinners = {};
+        if (partyStats.length > 0) {
+            AWARDS.forEach(award => {
+                let bestPlayer = null;
+                let bestValue = 0;
+                partyStats.forEach(player => {
+                    const value = award.check(player);
+                    if (value > bestValue) {
+                        bestValue = value;
+                        bestPlayer = player;
+                    }
+                });
+                if (bestPlayer && bestValue > 0) {
+                    if (!awardWinners[bestPlayer.name]) {
+                        awardWinners[bestPlayer.name] = [];
+                    }
+                    awardWinners[bestPlayer.name].push(award);
+                }
+            });
+        }
+
+        // ==========================================
+        // PLAYER BUCKETS - LEFT SIDE
+        // ==========================================
+        const numPlayers = Math.max(partyStats.length, 1);
+
+        // Dynamic sizing based on player count
+        const bucketWidth = numPlayers === 1 ? 200 : (numPlayers === 2 ? 180 : 140);
+        const bucketHeight = 100;
+        const bucketSpacing = 8;
+
+        // Position buckets on left side
+        const startX = 20 + bucketWidth / 2;
+        const bucketY = 250;
+
+        const playerBuckets = [];
+
+        // Create buckets for each player
+        const playersToShow = partyStats.length > 0 ? partyStats : [{
+            name: 'You',
+            characterData: { char: '@', color: [255, 255, 255] },
+            kills: runStats.enemiesKilled,
+            creditsPickedUp: currencyEarned,
+            bossesKilled: runStats.bossesKilled
+        }];
+
+        playersToShow.forEach((player, index) => {
+            const bucketX = startX + index * (bucketWidth + bucketSpacing);
+            const playerAwards = awardWinners[player.name] || [];
+            const credits = player.creditsPickedUp || 0;
+
+            // Character icon
+            const charIcon = player.characterData?.char || '@';
+            const charColor = player.characterData?.color || [255, 255, 255];
+
+            k.add([
+                k.text(charIcon, { size: 32 }),
+                k.pos(bucketX, 90),
+                k.anchor('center'),
+                k.color(...charColor),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+
+            // Player name
+            const maxNameLen = numPlayers <= 2 ? 12 : 8;
+            const displayName = (player.name || `Player ${index + 1}`).substring(0, maxNameLen);
+            k.add([
+                k.text(displayName, { size: 16 }),
+                k.pos(bucketX, 118),
+                k.anchor('center'),
+                k.color(...UI_COLORS.GOLD),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+
+            // Kill count
+            k.add([
+                k.text(`${player.kills || 0} kills`, { size: 14 }),
+                k.pos(bucketX, 138),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+
+            // Awards (show 1-2 based on space)
+            let awardY = 156;
+            const maxAwards = numPlayers <= 2 ? 2 : 1;
+            playerAwards.slice(0, maxAwards).forEach(award => {
+                k.add([
+                    k.text(`"${award.title}"`, { size: 12 }),
+                    k.pos(bucketX, awardY),
+                    k.anchor('center'),
+                    k.color(...award.color),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+                awardY += 16;
+            });
+
+            // Bucket container
+            k.add([
+                k.rect(bucketWidth - 16, bucketHeight),
+                k.pos(bucketX, bucketY + bucketHeight / 2),
+                k.anchor('center'),
+                k.outline(3, k.rgb(...UI_COLORS.TEXT_DISABLED)),
+                k.color(0, 0, 0),
+                k.opacity(0.4),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+
+            // Currency label below bucket (gold color)
+            const currencyLabel = k.add([
+                k.text(`0 ${currencyName}`, { size: 20 }),
+                k.pos(bucketX, bucketY + bucketHeight + 18),
+                k.anchor('center'),
+                k.color(...UI_COLORS.GOLD),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 10)
+            ]);
+
+            playerBuckets.push({
+                x: bucketX,
+                y: bucketY,
+                width: bucketWidth - 16,
+                height: bucketHeight,
+                credits: credits,
+                label: currencyLabel,
+                particles: [],
+                spawnedCount: 0,
+                displayedCount: 0
+            });
+        });
+
+        // ==========================================
+        // KILL BREAKDOWN - RIGHT SIDE (20% bigger)
+        // ==========================================
+        const rightX = k.width() - 140;
+        let rightY = 85;
+
         k.add([
-            k.text(`Best ${UI_TERMS.FLOOR}: ${saveData.stats.bestFloor} | Total Runs: ${saveData.stats.totalRuns}`, { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, lifetimeY + 25),
+            k.text('STAFF TERMINATED', { size: 22 }),
+            k.pos(rightX, rightY),
             k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_TERTIARY),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL)
+        ]);
+        rightY += 32;
+
+        // Get kills by type and sort
+        const killsByType = runStats.killsByType || {};
+        const sortedKills = Object.entries(killsByType)
+            .filter(([_, count]) => count > 0)
+            .sort((a, b) => b[1] - a[1]);
+
+        if (sortedKills.length === 0) {
+            k.add([
+                k.text('No staff harmed', { size: 17 }),
+                k.pos(rightX, rightY + 10),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_DISABLED),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+        } else {
+            const maxToShow = Math.min(sortedKills.length, 10);
+            const killSpacing = 26;
+
+            for (let i = 0; i < maxToShow; i++) {
+                const [type, count] = sortedKills[i];
+                const tvName = TV_ENEMY_NAMES[type] || type;
+                const char = getEnemyChar(type);
+                const color = getEnemyColor(type);
+
+                // Enemy icon
+                k.add([
+                    k.text(char, { size: 17 }),
+                    k.pos(rightX - 90, rightY),
+                    k.anchor('center'),
+                    k.color(...color),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+
+                // Enemy name (truncated)
+                const shortName = tvName.length > 12 ? tvName.substring(0, 10) + '..' : tvName;
+                k.add([
+                    k.text(shortName, { size: 14 }),
+                    k.pos(rightX - 70, rightY),
+                    k.anchor('left'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+
+                // Kill count
+                k.add([
+                    k.text(`x${count}`, { size: 14 }),
+                    k.pos(rightX + 80, rightY),
+                    k.anchor('right'),
+                    k.color(...UI_COLORS.DANGER),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+
+                rightY += killSpacing;
+            }
+
+            if (sortedKills.length > maxToShow) {
+                const remainingKills = sortedKills.slice(maxToShow).reduce((sum, [_, c]) => sum + c, 0);
+                k.add([
+                    k.text(`+${remainingKills} more`, { size: 13 }),
+                    k.pos(rightX, rightY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_DISABLED),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+            }
+        }
+
+        // ==========================================
+        // CURRENCY DROP ANIMATION
+        // ==========================================
+        const maxParticlesPerPlayer = 40;
+        const particleSpawnDelay = 0.05;
+        const particleFallSpeed = 300;
+        let animationTimer = 0;
+        const animationStartDelay = 0.8;
+
+        k.onUpdate(() => {
+            animationTimer += k.dt();
+            if (animationTimer < animationStartDelay) return;
+
+            playerBuckets.forEach((bucket, bucketIndex) => {
+                if (bucket.credits <= 0) return;
+
+                const targetParticles = Math.min(bucket.credits, maxParticlesPerPlayer);
+                const particleValue = bucket.credits / targetParticles;
+
+                const spawnTime = (animationTimer - animationStartDelay) - (bucketIndex * 0.15);
+                const targetSpawned = Math.floor(spawnTime / particleSpawnDelay);
+
+                while (bucket.spawnedCount < targetParticles && bucket.spawnedCount < targetSpawned) {
+                    const startX = bucket.x + (Math.random() - 0.5) * (bucket.width - 20);
+                    const startY = bucket.y - 40 - Math.random() * 30;
+                    const icon = CURRENCY_ICONS[Math.floor(Math.random() * CURRENCY_ICONS.length)];
+
+                    const particle = k.add([
+                        k.text(icon, { size: 16 }),
+                        k.pos(startX, startY),
+                        k.anchor('center'),
+                        k.color(255, 215, 0), // Gold color
+                        k.opacity(1),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.MODAL + 5),
+                        'currencyParticle',
+                        {
+                            velocity: particleFallSpeed + Math.random() * 80,
+                            landed: false,
+                            value: particleValue
+                        }
+                    ]);
+
+                    bucket.particles.push(particle);
+                    bucket.spawnedCount++;
+                }
+
+                // Update particles
+                bucket.particles.forEach(particle => {
+                    if (!particle.exists() || particle.landed) return;
+
+                    particle.pos.y += particle.velocity * k.dt();
+
+                    const bucketBottom = bucket.y + bucket.height - 8;
+                    const stackHeight = bucket.particles.filter(p => p.landed).length * 2;
+                    const landingY = bucketBottom - stackHeight;
+
+                    if (particle.pos.y >= landingY) {
+                        particle.pos.y = landingY;
+                        particle.landed = true;
+                        bucket.displayedCount += particle.value;
+                        bucket.label.text = `${Math.floor(bucket.displayedCount)} ${currencyName}`;
+                        particle.opacity = 0.85;
+                    }
+                });
+            });
+        });
+
+        // ==========================================
+        // BOTTOM: Total & Controls
+        // ==========================================
+        k.add([
+            k.text(`Team Earnings: +${totalTeamCredits} ${currencyName}`, { size: 18 }),
+            k.pos(k.width() / 2, k.height() - 95),
+            k.anchor('center'),
+            k.color(...UI_COLORS.GOLD),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Restart prompt - different text for host vs client in multiplayer
+        k.add([
+            k.text(`Career Total: ${totalCurrency} ${currencyName}`, { size: 14 }),
+            k.pos(k.width() / 2, k.height() - 72),
+            k.anchor('center'),
+            k.color(...UI_COLORS.GOLD),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL)
+        ]);
+
+        // Controls - Buttons
         const inMultiplayer = isMultiplayerActive();
         const isHostPlayer = isHost();
 
-        const restartText = inMultiplayer && !isHostPlayer
-            ? 'Waiting for Host to Restart...'
-            : 'Press SPACE to Restart';
+        const buttonY = k.height() - 45;
+        const buttonWidth = 140;
+        const buttonHeight = 36;
 
-        k.add([
-            k.text(restartText, { size: UI_TEXT_SIZES.HEADER }),
-            k.pos(k.width() / 2, k.height() - 60),
+        // Play Again button
+        const playAgainEnabled = !inMultiplayer || isHostPlayer;
+        const playAgainText = inMultiplayer && !isHostPlayer
+            ? 'Waiting...'
+            : 'Play Again';
+
+        // Play Again button background
+        const playAgainBg = k.add([
+            k.rect(buttonWidth, buttonHeight),
+            k.pos(k.width() / 2 - 80, buttonY),
             k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_TERTIARY),
+            k.color(playAgainEnabled ? 60 : 40, playAgainEnabled ? 80 : 40, playAgainEnabled ? 60 : 40),
+            k.outline(2, k.rgb(playAgainEnabled ? 100 : 60, playAgainEnabled ? 200 : 80, playAgainEnabled ? 100 : 60)),
+            k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
         k.add([
-            k.text('Press T for Statistics | ESC to Return to Menu', { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 30),
+            k.text(playAgainText, { size: 16 }),
+            k.pos(k.width() / 2 - 80, buttonY),
             k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.color(playAgainEnabled ? 150 : 80, playAgainEnabled ? 255 : 120, playAgainEnabled ? 150 : 80),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL + 1)
+        ]);
+
+        // Menu button background
+        const menuBg = k.add([
+            k.rect(buttonWidth, buttonHeight),
+            k.pos(k.width() / 2 + 80, buttonY),
+            k.anchor('center'),
+            k.color(60, 60, 80),
+            k.outline(2, k.rgb(100, 100, 200)),
+            k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Listen for restart signal from host (clients only)
+        k.add([
+            k.text('Menu', { size: 16 }),
+            k.pos(k.width() / 2 + 80, buttonY),
+            k.anchor('center'),
+            k.color(150, 150, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL + 1)
+        ]);
+
+        // Button click handlers
+        if (playAgainEnabled) {
+            playAgainBg.onClick(() => {
+                playMenuSelect();
+                if (inMultiplayer && isHostPlayer) {
+                    broadcast('game_restart', {});
+                }
+                k.go('game', { resetState: true });
+            });
+        }
+
+        menuBg.onClick(() => {
+            playMenuNav();
+            if (inMultiplayer && !isHostPlayer) {
+                offMessage('game_restart');
+            }
+            k.go('menu');
+        });
+
+        // Network handlers
         if (inMultiplayer && !isHostPlayer) {
             onMessage('game_restart', () => {
                 playMenuSelect();
@@ -171,36 +534,20 @@ export function setupGameOverScene(k) {
         }
 
         k.onKeyPress('space', () => {
-            // In multiplayer, only host can trigger restart
-            if (inMultiplayer && !isHostPlayer) {
-                return; // Client waits for host signal
-            }
-
+            if (inMultiplayer && !isHostPlayer) return;
             playMenuSelect();
-
-            // Broadcast restart to clients before going to game
             if (inMultiplayer && isHostPlayer) {
                 broadcast('game_restart', {});
             }
-
-            // Reset game state when restarting
             k.go('game', { resetState: true });
-        });
-
-        k.onKeyPress('t', () => {
-            playMenuNav();
-            k.go('statistics');
         });
 
         k.onKeyPress('escape', () => {
             playMenuNav();
-            // Clean up message listener
             if (inMultiplayer && !isHostPlayer) {
                 offMessage('game_restart');
             }
-            // Return to menu
             k.go('menu');
         });
     });
 }
-

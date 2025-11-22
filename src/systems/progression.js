@@ -62,10 +62,7 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
         // Play level up sound
         playLevelUp();
 
-        // Revive all dead players (multiplayer feature)
-        if (reviveAllPlayersCallback) {
-            reviveAllPlayersCallback();
-        }
+        // Note: Revives now only happen on room completion, not on level up
 
         // Show level up notification
         const notification = k.add([

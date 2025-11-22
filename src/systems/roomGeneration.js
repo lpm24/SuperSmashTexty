@@ -181,3 +181,22 @@ export function resetRoomTemplateHistory() {
     lastRoomTemplate = null;
 }
 
+// Get room template by specific key (for multiplayer sync)
+export function getRoomTemplateByKey(key) {
+    if (!ROOM_TEMPLATES[key]) {
+        console.warn(`Unknown room template key: ${key}, falling back to empty`);
+        return {
+            key: 'empty',
+            ...ROOM_TEMPLATES.empty
+        };
+    }
+
+    // Update last template tracker for consistency
+    lastRoomTemplate = key;
+
+    return {
+        key: key,
+        ...ROOM_TEMPLATES[key]
+    };
+}
+

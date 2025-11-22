@@ -22,6 +22,7 @@ const DEFAULT_SETTINGS = {
     visual: {
         showParticles: true,
         showScreenShake: true,
+        showHitFreeze: true,
         showDamageNumbers: true,
         compactHUD: false
     },

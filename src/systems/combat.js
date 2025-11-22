@@ -42,6 +42,9 @@ import {
     spawnDeathExplosion
 } from './particleSystem.js';
 
+// Visual effects imports
+import { screenShake, hitFreeze, EffectPresets } from './visualEffects.js';
+
 // Helper function to apply knockback while respecting collisions and room boundaries
 function applySafeKnockback(k, entity, knockbackDir, knockbackAmount) {
     if (!entity || !entity.exists()) return;
@@ -280,6 +283,9 @@ export function setupCombatSystem(k, player) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
 
+                            // Track projectile owner for kill attribution
+                            projectile.ownerSlotIndex = player.slotIndex;
+
                             // Add burn DoT effect
                             const burnDamagePerTick = Math.floor(finalDamage * 0.3); // 30% of hit damage per tick
                             const burnDuration = 2.0; // 2 seconds of burn
@@ -305,6 +311,9 @@ export function setupCombatSystem(k, player) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
 
+                            // Track projectile owner for kill attribution
+                            projectile.ownerSlotIndex = player.slotIndex;
+
                             // Register projectile for multiplayer sync
                             if (isMultiplayerActive() && isHost()) {
                                 registerProjectile(projectile, {
@@ -321,6 +330,9 @@ export function setupCombatSystem(k, player) {
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
+
+                            // Track projectile owner for kill attribution
+                            projectile.ownerSlotIndex = player.slotIndex;
 
                             // Register projectile for multiplayer sync
                             if (isMultiplayerActive() && isHost()) {
@@ -341,6 +353,9 @@ export function setupCombatSystem(k, player) {
                             if (player.weaponDef) {
                                 projectile.useWeaponVisual(player.weaponDef);
                             }
+
+                            // Track projectile owner for kill attribution
+                            projectile.ownerSlotIndex = player.slotIndex;
 
                             // Register projectile for multiplayer sync
                             if (isMultiplayerActive() && isHost()) {
@@ -529,6 +544,11 @@ export function setupCombatSystem(k, player) {
             enemy.hurt(projectile.damage);
         }
 
+        // Track who last hit this enemy for kill attribution
+        if (projectile.ownerSlotIndex !== undefined) {
+            enemy.lastHitBySlot = projectile.ownerSlotIndex;
+        }
+
         // Broadcast damage event for multiplayer
         if (isMultiplayerActive() && isHost()) {
             broadcastDamageEvent({
@@ -577,6 +597,11 @@ export function setupCombatSystem(k, player) {
 
         // Spawn hit impact particle effect
         spawnHitImpact(k, enemy.pos.x, enemy.pos.y, knockbackDir, { isCrit: projectile.isCrit });
+
+        // Screen effects for crits
+        if (projectile.isCrit) {
+            EffectPresets.criticalHit();
+        }
 
         // Visual feedback (different color for crits)
         enemy.color = projectile.isCrit
@@ -666,6 +691,11 @@ export function setupCombatSystem(k, player) {
             boss.hurt(projectile.damage);
         }
 
+        // Track who last hit this boss for kill attribution
+        if (projectile.ownerSlotIndex !== undefined) {
+            boss.lastHitBySlot = projectile.ownerSlotIndex;
+        }
+
         // Apply fire DoT
         if (projectile.burnDamage && projectile.burnDuration) {
             boss.burnDamage = projectile.burnDamage;
@@ -690,6 +720,13 @@ export function setupCombatSystem(k, player) {
         }
 
         spawnHitImpact(k, boss.pos.x, boss.pos.y, knockbackDir, { isCrit: projectile.isCrit });
+
+        // Screen effects for boss hits and crits
+        if (projectile.isCrit) {
+            EffectPresets.criticalHit();
+        } else {
+            EffectPresets.bossHit();
+        }
 
         boss.color = projectile.isCrit ? k.rgb(255, 200, 0) : k.rgb(255, 255, 255);
         k.wait(0.1, () => {
@@ -739,6 +776,11 @@ export function setupCombatSystem(k, player) {
         // Use takeDamage to handle armor/shields
         miniboss.takeDamage(finalDamage);
 
+        // Track who last hit this miniboss for kill attribution
+        if (projectile.ownerSlotIndex !== undefined) {
+            miniboss.lastHitBySlot = projectile.ownerSlotIndex;
+        }
+
         // Apply fire DoT if projectile has burn effect
         if (projectile.burnDamage && projectile.burnDuration) {
             miniboss.burnDamage = projectile.burnDamage;
@@ -752,7 +794,12 @@ export function setupCombatSystem(k, player) {
         // Spawn hit impact particle effect
         const impactDir = k.vec2(miniboss.pos.x - projectile.pos.x, miniboss.pos.y - projectile.pos.y);
         spawnHitImpact(k, miniboss.pos.x, miniboss.pos.y, impactDir, { isCrit: projectile.isCrit });
-        
+
+        // Screen effects for crits
+        if (projectile.isCrit) {
+            EffectPresets.criticalHit();
+        }
+
         // Track this miniboss for piercing
         if (projectile.piercedEnemies) {
             projectile.piercedEnemies.add(miniboss);
@@ -799,8 +846,9 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
-        // Play player hit sound
+        // Play player hit sound and effects
         playPlayerHit();
+        EffectPresets.playerHit();
 
         // Apply damage with defense reduction (use enemy's damage if available)
         const baseDamage = enemy.damage || COMBAT_CONFIG.BASE_ENEMY_DAMAGE;
@@ -868,8 +916,9 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
-        // Play player hit sound
+        // Play player hit sound and effects
         playPlayerHit();
+        EffectPresets.playerHit();
 
         // Minibosses deal more damage than regular enemies but less than bosses
         // Melee miniboss deals melee damage, others use base damage
@@ -933,8 +982,9 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
-        // Play player hit sound
+        // Play player hit sound and effects
         playPlayerHit();
+        EffectPresets.playerHit();
 
         // Bosses deal more damage
         // Melee guardian deals melee damage, others use base damage
@@ -1003,8 +1053,9 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
-        // Play player hit sound
+        // Play player hit sound and effects
         playPlayerHit();
+        EffectPresets.playerHit();
 
         // Apply damage with damage reduction (The Tank ability)
         const damageAfterReduction = projectile.damage * (1 - (player.damageReduction || 0));
@@ -1199,8 +1250,9 @@ function createChainProjectile(k, x, y, direction, speed, damage, chainRange, ma
 function explodeProjectile(k, projectile, x, y) {
     if (!projectile.exists()) return;
 
-    // Play explosion sound
+    // Play explosion sound and effects
     playExplosion();
+    EffectPresets.explosion();
 
     const explosionRadius = projectile.explosionRadius || 50;
     const explosionDamage = projectile.explosionDamage || 15;

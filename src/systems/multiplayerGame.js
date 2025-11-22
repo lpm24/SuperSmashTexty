@@ -37,7 +37,8 @@ const mpGame = {
     roomRng: null, // SeededRandom instance for room generation
     currentFloor: 1, // Track current floor for seed generation
     currentRoom: { x: 0, y: 0 }, // Track current room for seed generation
-    pendingXP: 0 // XP accumulated while player was in upgrade draft screen
+    pendingXP: 0, // XP accumulated while player was in upgrade draft screen
+    onGameSeedCallback: null // Callback for when game_seed is received (clients only)
 };
 
 /**
@@ -741,6 +742,18 @@ function setupClientHandlers() {
         // Initialize RNG with seed from host
         mpGame.gameSeed = payload.seed;
         mpGame.floorRng = new SeededRandom(mpGame.gameSeed);
+
+        // Store first room template key for use when room loads
+        if (payload.roomTemplateKey) {
+            mpGame.firstRoomTemplateKey = payload.roomTemplateKey;
+            console.log('[Multiplayer] Client received first room template:', payload.roomTemplateKey);
+        }
+
+        // Call callback to regenerate floor map with correct seed
+        if (mpGame.onGameSeedCallback) {
+            mpGame.onGameSeedCallback();
+            mpGame.onGameSeedCallback = null;
+        }
     });
 
     // Receive pause state updates from host
@@ -1449,13 +1462,15 @@ export function broadcastRevivalEvent() {
  * Called when all players are dead
  * @param {Object} runStats - Run statistics
  * @param {number} currencyEarned - Currency earned this run
+ * @param {Array} partyStats - Party statistics for game over screen
  */
-export function broadcastGameOver(runStats, currencyEarned) {
+export function broadcastGameOver(runStats, currencyEarned, partyStats = []) {
     if (!mpGame.isHost || !mpGame.isActive) return;
 
     broadcast('game_over', {
         runStats: runStats,
         currencyEarned: currencyEarned,
+        partyStats: partyStats,
         timestamp: Date.now()
     });
 }
@@ -1580,6 +1595,22 @@ export function getGameSeed() {
 }
 
 /**
+ * Check if game seed has been set (not 0)
+ * @returns {boolean} True if seed is set
+ */
+export function hasGameSeed() {
+    return mpGame.gameSeed !== 0;
+}
+
+/**
+ * Set callback for when game_seed is received (clients only)
+ * @param {Function} callback - Function to call when seed is received
+ */
+export function onGameSeedReceived(callback) {
+    mpGame.onGameSeedCallback = callback;
+}
+
+/**
  * Set current floor for seeded RNG
  * @param {number} floor - Floor number
  */
@@ -1610,6 +1641,16 @@ export function getRoomRNG() {
 }
 
 /**
+ * Get and clear the first room template key (for clients to use when loading first room)
+ * @returns {string|null} Template key or null if not set
+ */
+export function getFirstRoomTemplateKey() {
+    const key = mpGame.firstRoomTemplateKey;
+    mpGame.firstRoomTemplateKey = null; // Clear after use
+    return key;
+}
+
+/**
  * Get the floor RNG (for floor-wide generation like floor maps)
  * @returns {SeededRandom} Seeded random number generator for this floor
  */
@@ -1632,12 +1673,14 @@ export function getUpgradeRNG(playerIndex, playerLevel) {
 /**
  * Broadcast game seed to all clients (host only)
  * Called when game starts to sync RNG
+ * @param {string} firstRoomTemplateKey - Key of the first room template
  */
-export function broadcastGameSeed() {
+export function broadcastGameSeed(firstRoomTemplateKey = null) {
     if (!mpGame.isHost) return;
 
     broadcast('game_seed', {
-        seed: mpGame.gameSeed
+        seed: mpGame.gameSeed,
+        roomTemplateKey: firstRoomTemplateKey
     });
 }
 
@@ -1670,6 +1713,17 @@ export function sendEnemyDeath(deathData) {
     if (mpGame.isHost) return; // Host doesn't send to itself
 
     sendToHost('enemy_death', deathData);
+}
+
+/**
+ * Broadcast obstacle data to all clients (host only)
+ * @param {Array} obstacles - Array of obstacle data objects
+ * @param {Object} doorStates - Optional door blocked states { north, south, east, west }
+ */
+export function broadcastObstacles(obstacles, doorStates = null) {
+    if (!mpGame.isHost) return;
+
+    broadcast('obstacle_data', { obstacles, doorStates });
 }
 
 /**
@@ -1730,16 +1784,41 @@ export function broadcastEmote(slotIndex, emoteType) {
  * Called when transitioning to a new room to sync spawn positions and player stats
  * @param {string} entryDirection - Direction players will enter from ('north', 'south', 'east', 'west', or null)
  * @param {Array} allPlayerStats - Stats for all players to restore after transition
+ * @param {string} gridDirection - Direction moved on floor map
+ * @param {number} currentFloor - Current floor number
+ * @param {string} roomTemplateKey - Key of the room template for obstacle sync
  */
-export function broadcastRoomTransition(entryDirection, allPlayerStats = null, gridDirection = null, currentFloor = null) {
+export function broadcastRoomTransition(entryDirection, allPlayerStats = null, gridDirection = null, currentFloor = null, roomTemplateKey = null) {
     if (!mpGame.isHost) return;
 
     broadcast('room_transition', {
         entryDirection: entryDirection,
         allPlayerStats: allPlayerStats,
         gridDirection: gridDirection,
-        currentFloor: currentFloor
+        currentFloor: currentFloor,
+        roomTemplateKey: roomTemplateKey
     });
+}
+
+// Store pending obstacles for next room (set by host before transition)
+let pendingObstacles = null;
+
+/**
+ * Set pending obstacles to be sent with next scene load
+ * @param {Array} obstacles - Array of obstacle data
+ */
+export function setPendingObstacles(obstacles) {
+    pendingObstacles = obstacles;
+}
+
+/**
+ * Get and clear pending obstacles
+ * @returns {Array|null} Pending obstacles or null
+ */
+export function getPendingObstacles() {
+    const obstacles = pendingObstacles;
+    pendingObstacles = null;
+    return obstacles;
 }
 
 /**

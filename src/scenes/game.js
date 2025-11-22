@@ -29,7 +29,7 @@ import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
 import { SeededRandom } from '../utils/seededRandom.js';
-import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory } from '../systems/roomGeneration.js';
+import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
@@ -37,12 +37,13 @@ import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
+import { initVisualEffects, updateScreenShake, resetVisualEffects, EffectPresets, isInHitFreeze } from '../systems/visualEffects.js';
 import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, broadcastObstacles } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 
 // Config imports
@@ -160,7 +161,8 @@ export function setupGameScene(k) {
                 floorsReached: 1,
                 roomsCleared: 0,
                 enemiesKilled: 0,
-                bossesKilled: 0
+                bossesKilled: 0,
+                killsByType: {}
             };
             // Reset client message handler registration flag (allows re-registration on new game)
             gameSceneMessageHandlersRegistered = false;
@@ -190,14 +192,19 @@ export function setupGameScene(k) {
             pickups: new SpatialGrid(128)     // Grid for pickups (XP, currency, powerups)
         };
 
+        // Initialize visual effects system
+        initVisualEffects(k);
+        resetVisualEffects();
+
         // Get party size early for multiplayer checks throughout the scene
         const partySize = getPartySize();
 
-        // Generate floor map if starting new floor or no map exists
-        if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
+        // Helper function to generate floor map and minimap
+        const generateFloorMapAndMinimap = () => {
             // Set current floor for seeded RNG in multiplayer
             if (partySize > 1) {
                 setCurrentFloor(currentFloor);
+                console.log('[Multiplayer] Generating floor map with seed:', hasGameSeed() ? 'valid' : 'invalid (0)');
             }
 
             // Use seeded RNG for multiplayer to ensure same floor layout on all clients
@@ -215,6 +222,14 @@ export function setupGameScene(k) {
             if (k.gameData) {
                 k.gameData.minimap = gameState.minimap;
             }
+        };
+
+        // Generate floor map if starting new floor or no map exists
+        // For multiplayer clients, this will be regenerated when game_seed arrives
+        if (!gameState.floorMap || gameState.floorMap.floor !== currentFloor) {
+            // For single player or if we're host, generate immediately
+            // For clients, generate with placeholder (will be regenerated when seed arrives)
+            generateFloorMapAndMinimap();
         } else {
             // Update minimap if it exists
             if (gameState.minimap) {
@@ -362,6 +377,18 @@ export function setupGameScene(k) {
 
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);
+
+            // Initialize per-player run stats
+            player.runStats = {
+                kills: 0,
+                deaths: 0,
+                revives: 0,
+                damageTaken: 0,
+                damageDealt: 0,
+                creditsPickedUp: 0,
+                xpPickedUp: 0,
+                bossesKilled: 0
+            };
         }
         
         // ==========================================
@@ -381,11 +408,31 @@ export function setupGameScene(k) {
 
             // Broadcast game seed to clients (host only) to ensure synchronized RNG
             if (party.isHost) {
-                broadcastGameSeed();
+                // Select first room template and include it with game seed
+                const roomRng = getRoomRNG();
+                const firstRoomTemplate = getWeightedRoomTemplate(currentFloor, roomRng);
+                gameState.roomTemplateKey = firstRoomTemplate.key;
+                console.log('[Multiplayer] Host selected first room template:', firstRoomTemplate.key);
+                broadcastGameSeed(firstRoomTemplate.key);
             }
 
-            // Set slot index on local player
+            // Regenerate floor map with correct seed for multiplayer
+            if (party.isHost) {
+                // Host: regenerate with the newly created seed
+                generateFloorMapAndMinimap();
+            } else {
+                // Client: regenerate when game_seed arrives
+                // For now, generate with current seed (will be 0)
+                // Then regenerate when we receive the actual seed
+                onGameSeedReceived(() => {
+                    console.log('[Multiplayer] Client received seed, regenerating floor map');
+                    generateFloorMapAndMinimap();
+                });
+            }
+
+            // Set slot index and name on local player
             player.slotIndex = localSlot;
+            player.playerName = party.slots[localSlot].playerName;
 
             // Adjust local player position to match slot index (for consistent multiplayer positioning)
             const localOffsetX = localSlot * 30;
@@ -502,14 +549,30 @@ export function setupGameScene(k) {
                                 addCurrency(currencyEarned);
                                 checkAchievements(k);
 
+                                // Gather party stats for game over screen
+                                const partyStats = players.filter(p => p && p.exists()).map(p => ({
+                                    name: p.playerName || 'Player',
+                                    level: p.level || 1,
+                                    characterData: p.characterData,
+                                    kills: p.runStats?.kills || 0,
+                                    deaths: p.runStats?.deaths || 0,
+                                    revives: p.runStats?.revives || 0,
+                                    damageTaken: p.runStats?.damageTaken || 0,
+                                    damageDealt: p.runStats?.damageDealt || 0,
+                                    xpCollected: p.runStats?.xpPickedUp || 0,
+                                    creditsPickedUp: p.runStats?.creditsPickedUp || 0,
+                                    bossesKilled: p.runStats?.bossesKilled || 0
+                                }));
+
                                 if (isMultiplayerActive()) {
-                                    broadcastGameOver(runStats, currencyEarned);
+                                    broadcastGameOver(runStats, currencyEarned, partyStats);
                                     cleanupMultiplayer();
                                 }
 
                                 k.go('gameOver', {
                                     runStats: { ...runStats },
-                                    currencyEarned: currencyEarned
+                                    currencyEarned: currencyEarned,
+                                    partyStats: partyStats
                                 });
                             }
                         });
@@ -574,9 +637,9 @@ export function setupGameScene(k) {
                                 healthBar.pos.x = remotePlayer.pos.x;
                                 healthBar.pos.y = remotePlayer.pos.y + healthBarOffset;
 
-                                // Update health bar width
-                                const barWidth = healthBarWidth * healthPercent;
-                                healthBar.width = Math.max(1, barWidth);
+                                // Update health bar width - use k.use() to replace the rect component
+                                const barWidth = Math.max(1, healthBarWidth * healthPercent);
+                                healthBar.use(k.rect(barWidth, healthBarHeight));
                                 healthBar.pos.x = remotePlayer.pos.x - (healthBarWidth - barWidth) / 2;
                             } else {
                                 // Hide health bars when at full health
@@ -607,13 +670,23 @@ export function setupGameScene(k) {
                     if (data.allPlayerStats) {
                         gameState.allPlayerStats = data.allPlayerStats;
                         // Find local player stats by matching slot index (not by isRemote flag!)
-                        // On client, localSlot is our slot index in the party
-                        const localPlayerStats = data.allPlayerStats.find(stats => stats.slotIndex === localSlot);
+                        // Recalculate localSlot from party to ensure it's current
+                        const currentParty = getParty();
+                        const currentLocalSlot = currentParty.slots.findIndex(slot => slot.isLocal);
+                        // Filter out null entries first to avoid errors
+                        const localPlayerStats = data.allPlayerStats.find(stats => stats && stats.slotIndex === currentLocalSlot);
                         if (localPlayerStats) {
                             gameState.playerStats = localPlayerStats;
+                            console.log('[Multiplayer] Client restored stats for slot', currentLocalSlot, 'level:', localPlayerStats.level);
                         } else {
-                            console.warn('[Multiplayer] Client could not find stats for local slot', localSlot);
+                            console.warn('[Multiplayer] Client could not find stats for local slot', currentLocalSlot, 'in', data.allPlayerStats);
                         }
+                    }
+
+                    // Sync room template key from host
+                    if (data.roomTemplateKey) {
+                        gameState.roomTemplateKey = data.roomTemplateKey;
+                        console.log('[Multiplayer] Client received room template:', data.roomTemplateKey);
                     }
 
                     // Sync floor number - check if we're advancing to a new floor
@@ -644,6 +717,9 @@ export function setupGameScene(k) {
                 onMessage('room_completed', () => {
                     roomCompleted = true;
 
+                    // Revive all dead players (same as host)
+                    reviveAllPlayers();
+
                     // Update doors to show they're open
                     spawnDoors.forEach(door => {
                         if (door.exists() && !door.blocked) {
@@ -653,8 +729,85 @@ export function setupGameScene(k) {
                         }
                     });
 
+                    // Special handling for boss rooms: unblock the north door
+                    if (isBossRoom) {
+                        const northDoor = spawnDoors.find(d => d.direction === 'north');
+                        if (northDoor && northDoor.exists()) {
+                            northDoor.blocked = false;
+                            northDoor.open = true;
+                            northDoor.isSpawnDoor = false;
+                            northDoor.isFloorExit = true;
+                            northDoor.updateVisual();
+                        }
+                    }
+
+                    // Update minimap to reflect room clear
+                    if (gameState.minimap) {
+                        gameState.minimap.update();
+                    }
+
+                    // Show completion message (same as host)
+                    const completionText = isBossRoom
+                        ? `BOSS DEFEATED! Floor ${currentFloor} Complete! Enter a door to continue`
+                        : 'Room Cleared! Enter a door to continue';
+                    const completionMsg = k.add([
+                        k.text(completionText, { size: 20 }),
+                        k.pos(k.width() / 2, k.height() - 40),
+                        k.anchor('center'),
+                        k.color(100, 255, 100),
+                        k.fixed(),
+                        k.z(500)
+                    ]);
+
+                    k.wait(5, () => {
+                        if (completionMsg.exists()) {
+                            k.destroy(completionMsg);
+                        }
+                    });
+
                     // Note: Level ups are now manually triggered via button, not auto-shown
                     // processPendingLevelUps();
+                });
+
+                // Listen for obstacle data from host
+                onMessage('obstacle_data', (data) => {
+                    console.log('[Multiplayer] Client received obstacle data:', data.obstacles.length, 'obstacles');
+
+                    // Clear any existing obstacles (in case of resync)
+                    k.get('obstacle').forEach(obj => k.destroy(obj));
+
+                    // Create obstacles from host data
+                    data.obstacles.forEach(obsData => {
+                        // Color comes as array, convert to k.rgb()
+                        const color = Array.isArray(obsData.color)
+                            ? k.rgb(obsData.color[0], obsData.color[1], obsData.color[2])
+                            : obsData.color;
+                        createObstacle(
+                            k,
+                            obsData.x,
+                            obsData.y,
+                            obsData.width,
+                            obsData.height,
+                            obsData.type,
+                            obsData.char,
+                            color
+                        );
+                    });
+                });
+
+                // Listen for door states from host
+                onMessage('door_states', (doorStates) => {
+                    console.log('[Multiplayer] Client received door states:', doorStates);
+
+                    // Update door blocked states (spawnDoors is defined later in scene)
+                    if (typeof spawnDoors !== 'undefined' && spawnDoors.length > 0) {
+                        spawnDoors.forEach(door => {
+                            if (doorStates.hasOwnProperty(door.direction)) {
+                                door.blocked = doorStates[door.direction];
+                                door.updateVisual();
+                            }
+                        });
+                    }
                 });
 
                 // Listen for game over event from host
@@ -681,7 +834,8 @@ export function setupGameScene(k) {
                     // Go to game over scene
                     k.go('gameOver', {
                         runStats: { ...(data.runStats || runStats) },
-                        currencyEarned: currencyEarned
+                        currencyEarned: currencyEarned,
+                        partyStats: data.partyStats || []
                     });
                 });
 
@@ -720,6 +874,9 @@ export function setupGameScene(k) {
                     // Find the player who leveled up (remote player)
                     const leveledPlayer = players.find(p => p.slotIndex === data.slotIndex);
                     if (leveledPlayer && leveledPlayer.exists()) {
+                        // Update the player's level to match (critical for saving stats)
+                        leveledPlayer.level = data.level;
+
                         // Initialize pendingLevelUps if needed
                         if (!leveledPlayer.pendingLevelUps) {
                             leveledPlayer.pendingLevelUps = [];
@@ -819,8 +976,16 @@ export function setupGameScene(k) {
         }
 
         // Key handlers for emotes (local player only)
+        let lastEmoteTime = 0;
+        const EMOTE_COOLDOWN = 0.1; // seconds
+
         k.onKeyPress('q', () => {
             if (player.isDead) return;
+
+            // Check cooldown
+            const now = k.time();
+            if (now - lastEmoteTime < EMOTE_COOLDOWN) return;
+            lastEmoteTime = now;
 
             // Show locally
             showEmote(player, 'exclamation');
@@ -833,6 +998,11 @@ export function setupGameScene(k) {
 
         k.onKeyPress('e', () => {
             if (player.isDead) return;
+
+            // Check cooldown
+            const now = k.time();
+            if (now - lastEmoteTime < EMOTE_COOLDOWN) return;
+            lastEmoteTime = now;
 
             // Show locally
             showEmote(player, 'heart');
@@ -950,6 +1120,15 @@ export function setupGameScene(k) {
                 }
             });
 
+            // Clear all enemy projectiles when revival happens to prevent instant re-death
+            if (revivedCount > 0) {
+                k.get('projectile').forEach(proj => {
+                    if (proj.isEnemyProjectile || proj.isBossProjectile) {
+                        k.destroy(proj);
+                    }
+                });
+            }
+
             // Broadcast revival event in multiplayer
             if (revivedCount > 0 && isMultiplayerActive() && isHost()) {
                 import('../systems/multiplayerGame.js').then(({ broadcastRevivalEvent }) => {
@@ -991,12 +1170,32 @@ export function setupGameScene(k) {
         // Get room template from floor map (or fallback to weighted generation)
         const currentRoomNode = gameState.floorMap.getCurrentRoom();
         let roomTemplate;
-        if (currentRoomNode && currentRoomNode.template) {
+
+        if (partySize > 1 && gameState.roomTemplateKey) {
+            // Multiplayer: use the stored template key (synced from host transition)
+            // This takes priority over floor map template for subsequent rooms
+            roomTemplate = getRoomTemplateByKey(gameState.roomTemplateKey);
+            console.log('[Multiplayer] Using synced template:', gameState.roomTemplateKey);
+            // Clear the key after use so next room gets a fresh selection
+            gameState.roomTemplateKey = null;
+        } else if (partySize > 1 && !hasGameSeed()) {
+            // Multiplayer client before seed arrived: use firstRoomTemplateKey or fallback
+            const firstRoomKey = getFirstRoomTemplateKey();
+            if (firstRoomKey) {
+                roomTemplate = getRoomTemplateByKey(firstRoomKey);
+                console.log('[Multiplayer] Client using first room template:', firstRoomKey);
+            } else {
+                // Fallback - shouldn't normally happen since scene reloads when seed arrives
+                console.warn('[Multiplayer] No seed or template key available, using fallback');
+                const roomRng = getRoomRNG();
+                roomTemplate = getWeightedRoomTemplate(currentFloor, roomRng);
+            }
+        } else if (currentRoomNode && currentRoomNode.template) {
+            // Use floor map template (for single player or multiplayer with correct seed)
             roomTemplate = currentRoomNode.template;
         } else {
-            // Use seeded RNG for multiplayer to ensure same room layout on all clients
-            const roomRng = partySize > 1 ? getRoomRNG() : null;
-            roomTemplate = getWeightedRoomTemplate(currentFloor, roomRng);
+            // Fallback to weighted generation
+            roomTemplate = getWeightedRoomTemplate(currentFloor, partySize > 1 ? getRoomRNG() : null);
         }
         const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
@@ -1066,22 +1265,27 @@ export function setupGameScene(k) {
         }
         
         const obstacles = [];
-        if (!isFirstRoom) {
+        const obstacleDataForBroadcast = [];
+
+        // Only create obstacles on host (or single player) - clients receive from host
+        const shouldCreateObstacles = partySize <= 1 || isHost();
+
+        if (!isFirstRoom && shouldCreateObstacles) {
             roomTemplate.obstacles.forEach(obs => {
             // Check if obstacle would overlap with player spawn safe zone
             const distanceToSpawn = Math.sqrt(
-                Math.pow(obs.x - playerSpawnX, 2) + 
+                Math.pow(obs.x - playerSpawnX, 2) +
                 Math.pow(obs.y - playerSpawnY, 2)
             );
-            
+
             // Check if obstacle would block entrance door
             const distanceToEntrance = Math.sqrt(
-                Math.pow(obs.x - entranceDoorX, 2) + 
+                Math.pow(obs.x - entranceDoorX, 2) +
                 Math.pow(obs.y - entranceDoorY, 2)
             );
-            
+
             const obstacleRadius = Math.max(obs.width, obs.height) / 2;
-            
+
             // Skip obstacle if it's too close to spawn or entrance door
             if (distanceToSpawn < safeZoneRadius + obstacleRadius ||
                 distanceToEntrance < safeZoneRadius + obstacleRadius) {
@@ -1105,7 +1309,36 @@ export function setupGameScene(k) {
                 obstacleColor
             );
             obstacles.push(obstacle);
+
+            // Collect data for broadcast to clients
+            if (partySize > 1 && isHost()) {
+                // Convert color to array for network serialization
+                let colorArray = null;
+                if (obstacleColor) {
+                    if (Array.isArray(obstacleColor)) {
+                        colorArray = obstacleColor;
+                    } else if (obstacleColor.r !== undefined) {
+                        colorArray = [obstacleColor.r, obstacleColor.g, obstacleColor.b];
+                    }
+                }
+                obstacleDataForBroadcast.push({
+                    x: constrainedPos.x,
+                    y: constrainedPos.y,
+                    width: obs.width,
+                    height: obs.height,
+                    type: obs.type,
+                    char: obs.char || '#',
+                    color: colorArray
+                });
+            }
             });
+
+            // Broadcast obstacles to clients (with small delay to ensure client has loaded)
+            if (partySize > 1 && isHost()) {
+                k.wait(0.1, () => {
+                    broadcastObstacles(obstacleDataForBroadcast);
+                });
+            }
         }
         
         // HUD
@@ -1206,8 +1439,12 @@ export function setupGameScene(k) {
             k.z(UI_Z_LAYERS.UI_BG)
         ]);
 
+        // Initialize XP bar with player's current progress
+        const initialXpProgress = player.xpToNext > 0 ? player.xp / player.xpToNext : 0;
+        const initialXpWidth = Math.max(0, (xpBarWidth - 34) * initialXpProgress);
+
         const xpBarFill = k.add([
-            k.rect(0, xpBarHeight - 4),
+            k.rect(initialXpWidth, xpBarHeight - 4),
             k.pos(58, xpBarY + 2), // Start after level badge (adjusted for larger badge)
             k.color(100, 200, 255), // Light blue XP color (matches pickup)
             k.fixed(),
@@ -1215,7 +1452,7 @@ export function setupGameScene(k) {
         ]);
 
         const xpBarText = k.add([
-            k.text('0/10', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.text(formatXP(player.xp || 0, player.xpToNext || 10), { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(k.width() / 2, xpBarY + xpBarHeight / 2),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -1239,7 +1476,7 @@ export function setupGameScene(k) {
         ]);
 
         const levelText = k.add([
-            k.text('1', { size: UI_TEXT_SIZES.BODY }), // 30% bigger (was SMALL)
+            k.text(`${player.level || 1}`, { size: UI_TEXT_SIZES.BODY }), // 30% bigger (was SMALL)
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
             k.color(255, 255, 255), // White text for better visibility
@@ -1264,7 +1501,7 @@ export function setupGameScene(k) {
         const playerHealthBarFill = k.add([
             k.rect(playerHealthBarWidth - 2, playerHealthBarHeight - 2),
             k.pos(0, 0),
-            k.anchor('left'), // Changed from 'center' to 'left' so it drains from right
+            k.anchor('center'), // Use center anchor for proper width updates
             k.color(100, 255, 100), // Green health color
             k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
@@ -1701,6 +1938,11 @@ export function setupGameScene(k) {
             // (We'll add obstacle insertion in room generation code later)
         }));
 
+        // Update screen shake effect
+        eventHandlers.updates.push(k.onUpdate(() => {
+            updateScreenShake(k.dt());
+        }));
+
         // Hover detection for tooltips
         eventHandlers.updates.push(k.onUpdate(() => {
             // Don't show tooltips when paused or during upgrade draft
@@ -1886,12 +2128,13 @@ export function setupGameScene(k) {
                 const healthBarY = player.pos.y + playerHealthBarOffsetY;
                 playerHealthBarBg.pos = k.vec2(healthBarX, healthBarY);
 
-                // Fill bar uses 'left' anchor, so offset X to left edge of background
-                const fillBarX = healthBarX - (playerHealthBarWidth / 2) + 1; // +1 for border offset
-                playerHealthBarFill.pos = k.vec2(fillBarX, healthBarY);
+                // Update health bar width - use k.use() to replace the rect component
+                const fillWidth = Math.max(1, (playerHealthBarWidth - 2) * healthPercent);
+                playerHealthBarFill.use(k.rect(fillWidth, playerHealthBarHeight - 2));
 
-                // Update health bar width
-                playerHealthBarFill.width = Math.max(0, (playerHealthBarWidth - 2) * healthPercent);
+                // Position fill aligned to left edge of background
+                const fillBarX = healthBarX - (playerHealthBarWidth / 2) + 1 + (fillWidth / 2);
+                playerHealthBarFill.pos = k.vec2(fillBarX, healthBarY);
 
                 // Color based on health percentage
                 if (healthPercent > 0.6) {
@@ -1942,7 +2185,8 @@ export function setupGameScene(k) {
                 weaponDetailDPS.text = `DPS: ${dps}`;
 
                 // Show weapon details when paused (save state before showing)
-                if (k.paused) {
+                // But NOT during hit freeze - only show on actual user pause
+                if (k.paused && !isInHitFreeze()) {
                     // Save current state before forcing it visible
                     if (k.gameData.weaponDetailSavedState === undefined) {
                         k.gameData.weaponDetailSavedState = weaponDetailState;
@@ -2431,7 +2675,18 @@ export function setupGameScene(k) {
             spawnDoor.updateVisual(); // Update appearance based on state
             spawnDoors.push(spawnDoor);
         });
-        
+
+        // Broadcast door states to clients (with small delay to ensure client has loaded)
+        if (partySize > 1 && isHost()) {
+            k.wait(0.1, () => {
+                const doorStates = {};
+                spawnDoors.forEach(door => {
+                    doorStates[door.direction] = door.blocked;
+                });
+                broadcast('door_states', doorStates);
+            });
+        }
+
         // Spawn enemies periodically
         let enemySpawnTimer = 0;
         const enemySpawnInterval = 0.33; // seconds between spawns (3x faster spawn rate)
@@ -2865,8 +3120,19 @@ export function setupGameScene(k) {
                     // Play enemy death sound
                     playEnemyDeath();
 
-                    // Track enemy kill
+                    // Track enemy kill by type
                     runStats.enemiesKilled++;
+                    const enemyType = enemy.type || enemy.enemyType || 'basic';
+                    runStats.killsByType[enemyType] = (runStats.killsByType[enemyType] || 0) + 1;
+
+                    // Track kill for the player who last hit this enemy
+                    const killerSlot = enemy.lastHitBySlot;
+                    if (killerSlot !== undefined && players[killerSlot] && players[killerSlot].runStats) {
+                        players[killerSlot].runStats.kills++;
+                    } else if (player.runStats) {
+                        // Fallback to local player if no killer tracked
+                        player.runStats.kills++;
+                    }
 
                     // Only spawn pickups if we're the host (or not in multiplayer)
                     // Pickups will be broadcast to clients via registerPickup()
@@ -2919,8 +3185,19 @@ export function setupGameScene(k) {
                     // Play enemy death sound (louder for miniboss)
                     playEnemyDeath();
 
-                    // Track miniboss kill (counts as enemy too)
+                    // Track miniboss kill by type (counts as enemy too)
                     runStats.enemiesKilled++;
+                    const minibossType = miniboss.type || 'miniboss';
+                    runStats.killsByType[minibossType] = (runStats.killsByType[minibossType] || 0) + 1;
+
+                    // Track kill for the player who last hit this miniboss
+                    const minibossKillerSlot = miniboss.lastHitBySlot;
+                    if (minibossKillerSlot !== undefined && players[minibossKillerSlot] && players[minibossKillerSlot].runStats) {
+                        players[minibossKillerSlot].runStats.kills++;
+                    } else if (player.runStats) {
+                        // Fallback to local player if no killer tracked
+                        player.runStats.kills++;
+                    }
 
                     // Only spawn pickups if we're the host (or not in multiplayer)
                     if (!isMultiplayerActive() || isHost()) {
@@ -2975,9 +3252,22 @@ export function setupGameScene(k) {
                     // Play boss death sound
                     playBossDeath();
 
-                    // Track boss kill (counts as enemy too)
+                    // Track boss kill by type (counts as enemy too)
                     runStats.enemiesKilled++;
                     runStats.bossesKilled++;
+                    const bossType = boss.type || 'boss';
+                    runStats.killsByType[bossType] = (runStats.killsByType[bossType] || 0) + 1;
+
+                    // Track kill for the player who last hit this boss
+                    const bossKillerSlot = boss.lastHitBySlot;
+                    if (bossKillerSlot !== undefined && players[bossKillerSlot] && players[bossKillerSlot].runStats) {
+                        players[bossKillerSlot].runStats.kills++;
+                        players[bossKillerSlot].runStats.bossesKilled++;
+                    } else if (player.runStats) {
+                        // Fallback to local player if no killer tracked
+                        player.runStats.kills++;
+                        player.runStats.bossesKilled++;
+                    }
 
                     // Only spawn pickups if we're the host (or not in multiplayer)
                     if (!isMultiplayerActive() || isHost()) {
@@ -3178,6 +3468,11 @@ export function setupGameScene(k) {
                     // Currency is persistent across the run, so just add once
                     addCurrency(pickup.value); // Add currency to persistent storage
 
+                    // Track credits picked up for the player who collected it
+                    if (closestPlayer && closestPlayer.runStats) {
+                        closestPlayer.runStats.creditsPickedUp += pickup.value;
+                    }
+
                     // Broadcast currency gain to clients
                     if (isMultiplayerActive()) {
                         broadcastCurrencyGain(pickup.value);
@@ -3280,7 +3575,7 @@ export function setupGameScene(k) {
                 if (!doorProgressBg || !doorProgressBg.exists()) {
                     doorProgressBg = k.add([
                         k.circle(20),
-                        k.pos(data.doorX, data.doorY - 30),
+                        k.pos(data.doorX, data.doorY),
                         k.anchor('center'),
                         k.color(80, 80, 80),
                         k.opacity(0.8),
@@ -3290,7 +3585,7 @@ export function setupGameScene(k) {
 
                     doorProgressCircle = k.add([
                         k.circle(18),
-                        k.pos(data.doorX, data.doorY - 30),
+                        k.pos(data.doorX, data.doorY),
                         k.anchor('center'),
                         k.color(data.isForced ? 255 : 100, data.isForced ? 200 : 255, data.isForced ? 0 : 100),
                         k.opacity(0),
@@ -3362,7 +3657,7 @@ export function setupGameScene(k) {
 
                             doorProgressBg = k.add([
                                 k.circle(20),
-                                k.pos(door.pos.x, door.pos.y - 30),
+                                k.pos(door.pos.x, door.pos.y),
                                 k.anchor('center'),
                                 k.color(80, 80, 80),
                                 k.opacity(0.8),
@@ -3372,7 +3667,7 @@ export function setupGameScene(k) {
 
                             doorProgressCircle = k.add([
                                 k.circle(18),
-                                k.pos(door.pos.x, door.pos.y - 30),
+                                k.pos(door.pos.x, door.pos.y),
                                 k.anchor('center'),
                                 k.color(isForced ? 255 : 100, isForced ? 200 : 255, isForced ? 0 : 100),
                                 k.opacity(0),
@@ -3700,7 +3995,18 @@ export function setupGameScene(k) {
                     powerupAmmo: p.powerupAmmo !== undefined ? p.powerupAmmo : null,
                     powerupDuration: p.powerupDuration !== undefined ? p.powerupDuration : null,
                     originalWeapon: p.originalWeapon || null,
-                    weaponKey: p.weaponKey
+                    weaponKey: p.weaponKey,
+                    // Per-player run stats for game over screen
+                    runStats: p.runStats || {
+                        kills: 0,
+                        deaths: 0,
+                        revives: 0,
+                        damageTaken: 0,
+                        damageDealt: 0,
+                        creditsPickedUp: 0,
+                        xpPickedUp: 0,
+                        bossesKilled: 0
+                    }
                 };
             }).filter(stats => stats !== null);
 
@@ -3832,7 +4138,13 @@ export function setupGameScene(k) {
 
             // In multiplayer, broadcast room transition to sync spawn positions and player stats
             if (isMultiplayerActive() && isHost()) {
-                broadcastRoomTransition(gameState.entryDirection, gameState.allPlayerStats, gridDirection, currentFloor);
+                // Preselect next room template so we can send it to clients
+                const roomRng = getRoomRNG();
+                const nextTemplate = getWeightedRoomTemplate(currentFloor, roomRng);
+                gameState.roomTemplateKey = nextTemplate.key;
+                console.log('[Multiplayer] Host selected next room template:', nextTemplate.key);
+
+                broadcastRoomTransition(gameState.entryDirection, gameState.allPlayerStats, gridDirection, currentFloor, gameState.roomTemplateKey);
             }
 
             // Restart game scene with new room/floor
@@ -3901,9 +4213,24 @@ export function setupGameScene(k) {
             // Check for achievements
             checkAchievements(k);
 
+            // Gather party stats for game over screen
+            const partyStats = players.filter(p => p && p.exists()).map(p => ({
+                name: p.playerName || 'Player',
+                level: p.level || 1,
+                characterData: p.characterData,
+                kills: p.runStats?.kills || 0,
+                deaths: p.runStats?.deaths || 0,
+                revives: p.runStats?.revives || 0,
+                damageTaken: p.runStats?.damageTaken || 0,
+                damageDealt: p.runStats?.damageDealt || 0,
+                xpCollected: p.runStats?.xpPickedUp || 0,
+                creditsPickedUp: p.runStats?.creditsPickedUp || 0,
+                bossesKilled: p.runStats?.bossesKilled || 0
+            }));
+
             // Broadcast game over to clients (if host in multiplayer)
             if (isMultiplayerActive() && isHost()) {
-                broadcastGameOver(runStats, currencyEarned);
+                broadcastGameOver(runStats, currencyEarned, partyStats);
             }
 
             // Cleanup multiplayer
@@ -3914,7 +4241,8 @@ export function setupGameScene(k) {
             // Pass run stats to game over scene
             k.go('gameOver', {
                 runStats: { ...runStats },
-                currencyEarned: currencyEarned
+                currencyEarned: currencyEarned,
+                partyStats: partyStats
             });
         });
         
@@ -4223,6 +4551,23 @@ export function setupGameScene(k) {
                 updatePauseUI(k.paused);
             }
         }));
+
+        // Auto-pause on window blur (solo mode only)
+        const handleGameBlur = () => {
+            // Only auto-pause in solo mode
+            if (isMultiplayerActive()) return;
+            // Don't pause if already paused or upgrade draft is showing
+            if (k.paused || isUpgradeDraftActive()) return;
+
+            k.paused = true;
+            updatePauseUI(true);
+        };
+        window.addEventListener('blur', handleGameBlur);
+
+        // Clean up blur listener on scene leave
+        k.onSceneLeave(() => {
+            window.removeEventListener('blur', handleGameBlur);
+        });
 
         // Cleanup event handlers on scene leave (memory leak fix)
         k.onSceneLeave(() => {
