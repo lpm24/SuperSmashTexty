@@ -112,19 +112,19 @@ export const WEAPON_UNLOCKS = {
 export const PERMANENT_UPGRADE_UNLOCKS = {
     startingHealth: {
         name: 'Starting Health +10',
-        description: 'Begin runs with +10 max health',
+        description: 'Start the show with +10 max health',
         cost: 50,
         maxLevel: 5 // Can be purchased multiple times
     },
     startingDamage: {
         name: 'Starting Damage +1',
-        description: 'Begin runs with +1 damage',
+        description: 'Start the show with +1 damage',
         cost: 75,
         maxLevel: 5
     },
     startingSpeed: {
         name: 'Starting Speed +10',
-        description: 'Begin runs with +10 speed',
+        description: 'Start the show with +10 speed',
         cost: 60,
         maxLevel: 5
     },

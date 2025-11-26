@@ -38,7 +38,7 @@ export function setupCharacterSelectScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Characters'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('CONTESTANTS'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),

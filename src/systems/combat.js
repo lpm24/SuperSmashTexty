@@ -1332,9 +1332,19 @@ function chainToNextEnemy(k, projectile, currentEnemy) {
         // Chain to next enemy
         projectile.chainJumps = (projectile.chainJumps || 0) + 1;
         
-        // Visual chain effect
+        // Visual chain effect - use a thin rotated rectangle as a line
+        const startPos = currentEnemy.pos;
+        const endPos = nearestEnemy.pos;
+        const distance = k.vec2(endPos.x - startPos.x, endPos.y - startPos.y).len();
+        const angle = Math.atan2(endPos.y - startPos.y, endPos.x - startPos.x);
+        const midX = (startPos.x + endPos.x) / 2;
+        const midY = (startPos.y + endPos.y) / 2;
+        
         const chainLine = k.add([
-            k.line(currentEnemy.pos, nearestEnemy.pos, 2),
+            k.rect(distance, 2), // Thin rectangle as line
+            k.pos(midX, midY),
+            k.anchor('center'),
+            k.rotate(angle),
             k.color(255, 255, 100),
             k.z(150)
         ]);

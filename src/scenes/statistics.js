@@ -64,7 +64,7 @@ export function setupStatisticsScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Stats & Achievements'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('RATINGS & RECORDS'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -79,8 +79,8 @@ export function setupStatisticsScene(k) {
         const tabHeight = 30;
         
         const tabs = [
-            { key: 'stats', label: 'Statistics' },
-            { key: 'achievements', label: 'Achievements' }
+            { key: 'stats', label: 'RATINGS' },
+            { key: 'achievements', label: 'RECORDS' }
         ];
         
         // Calculate centered positions for tabs (same as Settings menu)
@@ -170,7 +170,7 @@ export function setupStatisticsScene(k) {
                 const statsSpacing = 30;
                 
                 const statLabels = [
-                    { label: 'Total Runs', value: stats.totalRuns || 0 },
+                    { label: 'Total Shows', value: stats.totalRuns || 0 },
                     { label: 'Best Floor', value: stats.bestFloor || 1 },
                     { label: 'Best Room', value: stats.bestRoom || 1 },
                     { label: 'Best Level', value: stats.bestLevel || 1 },

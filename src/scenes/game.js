@@ -46,6 +46,10 @@ import { getParty, getPartySize } from '../systems/partySystem.js';
 import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, broadcastObstacles } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 
+// Data imports
+import { BOSS_TYPES, getBossDefinition } from '../data/bosses.js';
+import { MINIBOSS_TYPES, getMinibossDefinition } from '../data/minibosses.js';
+
 // Config imports
 import { PICKUP_CONFIG } from '../config/constants.js';
 import {
@@ -2282,7 +2286,7 @@ export function setupGameScene(k) {
                 if (meleeGuardian && rangedGuardian && (meleeGuardian.exists() || rangedGuardian.exists())) {
                     // Show boss HUD
                     bossNameText.hidden = false;
-                    bossNameText.text = 'THE TWIN GUARDIANS';
+                    bossNameText.text = 'THE CO-HOSTS';
                     
                     // Calculate combined health
                     const meleeHP = meleeGuardian.exists() ? meleeGuardian.hp() : 0;
@@ -2359,7 +2363,7 @@ export function setupGameScene(k) {
                         const bossMaxArmorHP = remainingBoss.maxArmorHealth || 0;
                         
                         bossNameText.hidden = false;
-                        bossNameText.text = remainingBoss.enraged ? 'THE TWIN GUARDIANS (ENRAGED)' : 'THE TWIN GUARDIANS';
+                        bossNameText.text = remainingBoss.enraged ? 'THE CO-HOSTS (ENRAGED)' : 'THE CO-HOSTS';
                         
                         const healthPercent = Math.max(0, Math.min(1, bossHP / bossMaxHP));
                         bossHealthBar.width = 296 * healthPercent;
@@ -2426,14 +2430,13 @@ export function setupGameScene(k) {
                 const bossArmorHP = boss.armorHealth || 0;
                 const bossMaxArmorHP = boss.maxArmorHealth || 0;
                 
-                // Get boss name
-                const bossNames = {
-                    'gatekeeper': 'THE GATEKEEPER',
-                    'swarmQueen': 'THE SWARM QUEEN',
-                    'twinGuardianMelee': 'THE TWIN GUARDIANS',
-                    'twinGuardianRanged': 'THE TWIN GUARDIANS'
-                };
-                const bossName = bossNames[boss.type] || 'BOSS';
+                // Get boss name from data files
+                let bossName = 'BOSS';
+                if (boss.type === 'twinGuardianMelee' || boss.type === 'twinGuardianRanged') {
+                    bossName = 'THE CO-HOSTS';
+                } else if (BOSS_TYPES[boss.type]?.name) {
+                    bossName = `THE ${BOSS_TYPES[boss.type].name.toUpperCase()}`;
+                }
                 
                 // Show boss HUD
                 bossNameText.hidden = false;
@@ -2767,7 +2770,7 @@ export function setupGameScene(k) {
 
                         // Show boss announcement
                         const announcement = k.add([
-                            k.text('THE TWIN GUARDIANS', { size: 32 }),
+                            k.text('THE CO-HOSTS', { size: 32 }),
                             k.pos(k.width() / 2, k.height() / 2 - 100),
                             k.anchor('center'),
                             k.color(255, 100, 100),
@@ -2811,9 +2814,12 @@ export function setupGameScene(k) {
                         playBossSpawn();
 
                         // Show boss announcement
-                        const bossName = bossType === 'gatekeeper' ? 'THE GATEKEEPER' :
-                                       bossType === 'swarmQueen' ? 'THE SWARM QUEEN' :
-                                       'THE TWIN GUARDIANS';
+                        let bossName = 'BOSS';
+                        if (bossType === 'twinGuardian') {
+                            bossName = 'THE CO-HOSTS';
+                        } else if (BOSS_TYPES[bossType]?.name) {
+                            bossName = `THE ${BOSS_TYPES[bossType].name.toUpperCase()}`;
+                        }
                         const announcement = k.add([
                             k.text(bossName, { size: 32 }),
                             k.pos(k.width() / 2, k.height() / 2 - 100),
@@ -2869,15 +2875,9 @@ export function setupGameScene(k) {
                     }
 
                     // Show miniboss announcement
-                    const minibossNames = {
-                        'brute': 'MINIBOSS: BRUTE',
-                        'sentinel': 'MINIBOSS: SENTINEL',
-                        'berserker': 'MINIBOSS: BERSERKER',
-                        'guardian': 'MINIBOSS: GUARDIAN',
-                        'warlock': 'MINIBOSS: WARLOCK'
-                    };
+                    const minibossName = MINIBOSS_TYPES[minibossType]?.name || 'MINIBOSS';
                     const announcement = k.add([
-                        k.text(minibossNames[minibossType] || 'MINIBOSS', { size: 24 }),
+                        k.text(`MINIBOSS: ${minibossName.toUpperCase()}`, { size: 24 }),
                         k.pos(k.width() / 2, k.height() / 2 - 100),
                         k.anchor('center'),
                         k.color(255, 200, 100),

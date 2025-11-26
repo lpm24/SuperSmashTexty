@@ -4,6 +4,8 @@ import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
 import { ENEMY_TYPES } from '../data/enemies.js';
+import { MINIBOSS_TYPES } from '../data/minibosses.js';
+import { BOSS_TYPES } from '../data/bosses.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -11,43 +13,23 @@ import {
     UI_TERMS
 } from '../config/uiConfig.js';
 
-// TV Station themed enemy names
-const TV_ENEMY_NAMES = {
-    rusher: 'Intern',
-    shooter: 'Security',
-    zombie: 'Overnight Editor',
-    slime: 'Coffee Spill',
-    bat: 'Studio Fly',
-    charger: 'Line Producer',
-    turret: 'Teleprompter',
-    heavyTank: 'Executive Producer',
-    zippy: 'PA',
-    exploder: 'Pyrotechnics',
-    orbiter: 'Drone Operator',
-    mage: 'VFX Artist',
-    shieldBearer: 'Bodyguard',
-    golem: 'Mascot Suit',
-    wraith: 'Ghost Writer',
-    spawner: 'Casting Director',
-    buffer: 'Hype Man',
-    healer: 'Makeup Artist',
-    teleporter: 'Stage Manager',
-    freezer: 'AC Tech',
-    leech: 'Talent Agent',
-    basic: 'Crew Member',
-    tank: 'Camera Op',
-    fast: 'Runner',
-    brute: 'Boom Operator',
-    sentinel: 'Head of Security',
-    berserker: 'Method Actor',
-    guardian: 'Union Rep',
-    warlock: 'Network Exec',
-    gatekeeper: 'Studio Head',
-    swarmQueen: 'HR Director',
-    twinGuardian: 'The Twins',
-    twinGuardianMelee: 'Twin (Melee)',
-    twinGuardianRanged: 'Twin (Ranged)'
-};
+// Get enemy name from data files, with fallback to type key
+function getEnemyName(type) {
+    // Check enemies first
+    if (ENEMY_TYPES[type]?.name) {
+        return ENEMY_TYPES[type].name;
+    }
+    // Check mini-bosses
+    if (MINIBOSS_TYPES[type]?.name) {
+        return MINIBOSS_TYPES[type].name;
+    }
+    // Check bosses
+    if (BOSS_TYPES[type]?.name) {
+        return BOSS_TYPES[type].name;
+    }
+    // Fallback to type key
+    return type;
+}
 
 // Get enemy character for display
 function getEnemyChar(type) {
@@ -309,7 +291,7 @@ export function setupGameOverScene(k) {
 
             for (let i = 0; i < maxToShow; i++) {
                 const [type, count] = sortedKills[i];
-                const tvName = TV_ENEMY_NAMES[type] || type;
+                const tvName = getEnemyName(type);
                 const char = getEnemyChar(type);
                 const color = getEnemyColor(type);
 

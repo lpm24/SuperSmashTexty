@@ -447,7 +447,7 @@ export function setupMenuScene(k) {
 
             // "Selected Character" label
             k.add([
-                k.text('SELECTED CHARACTER', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.text('SELECTED CONTESTANT', { size: UI_TEXT_SIZES.SMALL - 2 }),
                 k.pos(charPanelX - charPanelWidth / 2, charPanelY - charPanelHeight + 15),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -575,7 +575,7 @@ export function setupMenuScene(k) {
 
         // Main buttons
         const playButton = createMenuButton(
-            k, 'Play', centerX, buttonStartY,
+            k, 'ACTION!', centerX, buttonStartY,
             350, 55, UI_TEXT_SIZES.TITLE
         );
         playButton.onClick(() => {
@@ -609,7 +609,7 @@ export function setupMenuScene(k) {
         updateStartButtonState();
 
         const characterButton = createMenuButton(
-            k, 'Character', centerX, buttonStartY + buttonSpacing,
+            k, 'CONTESTANT', centerX, buttonStartY + buttonSpacing,
             350, 50, UI_TEXT_SIZES.HEADER
         );
         characterButton.onClick(() => {
@@ -670,7 +670,7 @@ export function setupMenuScene(k) {
         }
 
         const shopButton = createMenuButton(
-            k, 'Shop', centerX, buttonStartY + buttonSpacing * 2,
+            k, 'MERCH', centerX, buttonStartY + buttonSpacing * 2,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         shopButton.onClick(() => {
@@ -679,7 +679,7 @@ export function setupMenuScene(k) {
         });
 
         const statisticsButton = createMenuButton(
-            k, 'Statistics', centerX, buttonStartY + buttonSpacing * 3,
+            k, 'RATINGS', centerX, buttonStartY + buttonSpacing * 3,
             350, 50, UI_TEXT_SIZES.BUTTON
         );
         statisticsButton.onClick(() => {

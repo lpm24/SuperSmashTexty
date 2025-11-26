@@ -34,7 +34,7 @@ export function setupShopScene(k) {
 
         // Title
         k.add([
-            k.text(formatButtonText('Shop'), { size: UI_TEXT_SIZES.TITLE }),
+            k.text(formatButtonText('MERCH'), { size: UI_TEXT_SIZES.TITLE }),
             k.pos(k.width() / 2, 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -52,9 +52,9 @@ export function setupShopScene(k) {
         const tabHeight = 30;
         
         const categories = [
-            { key: 'permanentUpgrades', label: 'Upgrades' },
-            { key: 'characters', label: 'Characters' },
-            { key: 'weapons', label: 'Weapons' }
+            { key: 'permanentUpgrades', label: 'POWER-UPS' },
+            { key: 'characters', label: 'CONTESTANTS' },
+            { key: 'weapons', label: 'PROPS' }
         ];
         
         // Calculate centered positions for tabs (same as Statistics and Settings menus)
