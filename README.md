@@ -2,6 +2,12 @@
 
 An ASCII-style browser action roguelike that blends the arena-style chaos of Smash TV with the roguelike upgrade loops of Vampire Survivors.
 
+## 🎮 Play Now
+
+**🎮 [Play SuperSmashTexty on GitHub Pages](https://lpm24.github.io/SuperSmashTexty/)**
+
+Play directly in your browser - no installation required!
+
 ## 🎮 Game Overview
 
 **SuperSmashTexty** is a high-intensity power fantasy where players fight through procedurally generated arenas, collecting upgrades and unlocking persistent meta-progression. Players take on the role of contestants in a deadly game show, fighting through studio floors against increasingly powerful show staff and executives.
@@ -153,9 +159,13 @@ This starts a local PeerJS signaling server on port 9000. The game automatically
 - ✅ Enhanced combat system with multiple upgrade paths
 - ✅ Game show theme implementation (enemies, bosses, menus themed as TV show staff)
 - ✅ Animated ASCII block art titles for all sub-menus (matching main menu aesthetic)
+- ✅ Menu UI standardization (credit indicators, back buttons, character icons)
+- ✅ Shop improvements (escalating prices, refund system, optimized layout)
+- ✅ Options menu with confirmation dialogs
+- ✅ Enhanced visual effects (golden enemy easter egg, particle effects)
+- ✅ Background particle effects on all menu pages
 - 🔄 Content expansion (more enemies, upgrades, synergies)
 - 🔄 Advanced procedural generation improvements
-- 🔄 Visual effects and polish
 - 🔄 Balance tuning and gameplay refinement
 
 See `GAME_DESIGN_DOCUMENT.md` for complete design specifications and implementation roadmap.
@@ -164,12 +174,14 @@ See `GAME_DESIGN_DOCUMENT.md` for complete design specifications and implementat
 
 **Recent Major Refactor (2025-01):**
 - ✅ **Constants System**: Centralized game configuration for easy tuning
-- ✅ **Data-Driven Content**: Enemies, bosses, and weapons as pure data
+- ✅ **Data-Driven Content**: Enemies, bosses, and weapons as pure data (21 enemies, 4 bosses, 5 minibosses)
 - ✅ **Multiplayer-Ready Architecture**: State, Input, and Network managers
 - ✅ **Comprehensive Documentation**: File headers and inline comments throughout
 - ✅ **Clean Codebase**: Zero dead code, organized imports, clear structure
 - ✅ **Future-Proof**: Ready for Windows/browser synchronous co-op multiplayer
 - ✅ **Game Show Theme**: Complete re-theming of enemies, bosses, and menus with TV show aesthetic
+- ✅ **Menu Polish**: Animated ASCII titles, standardized UI elements, enhanced visual effects
+- ✅ **Shop System**: Escalating prices, granular refund controls, optimized layouts
 
 The codebase follows best practices with:
 - Separation of concerns (entities, systems, data, core)
@@ -186,7 +198,26 @@ The codebase follows best practices with:
 
 ## 🎯 Project Goals
 
-1. Create a playable prototype with core mechanics
-2. Implement procedural room generation
-3. Build upgrade and meta-progression systems
-4. Deploy to GitHub Pages for easy access
+1. ✅ Create a playable prototype with core mechanics
+2. ✅ Implement procedural room generation
+3. ✅ Build upgrade and meta-progression systems
+4. ✅ Deploy to GitHub Pages for easy access
+5. 🔄 Expand content (enemies, upgrades, synergies)
+6. 🔄 Polish and balance gameplay
+7. 🔄 Implement multiplayer (architecture ready)
+
+## 🚀 Deployment
+
+The game is automatically deployed to GitHub Pages. To deploy manually:
+
+```bash
+./deploy.sh
+```
+
+Or manually:
+```bash
+npm run build
+git subtree push --prefix dist origin gh-pages
+```
+
+Visit: **https://lpm24.github.io/SuperSmashTexty/**
