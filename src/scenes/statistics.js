@@ -6,7 +6,8 @@ import {
     UI_COLORS,
     UI_Z_LAYERS,
     formatButtonText,
-    createMenuParticles
+    createMenuParticles,
+    createAnimatedTitle
 } from '../config/uiConfig.js';
 
 // Helper function to convert HSL to RGB for rainbow gradient
@@ -63,14 +64,7 @@ export function setupStatisticsScene(k) {
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
         // Title
-        k.add([
-            k.text(formatButtonText('RATINGS & RECORDS'), { size: UI_TEXT_SIZES.TITLE }),
-            k.pos(k.width() / 2, 40),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        createAnimatedTitle(k, 'RATINGS AND RECORDS', k.width() / 2, 60, 8);
         
         // Tab buttons (centered like Settings menu)
         const tabY = 90;
@@ -79,8 +73,8 @@ export function setupStatisticsScene(k) {
         const tabHeight = 30;
         
         const tabs = [
-            { key: 'stats', label: 'RATINGS' },
-            { key: 'achievements', label: 'RECORDS' }
+            { key: 'stats', label: 'Statistics' },
+            { key: 'achievements', label: 'Achievements' }
         ];
         
         // Calculate centered positions for tabs (same as Settings menu)
@@ -170,7 +164,7 @@ export function setupStatisticsScene(k) {
                 const statsSpacing = 30;
                 
                 const statLabels = [
-                    { label: 'Total Shows', value: stats.totalRuns || 0 },
+                    { label: 'Total Runs', value: stats.totalRuns || 0 },
                     { label: 'Best Floor', value: stats.bestFloor || 1 },
                     { label: 'Best Room', value: stats.bestRoom || 1 },
                     { label: 'Best Level', value: stats.bestLevel || 1 },

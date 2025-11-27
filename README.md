@@ -149,6 +149,7 @@ This starts a local PeerJS signaling server on port 9000. The game automatically
 - ✅ Room generation system with procedural variety
 - ✅ Enhanced combat system with multiple upgrade paths
 - ✅ Game show theme implementation (enemies, bosses, menus themed as TV show staff)
+- ✅ Animated ASCII block art titles for all sub-menus (matching main menu aesthetic)
 - 🔄 Content expansion (more enemies, upgrades, synergies)
 - 🔄 Advanced procedural generation improvements
 - 🔄 Visual effects and polish

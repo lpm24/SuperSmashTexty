@@ -49,6 +49,7 @@
 ## 🎉 Recent Updates (January 2025)
 
 ### Menu UI Improvements
+- ✅ **Animated ASCII Block Art Titles**: All sub-menu titles (CONTESTANTS, MERCH, OPTIONS, RATINGS AND RECORDS) now use multi-line ASCII block art with rainbow wave animation, matching the main menu title aesthetic
 - ✅ **Standardized Credit Indicator**: Unified credit display across all menus with rotating currency symbols ($, ₤, €, ₿, ¥, £, ¢, ₹)
 - ✅ **Standardized Back Buttons**: Consistent styling, size, and positioning across all menu scenes
 - ✅ **Character Icons in Shop**: Visual character icons displayed on shop's character page

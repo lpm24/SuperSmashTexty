@@ -1,5 +1,5 @@
 // Shop scene - allows players to purchase unlocks
-import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
 import {
@@ -8,11 +8,24 @@ import {
     UI_Z_LAYERS,
     formatButtonText,
     createCreditIndicator,
-    createMenuParticles
+    createMenuParticles,
+    createAnimatedTitle
 } from '../config/uiConfig.js';
 
 export function setupShopScene(k) {
     k.scene('shop', () => {
+        // Prevent context menu on right-click
+        const preventContextMenu = (e) => {
+            e.preventDefault();
+            return false;
+        };
+        document.addEventListener('contextmenu', preventContextMenu);
+        
+        // Cleanup on scene leave
+        k.onSceneLeave(() => {
+            document.removeEventListener('contextmenu', preventContextMenu);
+        });
+        
         const currency = getCurrency();
         const currencyName = getCurrencyName();
         
@@ -33,14 +46,7 @@ export function setupShopScene(k) {
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
         // Title
-        k.add([
-            k.text(formatButtonText('MERCH'), { size: UI_TEXT_SIZES.TITLE }),
-            k.pos(k.width() / 2, 40),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        createAnimatedTitle(k, 'MERCH', k.width() / 2, 60, 8);
 
         // Currency display (standardized)
         const creditIndicator = createCreditIndicator(k, currency, currencyName);
@@ -52,9 +58,9 @@ export function setupShopScene(k) {
         const tabHeight = 30;
         
         const categories = [
-            { key: 'permanentUpgrades', label: 'POWER-UPS' },
-            { key: 'characters', label: 'CONTESTANTS' },
-            { key: 'weapons', label: 'PROPS' }
+            { key: 'permanentUpgrades', label: 'Upgrades' },
+            { key: 'characters', label: 'Characters' },
+            { key: 'weapons', label: 'Weapons' }
         ];
         
         // Calculate centered positions for tabs (same as Statistics and Settings menus)
@@ -163,7 +169,8 @@ export function setupShopScene(k) {
             const itemSpacing = 100;
             const startY = contentY + 20;
             const maxItemsPerColumn = Math.floor(contentHeight / itemSpacing);
-            const itemsPerColumn = Math.min(maxItemsPerColumn, displayUnlocks.length);
+            // Cap at 3 items per column to prevent overflow (but allow fewer if there aren't enough items)
+            const itemsPerColumn = Math.min(3, maxItemsPerColumn, displayUnlocks.length);
             
             displayUnlocks.forEach((key, index) => {
                 const unlock = unlocks[key];
@@ -301,6 +308,68 @@ export function setupShopScene(k) {
                         k.fixed(),
                         k.z(1002)
                     ]);
+                    
+                    // Add right-click handler for permanent upgrades (refund single level)
+                    if (currentCategory === 'permanentUpgrades') {
+                        const currentLevel = getPermanentUpgradeLevel(key);
+                        if (currentLevel > 0) {
+                            // Use global mouse release event to detect right-click
+                            let rightClickHandler = null;
+                            rightClickHandler = k.onMouseRelease('right', () => {
+                                // Check if mouse is over the button
+                                const mousePos = k.mousePos();
+                                // Button position and size
+                                const buttonX = itemX + 230;
+                                const buttonY = itemY + 55;
+                                const buttonWidth = 80;
+                                const buttonHeight = 30;
+                                
+                                if (mousePos.x >= buttonX && mousePos.x <= buttonX + buttonWidth &&
+                                    mousePos.y >= buttonY && mousePos.y <= buttonY + buttonHeight) {
+                                    // Right-click on button: refund single level
+                                    if (isPurchasing) return;
+                                    isPurchasing = true;
+                                    
+                                    const result = refundSinglePermanentUpgrade(key);
+                                    
+                                    if (result && result.success) {
+                                        // Play purchase success sound (reusing for refund)
+                                        playPurchaseSuccess();
+                                        
+                                        // Refund successful
+                                        const refundMsg = k.add([
+                                            k.text(`Refunded $${result.refundAmount}!`, { size: 20 }),
+                                            k.pos(k.width() / 2, k.height() / 2),
+                                            k.anchor('center'),
+                                            k.color(100, 200, 255),
+                                            k.fixed(),
+                                            k.z(2000)
+                                        ]);
+                                        
+                                        k.wait(0.5, () => {
+                                            if (refundMsg.exists()) k.destroy(refundMsg);
+                                        });
+                                        
+                                        // Refresh shop and reset flag
+                                        refreshShop();
+                                        k.wait(0.2, () => {
+                                            isPurchasing = false;
+                                        });
+                                    } else {
+                                        // Reset flag on error
+                                        isPurchasing = false;
+                                    }
+                                }
+                            });
+                            
+                            // Cleanup handler when button is destroyed
+                            buttonBg.onDestroy(() => {
+                                if (rightClickHandler) {
+                                    rightClickHandler.cancel();
+                                }
+                            });
+                        }
+                    }
                     
                     if (canPurchase) {
                         buttonBg.onClick(() => {

@@ -11,7 +11,8 @@ import {
     formatButtonText,
     formatStatLabel,
     createCreditIndicator,
-    createMenuParticles
+    createMenuParticles,
+    createAnimatedTitle
 } from '../config/uiConfig.js';
 
 export function setupCharacterSelectScene(k) {
@@ -37,14 +38,7 @@ export function setupCharacterSelectScene(k) {
         const creditIndicator = createCreditIndicator(k, currency, currencyName);
 
         // Title
-        k.add([
-            k.text(formatButtonText('CONTESTANTS'), { size: UI_TEXT_SIZES.TITLE }),
-            k.pos(k.width() / 2, 40),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        createAnimatedTitle(k, 'CONTESTANTS', k.width() / 2, 60, 8);
         
         // Character selection layout: Left side = selection grid, Right side = details
         const characterKeys = Object.keys(CHARACTER_UNLOCKS);

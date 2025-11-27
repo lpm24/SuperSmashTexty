@@ -7,7 +7,8 @@ import {
     UI_COLORS,
     UI_Z_LAYERS,
     formatButtonText,
-    createMenuParticles
+    createMenuParticles,
+    createAnimatedTitle
 } from '../config/uiConfig.js';
 
 /**
@@ -316,14 +317,7 @@ export function setupSettingsScene(k) {
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
         // Title
-        k.add([
-            k.text(formatButtonText('Options'), { size: UI_TEXT_SIZES.TITLE }),
-            k.pos(k.width() / 2, 40),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        createAnimatedTitle(k, 'Options', k.width() / 2, 60, 8);
         
         // Tab buttons
         const tabY = 90;

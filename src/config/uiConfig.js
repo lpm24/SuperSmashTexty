@@ -325,6 +325,154 @@ export function createMenuParticles(k, options = {}) {
 }
 
 /**
+ * ASCII block art definitions for sub-menu titles
+ * Each title is rendered as multi-line ASCII art using block characters
+ */
+const ASCII_TITLES = {
+    'CONTESTANTS': [
+        ' ██████╗ ██████╗ ███╗   ██╗████████╗███████╗███████╗████████╗ █████╗ ███╗   ██╗████████╗███████╗',
+        '██╔════╝██╔═══██╗████╗  ██║╚══██╔══╝██╔════╝██╔════╝╚══██╔══╝██╔══██╗████╗  ██║╚══██╔══╝██╔════╝',
+        '██║     ██║   ██║██╔██╗ ██║   ██║   █████╗  ███████╗   ██║   ███████║██╔██╗ ██║   ██║   ███████╗',
+        '██║     ██║   ██║██║╚██╗██║   ██║   ██╔══╝  ╚════██║   ██║   ██╔══██║██║╚██╗██║   ██║   ╚════██║',
+        '╚██████╗╚██████╔╝██║ ╚████║   ██║   ███████╗███████║   ██║   ██║  ██║██║ ╚████║   ██║   ███████║',
+        ' ╚═════╝ ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚══════╝   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝'
+    ],
+    'MERCH': [
+        '███╗   ███╗███████╗██████╗  ██████╗██╗  ██╗',
+        '████╗ ████║██╔════╝██╔══██╗██╔════╝██║  ██║',
+        '██╔████╔██║█████╗  ██████╔╝██║     ███████║',
+        '██║╚██╔╝██║██╔══╝  ██╔══██╗██║     ██╔══██║',
+        '██║ ╚═╝ ██║███████╗██║  ██║╚██████╗██║  ██║',
+        '╚═╝     ╚═╝╚══════╝╚═╝  ╚═╝ ╚═════╝╚═╝  ╚═╝'
+    ],
+    'OPTIONS': [
+        ' ██████╗ ██████╗ ████████╗██╗ ██████╗ ███╗   ██╗███████╗',
+        '██╔═══██╗██╔══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║██╔════╝',
+        '██║   ██║██████╔╝   ██║   ██║██║   ██║██╔██╗ ██║███████╗',
+        '██║   ██║██╔═══╝    ██║   ██║██║   ██║██║╚██╗██║╚════██║',
+        '╚██████╔╝██║        ██║   ██║╚██████╔╝██║ ╚████║███████║',
+        ' ╚═════╝ ╚═╝        ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝╚══════╝'
+    ],
+    'RATINGS AND RECORDS': [
+        '██████╗  █████╗ ████████╗██╗███╗   ██╗ ██████╗ ███████╗    █████╗ ███╗   ██╗██████╗     ██████╗ ███████╗ ██████╗ ██████╗ ██████╗ ██████╗ ███████╗',
+        '██╔══██╗██╔══██╗╚══██╔══╝██║████╗  ██║██╔════╝ ██╔════╝   ██╔══██╗████╗  ██║██╔══██╗    ██╔══██╗██╔════╝██╔════╝██╔═══██╗██╔══██╗██╔══██╗██╔════╝',
+        '██████╔╝███████║   ██║   ██║██╔██╗ ██║██║  ███╗███████╗   ███████║██╔██╗ ██║██║  ██║    ██████╔╝█████╗  ██║     ██║   ██║██████╔╝██║  ██║███████╗',
+        '██╔══██╗██╔══██║   ██║   ██║██║╚██╗██║██║   ██║╚════██║   ██╔══██║██║╚██╗██║██║  ██║    ██╔══██╗██╔══╝  ██║     ██║   ██║██╔══██╗██║  ██║╚════██║',
+        '██║  ██║██║  ██║   ██║   ██║██║ ╚████║╚██████╔╝███████║   ██║  ██║██║ ╚████║██████╔╝    ██║  ██║███████╗╚██████╗╚██████╔╝██║  ██║██████╔╝███████║',
+        '╚═╝  ╚═╝╚═╝  ╚═╝   ╚═╝   ╚═╝╚═╝  ╚═══╝ ╚═════╝ ╚══════╝   ╚═╝  ╚═╝╚═╝  ╚═══╝╚═════╝     ╚═╝  ╚═╝╚══════╝ ╚═════╝ ╚═════╝ ╚═╝  ╚═╝╚═════╝ ╚══════╝'
+    ]
+};
+
+/**
+ * Create an animated ASCII block art title with rainbow wave effect (similar to main menu title)
+ * Uses multi-line ASCII art constructed from block characters
+ * @param {Object} k - Kaplay instance
+ * @param {string} text - Title text (will be converted to uppercase and matched to ASCII art)
+ * @param {number} x - X position (center)
+ * @param {number} y - Y position (center of title)
+ * @param {number} fontSize - Font size (default: 8, smaller than main menu's 10)
+ * @returns {Array} - Array of title line objects
+ */
+export function createAnimatedTitle(k, text, x, y, fontSize = 8) {
+    // Helper function to convert HSL to RGB (same as main menu)
+    function hslToRgb(h, s, l) {
+        s /= 100;
+        l /= 100;
+        const c = (1 - Math.abs(2 * l - 1)) * s;
+        const x = c * (1 - Math.abs((h / 60) % 2 - 1));
+        const m = l - c / 2;
+        let r = 0, g = 0, b = 0;
+        if (h >= 0 && h < 60) { r = c; g = x; b = 0; }
+        else if (h >= 60 && h < 120) { r = x; g = c; b = 0; }
+        else if (h >= 120 && h < 180) { r = 0; g = c; b = x; }
+        else if (h >= 180 && h < 240) { r = 0; g = x; b = c; }
+        else if (h >= 240 && h < 300) { r = x; g = 0; b = c; }
+        else if (h >= 300 && h < 360) { r = c; g = 0; b = x; }
+        return [
+            Math.round((r + m) * 255),
+            Math.round((g + m) * 255),
+            Math.round((b + m) * 255)
+        ];
+    }
+
+    // Get ASCII art for the title (use uppercase key)
+    const titleKey = formatButtonText(text);
+    const asciiTitle = ASCII_TITLES[titleKey];
+    
+    // Fallback to plain text if ASCII art not found
+    if (!asciiTitle) {
+        console.warn(`ASCII art not found for "${titleKey}", using plain text`);
+        const title = k.add([
+            k.text(titleKey, { size: fontSize * 2, font: 'monospace' }),
+            k.pos(x, y),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT),
+            'animatedTitle'
+        ]);
+        
+        // Apply same animation
+        let colorTime = 0;
+        title.onUpdate(() => {
+            colorTime += k.dt();
+            const hue = (colorTime * 50) % 360;
+            const color = hslToRgb(hue, 80, 60);
+            title.color = k.rgb(...color);
+            const offset = Math.sin(colorTime * 2) * 2;
+            title.pos.y = y + offset;
+        });
+        return [title];
+    }
+
+    // Create animated ASCII title (same structure as main menu)
+    const titleLines = [];
+    const lineSpacing = 10; // Slightly tighter than main menu's 12
+    const startY = y - (asciiTitle.length * lineSpacing) / 2;
+
+    asciiTitle.forEach((line, index) => {
+        const titleLine = k.add([
+            k.text(line, { size: fontSize, font: 'monospace' }),
+            k.pos(x, startY + index * lineSpacing),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT),
+            'animatedTitle'
+        ]);
+        titleLines.push(titleLine);
+    });
+
+    // Animated color wave effect (same as main menu)
+    let colorTime = 0;
+    k.onUpdate(() => {
+        colorTime += k.dt();
+        titleLines.forEach((line, index) => {
+            // Rainbow wave effect (same as main menu)
+            const hue = (colorTime * 50 + index * 20) % 360;
+            const color = hslToRgb(hue, 80, 60);
+            line.color = k.rgb(...color);
+
+            // Subtle floating animation (same as main menu)
+            const offset = Math.sin(colorTime * 2 + index * 0.3) * 2;
+            line.pos.y = startY + index * lineSpacing + offset;
+
+            // Glitch effect (random chance, same as main menu)
+            if (Math.random() < 0.001) {
+                line.pos.x = x + (Math.random() - 0.5) * 10;
+                k.wait(0.1, () => {
+                    if (line.exists()) {
+                        line.pos.x = x;
+                    }
+                });
+            }
+        });
+    });
+
+    return titleLines;
+}
+
+/**
  * Create a standardized credit indicator with rotating currency symbols
  * @param {Object} k - Kaplay instance
  * @param {number} currency - Current currency amount
