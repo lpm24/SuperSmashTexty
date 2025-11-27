@@ -134,6 +134,9 @@ This starts a local PeerJS signaling server on port 9000. The game automatically
 - ✅ Synergy system (8 upgrade combinations with special effects)
 - ✅ Meta progression system (currency, save/load, unlocks, results screen)
 - ✅ Shop UI (purchase permanent upgrades, characters, and weapons with currency)
+  - Left-click to purchase upgrades
+  - Right-click to refund a single level of permanent upgrades
+  - Bulk refund option for all permanent upgrades
 - ✅ Settings/Options menu (audio, controls, visual, gameplay settings with persistence)
 - ✅ Statistics & Achievements system (lifetime stats tracking, achievement unlocks, progress display)
 - ✅ UI improvements (pause overlay, compact HUD, level/XP decimal display)

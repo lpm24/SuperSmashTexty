@@ -9,6 +9,7 @@
 
 import { WEAPON_DEFINITIONS } from '../data/weapons.js';
 import { isMultiplayerActive, isHost, broadcastPowerupExpired } from './multiplayerGame.js';
+import { getPermanentUpgradeLevel } from './metaProgression.js';
 
 // Powerup weapon definitions
 export const POWERUP_WEAPONS = {
@@ -57,10 +58,16 @@ export function rollPowerupDrop(enemyType, floor = 1) {
 
     // Increased chance on higher floors
     const floorMultiplier = 1 + (floor - 1) * 0.1;
+    
+    // Get prop drop chance upgrade level (+5% per level, max 25%)
+    const dropChanceLevel = getPermanentUpgradeLevel('propDropChance');
+    const dropChanceBonus = dropChanceLevel * 0.05; // +5% per level
 
     for (const [key, powerup] of Object.entries(POWERUP_WEAPONS)) {
-        const adjustedChance = powerup.dropChance * floorMultiplier;
-        if (Math.random() < adjustedChance) {
+        const adjustedChance = powerup.dropChance * floorMultiplier + dropChanceBonus;
+        // Cap at 100% chance
+        const finalChance = Math.min(adjustedChance, 1.0);
+        if (Math.random() < finalChance) {
             return key;
         }
     }
@@ -149,7 +156,10 @@ export function applyPowerupWeapon(player, powerupKey) {
         player.powerupAmmo = powerup.ammo;
         player.powerupDuration = null;
     } else if (powerup.isTimeBased) {
-        player.powerupDuration = powerup.duration;
+        // Get prop durability upgrade level (+2 seconds per level, max +10 seconds)
+        const durabilityLevel = getPermanentUpgradeLevel('propDurability');
+        const durabilityBonus = durabilityLevel * 2; // +2 seconds per level
+        player.powerupDuration = powerup.duration + durabilityBonus;
         player.powerupAmmo = null;
     }
 }

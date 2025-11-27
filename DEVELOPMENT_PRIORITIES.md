@@ -57,9 +57,11 @@
   - Escalating upgrade prices (Level 1=$50, Level 2=$65, Level 3=$90, Level 4=$115, Level 5=$160)
   - Price display with $ prefix
   - Green border for unlocked characters (replaces "UNLOCKED" text)
-  - Refund button matches "Reset to Defaults" button formatting from Settings menu
+  - Right-click to refund a single level of permanent upgrades (granular refund control)
+  - Bulk refund button matches "Reset to Defaults" button formatting from Settings menu
   - Refund button displays amount in button text: "REFUND: $[Amount]"
   - Centered tab buttons (Upgrades, Characters, Weapons)
+  - Optimized column layout (max 3 items per column to prevent overflow)
 - ✅ **Pause Menu**: Fixed spacing and removed "(ESC)" text from Resume button
 - ✅ **Weapon Detail State**: Properly saves and restores minimized/maximized state when pausing/unpausing
 - ✅ **Statistics Menu**: Added padding between Statistics and Achievements tab buttons

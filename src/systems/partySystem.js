@@ -58,7 +58,9 @@ export async function initParty(k = null) {
         party.slots[0].permanentUpgradeLevels = {
             startingHealth: getPermanentUpgradeLevel('startingHealth'),
             startingDamage: getPermanentUpgradeLevel('startingDamage'),
-            startingSpeed: getPermanentUpgradeLevel('startingSpeed')
+            startingSpeed: getPermanentUpgradeLevel('startingSpeed'),
+            propDurability: getPermanentUpgradeLevel('propDurability'),
+            propDropChance: getPermanentUpgradeLevel('propDropChance')
         };
 
         console.log('[PartySystem] Host player initialized in slot 0:', {
@@ -343,7 +345,9 @@ export async function joinPartyAsClient(hostInviteCode) {
             permanentUpgradeLevels: {
                 startingHealth: getPermanentUpgradeLevel('startingHealth'),
                 startingDamage: getPermanentUpgradeLevel('startingDamage'),
-                startingSpeed: getPermanentUpgradeLevel('startingSpeed')
+                startingSpeed: getPermanentUpgradeLevel('startingSpeed'),
+                propDurability: getPermanentUpgradeLevel('propDurability'),
+                propDropChance: getPermanentUpgradeLevel('propDropChance')
             }
         });
 

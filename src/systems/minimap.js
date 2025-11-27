@@ -235,18 +235,6 @@ export class Minimap {
             'minimap'
         ]);
         this.elements.push(roomText);
-
-        // Click hint
-        const hint = this.k.add([
-            this.k.text('(click to expand)', { size: 8 }),
-            this.k.pos(x + 60, y + 75),
-            this.k.anchor('center'),
-            this.k.color(120, 120, 140),
-            this.k.fixed(),
-            this.k.z(901),
-            'minimap'
-        ]);
-        this.elements.push(hint);
     }
 
     /**
@@ -400,18 +388,6 @@ export class Minimap {
             ]);
             this.elements.push(label);
         });
-
-        // Close hint
-        const hint = this.k.add([
-            this.k.text('(click to minimize)', { size: 9 }),
-            this.k.pos(x + width / 2, y + height - 10),
-            this.k.anchor('center'),
-            this.k.color(120, 120, 140),
-            this.k.fixed(),
-            this.k.z(902),
-            'minimap'
-        ]);
-        this.elements.push(hint);
     }
 
     /**

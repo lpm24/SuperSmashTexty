@@ -268,6 +268,55 @@ export function getTotalRefundableCredits() {
     return 0;
 }
 
+// Refund a single level of a specific permanent upgrade
+export function refundSinglePermanentUpgrade(upgradeKey) {
+    const save = loadSave();
+    const currentLevel = getPermanentUpgradeLevel(upgradeKey);
+    
+    // Check if upgrade has any levels to refund
+    if (currentLevel === 0) {
+        return { success: false, reason: 'noLevels' };
+    }
+    
+    // Get refund amount from purchase history (most accurate)
+    let refundAmount = 0;
+    if (save.permanentUpgradePurchaseHistory && 
+        save.permanentUpgradePurchaseHistory[upgradeKey] && 
+        save.permanentUpgradePurchaseHistory[upgradeKey].length > 0) {
+        // Refund the last purchase (most recent level)
+        const purchaseHistory = save.permanentUpgradePurchaseHistory[upgradeKey];
+        refundAmount = purchaseHistory[purchaseHistory.length - 1];
+        // Remove the last entry
+        purchaseHistory.pop();
+        if (purchaseHistory.length === 0) {
+            delete save.permanentUpgradePurchaseHistory[upgradeKey];
+        }
+    } else {
+        // Fallback: Calculate price for the level being refunded (level-1 to level-2)
+        refundAmount = getUpgradePrice(currentLevel - 1);
+    }
+    
+    // Return credits
+    save.currency += refundAmount;
+    
+    // Decrease level by 1
+    save.permanentUpgradeLevels[upgradeKey] = currentLevel - 1;
+    
+    // If level becomes 0, remove from unlocks
+    if (save.permanentUpgradeLevels[upgradeKey] === 0) {
+        delete save.permanentUpgradeLevels[upgradeKey];
+        if (save.unlocks.permanentUpgrades) {
+            const index = save.unlocks.permanentUpgrades.indexOf(upgradeKey);
+            if (index > -1) {
+                save.unlocks.permanentUpgrades.splice(index, 1);
+            }
+        }
+    }
+    
+    saveGame(save);
+    return { success: true, refundAmount, newLevel: save.permanentUpgradeLevels[upgradeKey] || 0 };
+}
+
 // Refund all permanent upgrades (returns credits and resets levels)
 export function refundAllPermanentUpgrades() {
     const save = loadSave();

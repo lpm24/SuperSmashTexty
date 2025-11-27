@@ -30,7 +30,7 @@ export const ENEMY_TYPES = {
         size: 18,
         baseXPValue: 2, // Reduced by 3x for balance
         behavior: 'shoot',
-        fireRate: 0.8, // Shots per second
+        fireRate: 0.53, // Shots per second (reduced by 1/3 from 0.8)
         projectileSpeed: 200,
         projectileDamage: 7 // 6-8 range
     },

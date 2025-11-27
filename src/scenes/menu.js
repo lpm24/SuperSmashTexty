@@ -609,7 +609,7 @@ export function setupMenuScene(k) {
         updateStartButtonState();
 
         const characterButton = createMenuButton(
-            k, 'CONTESTANT', centerX, buttonStartY + buttonSpacing,
+            k, 'CONTESTANTS', centerX, buttonStartY + buttonSpacing,
             350, 50, UI_TEXT_SIZES.HEADER
         );
         characterButton.onClick(() => {

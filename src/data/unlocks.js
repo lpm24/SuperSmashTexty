@@ -128,13 +128,18 @@ export const PERMANENT_UPGRADE_UNLOCKS = {
         cost: 60,
         maxLevel: 5
     },
-    // Future permanent upgrades
-    // xpMultiplier: {
-    //     name: 'XP Multiplier +10%',
-    //     description: 'Permanent +10% XP gain',
-    //     cost: 100,
-    //     maxLevel: 3
-    // }
+    propDurability: {
+        name: 'Prop Durability',
+        description: 'Props last +2 seconds per level',
+        cost: 80,
+        maxLevel: 5 // Max +10 seconds (2 seconds per level)
+    },
+    propDropChance: {
+        name: 'Prop Drop Chance',
+        description: '+5% prop drop chance per level',
+        cost: 100,
+        maxLevel: 5 // Max +25% (5% per level)
+    }
 };
 
 // Get all unlocks for a category
