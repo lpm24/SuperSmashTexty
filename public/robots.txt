@@ -1,0 +1,5 @@
+# Robots.txt for SuperSmashTexty
+User-agent: *
+Allow: /
+
+Sitemap: https://lpm24.github.io/SuperSmashTexty/sitemap.xml
