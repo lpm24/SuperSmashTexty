@@ -35,10 +35,11 @@ import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun } from '../systems/metaProgression.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics } from '../systems/metaProgression.js';
+import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
-import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
+import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
 import { initVisualEffects, updateScreenShake, resetVisualEffects, EffectPresets, isInHitFreeze } from '../systems/visualEffects.js';
 import { generateFloorMap } from '../systems/floorMap.js';
@@ -128,6 +129,101 @@ function applyPermanentUpgrades(k, player, upgradeLevels = null) {
         : (upgradeLevels?.startingSpeed || 0);
     if (speedLevel > 0) {
         player.speed += speedLevel * 10;
+    }
+}
+
+/**
+ * Apply purchased run boosters to player at game start
+ * Boosters are consumed when the run starts
+ * @param {Object} k - Kaplay instance
+ * @param {Object} player - Player entity
+ * @param {Object} gameState - Game state to track active booster effects
+ */
+function applyRunBoosters(k, player, gameState) {
+    // Consume all purchased boosters
+    const boosters = consumeBoosters();
+    if (boosters.length === 0) return;
+
+    // Initialize booster tracking
+    gameState.activeBoosters = [];
+    gameState.creditMultiplier = 1.0;
+
+    boosters.forEach(booster => {
+        const boosterDef = RUN_BOOSTER_UNLOCKS[booster.key];
+        if (!boosterDef || !boosterDef.effect) return;
+
+        const effect = boosterDef.effect;
+
+        switch (effect.type) {
+            case 'startingHealth':
+                // Health Pack: Add bonus HP
+                player.maxHealth += effect.value;
+                player.setHP(player.hp() + effect.value);
+                break;
+
+            case 'tempDamage':
+                // Damage Amp: +X% damage for first floor
+                player.projectileDamage = Math.floor(player.projectileDamage * (1 + effect.value));
+                gameState.activeBoosters.push({ type: 'tempDamage', value: effect.value, duration: effect.duration });
+                break;
+
+            case 'tempSpeed':
+                // Speed Serum: +X% speed for first floor
+                player.speed = Math.floor(player.speed * (1 + effect.value));
+                player.originalSpeed = player.speed;
+                gameState.activeBoosters.push({ type: 'tempSpeed', value: effect.value, duration: effect.duration });
+                break;
+
+            case 'creditMultiplier':
+                // Wealth Charm: +X% credits for run
+                gameState.creditMultiplier = (gameState.creditMultiplier || 1) + effect.value;
+                break;
+
+            case 'tempCrit':
+                // Lucky Coin: +X% crit chance for first floor
+                player.critChance = (player.critChance || 0) + effect.value;
+                gameState.activeBoosters.push({ type: 'tempCrit', value: effect.value, duration: effect.duration });
+                break;
+
+            case 'tempDefense':
+                // Armor Plating: +X% damage reduction for first floor
+                player.damageReduction = (player.damageReduction || 0) + effect.value;
+                gameState.activeBoosters.push({ type: 'tempDefense', value: effect.value, duration: effect.duration });
+                break;
+
+            case 'tempXP':
+                // XP Booster: +X% XP for first floor
+                player.xpMultiplier = (player.xpMultiplier || 1) * (1 + effect.value);
+                gameState.activeBoosters.push({ type: 'tempXP', value: effect.value, duration: effect.duration });
+                break;
+
+            case 'autoRevive':
+                // Emergency Revive: Auto-revive once at X% HP
+                player.autoRevive = { health: effect.value, uses: effect.uses };
+                break;
+        }
+    });
+
+    // Show notification if boosters were applied
+    if (boosters.length > 0) {
+        const boosterText = k.add([
+            k.text(`${boosters.length} Booster${boosters.length > 1 ? 's' : ''} Active!`, { size: 18 }),
+            k.pos(k.width() / 2, 100),
+            k.anchor('center'),
+            k.color(100, 255, 150),
+            k.fixed(),
+            k.z(2000),
+            k.opacity(1)
+        ]);
+
+        // Fade out after 2 seconds
+        k.wait(2, () => {
+            if (boosterText.exists()) {
+                k.tween(boosterText.opacity, 0, 0.5, (val) => boosterText.opacity = val, k.easings.easeOutQuad).onEnd(() => {
+                    if (boosterText.exists()) k.destroy(boosterText);
+                });
+            }
+        });
     }
 }
 
@@ -419,6 +515,27 @@ export function setupGameScene(k) {
                     player.outline.opacity = 0.5;
                 }
             }
+
+            // Recreate cosmetic effects on room transition (glow entity was destroyed)
+            if (gameState.equippedCosmetics) {
+                // Recreate glow effect
+                if (gameState.equippedCosmetics.glow && gameState.equippedCosmetics.glow !== 'glowNone' && !player.isDead) {
+                    const glowDef = COSMETIC_UNLOCKS[gameState.equippedCosmetics.glow];
+                    if (glowDef && glowDef.color) {
+                        player.glowEffect = createGlowEffect(k, player, gameState.equippedCosmetics.glow, glowDef.color);
+                    }
+                }
+                // Restore trail info (properties persist on player object)
+                if (gameState.equippedCosmetics.trail && gameState.equippedCosmetics.trail !== 'trailNone') {
+                    const trailDef = COSMETIC_UNLOCKS[gameState.equippedCosmetics.trail];
+                    if (trailDef) {
+                        player.trailType = gameState.equippedCosmetics.trail;
+                        player.trailColor = trailDef.color;
+                        player.trailTimer = 0;
+                        player.lastTrailPos = { x: player.pos.x, y: player.pos.y };
+                    }
+                }
+            }
         } else {
             // New game - create fresh player
             // For daily runs, use the locked daily character
@@ -427,6 +544,32 @@ export function setupGameScene(k) {
 
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);
+
+            // Apply run boosters (consumables purchased in shop)
+            applyRunBoosters(k, player, gameState);
+
+            // Setup cosmetic effects (trails, glows, death effects)
+            const equippedCosmetics = getEquippedCosmetics();
+            gameState.equippedCosmetics = equippedCosmetics;
+
+            // Create glow effect if one is equipped
+            if (equippedCosmetics.glow && equippedCosmetics.glow !== 'glowNone') {
+                const glowDef = COSMETIC_UNLOCKS[equippedCosmetics.glow];
+                if (glowDef && glowDef.color) {
+                    player.glowEffect = createGlowEffect(k, player, equippedCosmetics.glow, glowDef.color);
+                }
+            }
+
+            // Store trail info on player for update loop
+            if (equippedCosmetics.trail && equippedCosmetics.trail !== 'trailNone') {
+                const trailDef = COSMETIC_UNLOCKS[equippedCosmetics.trail];
+                if (trailDef) {
+                    player.trailType = equippedCosmetics.trail;
+                    player.trailColor = trailDef.color;
+                    player.trailTimer = 0;
+                    player.lastTrailPos = { x: player.pos.x, y: player.pos.y };
+                }
+            }
 
             // Initialize per-player run stats
             player.runStats = {
@@ -2124,6 +2267,35 @@ export function setupGameScene(k) {
             }
         }));
 
+        // Update cosmetic effects (trails, glows)
+        eventHandlers.updates.push(k.onUpdate(() => {
+            if (k.paused || !player.exists() || player.isDead) return;
+
+            const dt = k.dt();
+
+            // Update glow effect
+            if (player.glowEffect) {
+                updateGlowEffect(k, player.glowEffect);
+            }
+
+            // Spawn trail particles when player moves
+            if (player.trailType && player.trailColor) {
+                player.trailTimer = (player.trailTimer || 0) + dt;
+                const trailInterval = 0.05; // Spawn trail every 50ms
+
+                // Check if player has moved
+                const dx = player.pos.x - (player.lastTrailPos?.x || player.pos.x);
+                const dy = player.pos.y - (player.lastTrailPos?.y || player.pos.y);
+                const distMoved = Math.sqrt(dx * dx + dy * dy);
+
+                if (player.trailTimer >= trailInterval && distMoved > 2) {
+                    spawnTrailParticle(k, player.pos.x, player.pos.y, player.trailType, player.trailColor);
+                    player.trailTimer = 0;
+                    player.lastTrailPos = { x: player.pos.x, y: player.pos.y };
+                }
+            }
+        }));
+
         // Hover detection for tooltips
         eventHandlers.updates.push(k.onUpdate(() => {
             // Don't show tooltips when paused or during upgrade draft
@@ -3241,8 +3413,14 @@ export function setupGameScene(k) {
                             scale: 1.5
                         });
                     } else {
-                        // Normal death explosion particle effect
-                        spawnDeathExplosion(k, posX, posY, { color: [255, 100, 100] });
+                        // Use cosmetic death effect if equipped, otherwise default
+                        const deathEffect = gameState.equippedCosmetics?.death;
+                        const enemyColor = enemy.originalColor || [255, 100, 100];
+                        if (deathEffect && deathEffect !== 'deathNone') {
+                            spawnCosmeticDeath(k, posX, posY, deathEffect, enemyColor);
+                        } else {
+                            spawnDeathExplosion(k, posX, posY, { color: enemyColor });
+                        }
                     }
 
                     // Handle shrapnel (projectiles in all directions)
@@ -4350,6 +4528,12 @@ export function setupGameScene(k) {
                     if (orb.exists()) k.destroy(orb);
                 });
                 player.orbitalOrbs = [];
+            }
+
+            // Cleanup glow effect
+            if (player.glowEffect && player.glowEffect.exists()) {
+                k.destroy(player.glowEffect);
+                player.glowEffect = null;
             }
 
             // In multiplayer, don't end the game immediately - only host checks if all players are dead

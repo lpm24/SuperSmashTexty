@@ -66,13 +66,22 @@ export function showToast(options) {
 export function showAchievementToast(achievement) {
     const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
 
+    // Determine title based on difficulty
+    let title = '🎉 Achievement Unlocked!';
+    if (achievement.difficulty === 'challenge') {
+        title = '⭐ Challenge Complete!';
+    } else if (achievement.difficulty === 'benchmark') {
+        title = '🏆 Milestone Reached!';
+    }
+
     showToast({
-        title: 'Achievement Unlocked!',
+        title: title,
         message: `${achievement.name}\n${achievement.description}`,
         icon: achievement.icon,
         iconColor: difficultyColor,
         type: 'achievement',
-        duration: 4
+        duration: 5,
+        difficulty: achievement.difficulty
     });
 }
 
@@ -124,9 +133,11 @@ function createToastUI(toastData) {
     // Get border color based on type
     let borderColor = UI_COLORS.BORDER;
     let bgColor = [...UI_COLORS.BG_MEDIUM];
+    let borderWidth = 2;
     if (toastData.type === 'achievement') {
         borderColor = toastData.iconColor;
-        bgColor = [40, 35, 50];
+        bgColor = [35, 30, 45];
+        borderWidth = 3; // Thicker border for achievements
     } else if (toastData.type === 'success') {
         borderColor = UI_COLORS.SUCCESS;
     } else if (toastData.type === 'error') {
@@ -139,12 +150,26 @@ function createToastUI(toastData) {
         k.pos(startX, y),
         k.anchor('center'),
         k.color(...bgColor),
-        k.outline(2, k.rgb(...borderColor)),
+        k.outline(borderWidth, k.rgb(...borderColor)),
         k.opacity(0.95),
         k.fixed(),
         k.z(UI_Z_LAYERS.TOOLTIP),
         'toast'
     ]);
+
+    // Add glow pulse effect for achievement toasts
+    if (toastData.type === 'achievement') {
+        let glowTime = 0;
+        container.onUpdate(() => {
+            glowTime += k.dt();
+            // Subtle pulse on the border brightness
+            const pulse = Math.sin(glowTime * 4) * 0.2 + 0.8;
+            const r = Math.min(255, borderColor[0] * pulse);
+            const g = Math.min(255, borderColor[1] * pulse);
+            const b = Math.min(255, borderColor[2] * pulse);
+            container.outline.color = k.rgb(r, g, b);
+        });
+    }
 
     // Icon background
     const iconBg = k.add([
@@ -158,9 +183,10 @@ function createToastUI(toastData) {
         'toast'
     ]);
 
-    // Icon
+    // Icon (larger for emoji icons)
+    const iconSize = toastData.type === 'achievement' ? 32 : 28;
     const icon = k.add([
-        k.text(toastData.icon, { size: 28 }),
+        k.text(toastData.icon, { size: iconSize }),
         k.pos(startX - toastState.toastWidth / 2 + 30, y),
         k.anchor('center'),
         k.color(...toastData.iconColor),
@@ -168,6 +194,18 @@ function createToastUI(toastData) {
         k.z(UI_Z_LAYERS.TOOLTIP + 2),
         'toast'
     ]);
+
+    // Add bounce effect to icon for achievements
+    if (toastData.type === 'achievement') {
+        let iconTime = 0;
+        const baseY = y;
+        icon.onUpdate(() => {
+            iconTime += k.dt();
+            // Gentle bounce effect
+            const bounce = Math.abs(Math.sin(iconTime * 3)) * 3;
+            icon.pos.y = baseY - bounce;
+        });
+    }
 
     // Title
     const title = k.add([

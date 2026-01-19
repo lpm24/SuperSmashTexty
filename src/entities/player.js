@@ -11,7 +11,7 @@
  */
 
 // System imports
-import { getSelectedCharacter } from '../systems/metaProgression.js';
+import { getSelectedCharacter, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
 
 // Data imports
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -64,7 +64,9 @@ export function createPlayer(k, x, y, characterKey = null) {
     player.originalSpeed = charData.stats.speed; // Store original speed for debuff restoration
     player.slowed = false; // Track if player is slowed
     player.maxHealth = charData.stats.health;
-    player.level = PROGRESSION_CONFIG.STARTING_LEVEL;
+    // Head Start: Begin at level 2 if upgrade purchased
+    const headStartLevel = getPermanentUpgradeLevel('headStart');
+    player.level = headStartLevel > 0 ? 2 : PROGRESSION_CONFIG.STARTING_LEVEL;
     player.xp = PROGRESSION_CONFIG.STARTING_XP;
     player.xpToNext = PROGRESSION_CONFIG.BASE_XP_TO_NEXT_LEVEL;
     player.pickupRadius = PLAYER_CONFIG.BASE_PICKUP_RADIUS;
@@ -157,6 +159,33 @@ export function createPlayer(k, x, y, characterKey = null) {
         player.critDamage = (player.critDamage || 2.0) * CHARACTER_ABILITIES.SNIPER_CRIT_DAMAGE_MULTIPLIER;
     } else if (charData.ability === 'fireDot') {
         player.fireDotMultiplier = CHARACTER_ABILITIES.PYRO_FIRE_DOT_MULTIPLIER;
+    }
+
+    // Apply permanent upgrades from shop (only for local players, not in multiplayer sync)
+    if (!charData.skipPermanentUpgrades) {
+        // Lucky Start: +5% crit chance per level
+        const luckyStartLevel = getPermanentUpgradeLevel('luckyStart');
+        if (luckyStartLevel > 0) {
+            player.critChance = (player.critChance || 0) + (luckyStartLevel * 0.05);
+        }
+
+        // Thick Skin: +3% damage reduction per level
+        const thickSkinLevel = getPermanentUpgradeLevel('thickSkin');
+        if (thickSkinLevel > 0) {
+            player.damageReduction = (player.damageReduction || 0) + (thickSkinLevel * 0.03);
+        }
+
+        // XP Magnet: +15% pickup radius per level
+        const xpMagnetLevel = getPermanentUpgradeLevel('xpMagnet');
+        if (xpMagnetLevel > 0) {
+            player.pickupRadius = Math.floor(player.pickupRadius * (1 + xpMagnetLevel * 0.15));
+        }
+
+        // Comfort Zone: +0.1s invulnerability after hit per level
+        const comfortZoneLevel = getPermanentUpgradeLevel('comfortZone');
+        if (comfortZoneLevel > 0) {
+            player.invulnerableDuration = player.invulnerableDuration + (comfortZoneLevel * 0.1);
+        }
     }
 
     // Control flags

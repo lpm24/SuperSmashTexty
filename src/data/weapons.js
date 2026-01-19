@@ -190,6 +190,62 @@ export const WEAPON_DEFINITIONS = {
         infinitePierce: true, // Special flag for railgun
         category: 'precision',
         upgradeCategories: ['damage', 'crit', 'critDamage', 'fireRate', 'obstaclePiercing']
+    },
+    spreadShot: {
+        name: 'Spread Shot',
+        icon: '⋔', // Trident-like spread
+        char: '◦', // Small bullet
+        color: [255, 180, 100],
+        fireRate: 2.5, // Moderate fire rate
+        projectileSpeed: 280,
+        baseDamage: 6, // Lower per projectile
+        projectileCount: 3, // 3 projectiles in cone
+        spreadAngle: 25, // Cone spread
+        piercing: 0,
+        obstaclePiercing: 0,
+        critChance: 0.05,
+        critDamage: 2.0,
+        range: 450, // Medium range
+        category: 'spread',
+        upgradeCategories: ['damage', 'pelletCount', 'spread', 'fireRate', 'crit']
+    },
+    homingMissiles: {
+        name: 'Homing Missiles',
+        icon: '⊳', // Triangle pointing right
+        char: '▸', // Small triangle
+        color: [255, 100, 150],
+        fireRate: 1.5, // Slow fire rate
+        projectileSpeed: 180, // Slower but tracks
+        baseDamage: 18, // High damage per hit
+        projectileCount: 1,
+        spreadAngle: 0,
+        piercing: 0,
+        obstaclePiercing: 0,
+        critChance: 0.05,
+        critDamage: 2.0,
+        range: 700, // Long range
+        homing: true, // Tracks nearest enemy
+        homingStrength: 3.0, // Turn rate multiplier
+        category: 'precision',
+        upgradeCategories: ['damage', 'fireRate', 'range', 'crit', 'projectileSpeed']
+    },
+    plasmaRifle: {
+        name: 'Plasma Rifle',
+        icon: '⊕', // Circled plus
+        char: '◈', // Diamond
+        color: [100, 255, 200],
+        fireRate: 2.0, // Moderate fire rate
+        projectileSpeed: 350,
+        baseDamage: 16, // High damage
+        projectileCount: 1,
+        spreadAngle: 0,
+        piercing: 2, // Penetrates 2 enemies
+        obstaclePiercing: 0,
+        critChance: 0.08, // Slightly higher crit
+        critDamage: 2.2,
+        range: 650, // Medium-long range
+        category: 'precision',
+        upgradeCategories: ['damage', 'piercing', 'crit', 'fireRate', 'range']
     }
 };
 

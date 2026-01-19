@@ -1,6 +1,6 @@
 // Shop scene - allows players to purchase unlocks
-import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked } from '../systems/metaProgression.js';
-import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
+import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked, purchaseBooster, getActiveBoostersCount, getEquippedCosmetic, setEquippedCosmetic } from '../systems/metaProgression.js';
+import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS, COSMETIC_UNLOCKS, RUN_BOOSTER_UNLOCKS } from '../data/unlocks.js';
 import { getAchievementById } from '../data/achievements.js';
 import { showAchievementModal } from '../components/achievementModal.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
@@ -55,14 +55,16 @@ export function setupShopScene(k) {
 
         // Category tabs
         const tabY = 80;
-        const tabSpacing = 120;
-        const tabWidth = 100;
+        const tabSpacing = 95;
+        const tabWidth = 85;
         const tabHeight = 30;
-        
+
         const categories = [
             { key: 'permanentUpgrades', label: 'Upgrades' },
-            { key: 'characters', label: 'Characters' },
-            { key: 'weapons', label: 'Weapons' }
+            { key: 'boosters', label: 'Boosters' },
+            { key: 'cosmetics', label: 'Cosmetics' },
+            { key: 'weapons', label: 'Weapons' },
+            { key: 'characters', label: 'Chars' }
         ];
         
         // Calculate centered positions for tabs (same as Statistics and Settings menus)
@@ -160,8 +162,12 @@ export function setupShopScene(k) {
             // Filter out default unlocks if they're not interesting to show
             const displayUnlocks = unlockKeys.filter(key => {
                 const unlock = unlocks[key];
-                // Show all permanent upgrades, but only show non-default characters/weapons
+                // Show all permanent upgrades and boosters
                 if (currentCategory === 'permanentUpgrades') return true;
+                if (currentCategory === 'boosters') return true; // Always show boosters (consumables)
+                // For cosmetics, show all non-defaults
+                if (currentCategory === 'cosmetics') return !unlock.unlockedByDefault;
+                // For characters/weapons, only show non-default
                 return !unlock.unlockedByDefault;
             });
             
@@ -292,7 +298,7 @@ export function setupShopScene(k) {
                 let statusText = '';
                 let canPurchase = false;
                 let purchaseCost = unlock.cost;
-                
+
                 if (currentCategory === 'permanentUpgrades') {
                     const level = getPermanentUpgradeLevel(key);
                     const maxLevel = unlock.maxLevel || 1;
@@ -302,6 +308,25 @@ export function setupShopScene(k) {
                         statusText = `Level ${level}/${maxLevel}`;
                         // Use escalating price based on current level
                         purchaseCost = getUpgradePrice(level);
+                        canPurchase = currency >= purchaseCost;
+                    }
+                } else if (currentCategory === 'boosters') {
+                    // Boosters are consumables - always purchasable
+                    statusText = 'Consumable';
+                    canPurchase = currency >= purchaseCost;
+                } else if (currentCategory === 'cosmetics') {
+                    // Cosmetics can be owned, equipped, or not owned
+                    const cosmeticType = unlock.category; // trail, death, or glow
+                    const equippedKey = getEquippedCosmetic(cosmeticType);
+                    const isOwned = isUnlocked('cosmetics', key) || unlock.unlockedByDefault;
+                    const isEquipped = equippedKey === key;
+
+                    if (isEquipped) {
+                        statusText = 'EQUIPPED';
+                    } else if (isOwned) {
+                        statusText = 'OWNED';
+                    } else {
+                        statusText = cosmeticType ? cosmeticType.charAt(0).toUpperCase() + cosmeticType.slice(1) : '';
                         canPurchase = currency >= purchaseCost;
                     }
                 } else if (currentCategory === 'characters') {
@@ -452,23 +477,26 @@ export function setupShopScene(k) {
                             // Prevent multiple simultaneous purchases
                             if (isPurchasing) return;
                             isPurchasing = true;
-                            
+
                             let result;
                             if (currentCategory === 'permanentUpgrades') {
                                 result = purchasePermanentUpgrade(key, purchaseCost, unlock.maxLevel);
+                            } else if (currentCategory === 'boosters') {
+                                result = purchaseBooster(key, purchaseCost);
                             } else {
                                 result = purchaseUnlock(currentCategory, key, purchaseCost);
                             }
                             
-                            // Handle result (permanent upgrades return object, regular unlocks return boolean)
-                            if (currentCategory === 'permanentUpgrades') {
+                            // Handle result (permanent upgrades and boosters return object, regular unlocks return boolean)
+                            if (currentCategory === 'permanentUpgrades' || currentCategory === 'boosters') {
                                 if (result && result.success) {
                                     // Play purchase success sound
                                     playPurchaseSuccess();
 
-                                    // Purchase successful
+                                    // Purchase successful - different message for boosters
+                                    const msgText = currentCategory === 'boosters' ? 'Booster Ready!' : 'Purchased!';
                                     const successMsg = k.add([
-                                        k.text('Purchased!', { size: 20 }),
+                                        k.text(msgText, { size: 20 }),
                                         k.pos(k.width() / 2, k.height() / 2),
                                         k.anchor('center'),
                                         k.color(100, 255, 100),
@@ -502,7 +530,7 @@ export function setupShopScene(k) {
                                     k.wait(0.5, () => {
                                         if (errorMsg.exists()) k.destroy(errorMsg);
                                     });
-                                    
+
                                     // Reset purchasing flag
                                     isPurchasing = false;
                                 } else {
@@ -560,8 +588,44 @@ export function setupShopScene(k) {
                     }
                     
                     unlockItems.push(buttonBg, buttonText);
+                } else if (currentCategory === 'cosmetics') {
+                    // Check if this cosmetic is owned but not equipped - show EQUIP button
+                    const cosmeticType = unlock.category;
+                    const equippedKey = getEquippedCosmetic(cosmeticType);
+                    const isOwned = isUnlocked('cosmetics', key) || unlock.unlockedByDefault;
+                    const isEquipped = equippedKey === key;
+
+                    if (isOwned && !isEquipped) {
+                        const equipButtonBg = k.add([
+                            k.rect(80, 30),
+                            k.pos(itemX + 230, itemY + 55),
+                            k.anchor('topleft'),
+                            k.color(50, 100, 150),
+                            k.outline(2, k.rgb(100, 150, 200)),
+                            k.area(),
+                            k.fixed(),
+                            k.z(1001)
+                        ]);
+
+                        const equipButtonText = k.add([
+                            k.text('EQUIP', { size: 14 }),
+                            k.pos(itemX + 270, itemY + 70),
+                            k.anchor('center'),
+                            k.color(255, 255, 255),
+                            k.fixed(),
+                            k.z(1002)
+                        ]);
+
+                        equipButtonBg.onClick(() => {
+                            playMenuNav();
+                            setEquippedCosmetic(cosmeticType, key);
+                            refreshShop();
+                        });
+
+                        unlockItems.push(equipButtonBg, equipButtonText);
+                    }
                 }
-                
+
                 // Push all items (only push statusLabel if it exists)
                 unlockItems.push(cardBg, nameText, descText);
                 if (statusLabel) {
@@ -577,7 +641,7 @@ export function setupShopScene(k) {
                 // Left arrow
                 const leftArrow = k.add([
                     k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 60, paginationY),
+                    k.pos(paginationCenterX - 80, paginationY),
                     k.anchor('center'),
                     k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                     k.area(),
@@ -596,7 +660,7 @@ export function setupShopScene(k) {
                 paginationItems.push(leftArrow);
 
                 // Page indicator pips
-                const pipSpacing = 16;
+                const pipSpacing = 20;
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
                 for (let i = 0; i < totalPages; i++) {
@@ -628,7 +692,7 @@ export function setupShopScene(k) {
                 // Right arrow
                 const rightArrow = k.add([
                     k.text('>', { size: 24 }),
-                    k.pos(paginationCenterX + 60, paginationY),
+                    k.pos(paginationCenterX + 80, paginationY),
                     k.anchor('center'),
                     k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                     k.area(),

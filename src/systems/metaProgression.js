@@ -271,6 +271,92 @@ export function purchasePermanentUpgrade(upgradeKey, cost, maxLevel) {
     return { success: true, newLevel: save.permanentUpgradeLevels[upgradeKey] };
 }
 
+// ============ BOOSTER FUNCTIONS ============
+
+/**
+ * Purchase a run booster (consumable)
+ * @param {string} boosterKey - The booster to purchase
+ * @param {number} cost - The cost of the booster
+ * @returns {Object} Result object with success status
+ */
+export function purchaseBooster(boosterKey, cost) {
+    const save = loadSave();
+
+    // Check if player has enough currency
+    if (save.currency < cost) {
+        return { success: false, reason: 'insufficientCurrency' };
+    }
+
+    // Initialize boosters array if needed
+    if (!save.activeBoosters) {
+        save.activeBoosters = [];
+    }
+
+    // Deduct currency
+    save.currency -= cost;
+
+    // Track currency spent in stats
+    if (save.stats) {
+        save.stats.totalCurrencySpent = (save.stats.totalCurrencySpent || 0) + cost;
+    }
+
+    // Add booster to active boosters
+    save.activeBoosters.push({
+        key: boosterKey,
+        purchasedAt: Date.now()
+    });
+
+    saveGame(save);
+    return { success: true, boosterKey };
+}
+
+/**
+ * Get count of active boosters
+ * @returns {number} Number of active boosters ready to use
+ */
+export function getActiveBoostersCount() {
+    const save = loadSave();
+    return (save.activeBoosters || []).length;
+}
+
+/**
+ * Get all active boosters
+ * @returns {Array} Array of active booster objects
+ */
+export function getActiveBoosters() {
+    const save = loadSave();
+    return save.activeBoosters || [];
+}
+
+/**
+ * Consume all active boosters for a run
+ * @returns {Array} Array of consumed booster effects
+ */
+export function consumeBoosters() {
+    const save = loadSave();
+    const boosters = save.activeBoosters || [];
+
+    // Clear boosters
+    save.activeBoosters = [];
+    saveGame(save);
+
+    return boosters;
+}
+
+/**
+ * Clear a specific booster (refund not included - just removes it)
+ * @param {number} index - Index of booster to clear
+ */
+export function clearBooster(index) {
+    const save = loadSave();
+    if (save.activeBoosters && index >= 0 && index < save.activeBoosters.length) {
+        save.activeBoosters.splice(index, 1);
+        saveGame(save);
+        return true;
+    }
+    return false;
+}
+
 // Calculate total refundable credits for all permanent upgrades
 export function getTotalRefundableCredits() {
     const save = loadSave();
@@ -450,16 +536,16 @@ export function getSaveStats() {
 // Calculate currency earned from a run
 export function calculateCurrencyEarned(runStats) {
     let currency = 0;
-    
+
     // Base currency per floor reached
     currency += runStats.floorsReached * 10;
-    
+
     // Currency per room cleared
     currency += runStats.roomsCleared * 5;
-    
+
     // Currency per enemy killed (small amount)
     currency += Math.floor(runStats.enemiesKilled * 0.5);
-    
+
     // Bonus for reaching higher floors
     if (runStats.floorsReached >= 2) {
         currency += 10; // Floor 2 bonus
@@ -470,7 +556,7 @@ export function calculateCurrencyEarned(runStats) {
     if (runStats.floorsReached >= 4) {
         currency += 30; // Floor 4+ bonus
     }
-    
+
     // Performance bonus: more enemies killed = bonus
     if (runStats.enemiesKilled >= 50) {
         currency += 10;
@@ -481,7 +567,19 @@ export function calculateCurrencyEarned(runStats) {
     if (runStats.enemiesKilled >= 200) {
         currency += 30;
     }
-    
+
+    // Boss Bounty upgrade: +15 credits per boss killed per level
+    const bossBountyLevel = getPermanentUpgradeLevel('bossBounty');
+    if (bossBountyLevel > 0 && runStats.bossesKilled > 0) {
+        currency += runStats.bossesKilled * bossBountyLevel * 15;
+    }
+
+    // Credit Bonus upgrade: +8% credits per level
+    const creditBonusLevel = getPermanentUpgradeLevel('creditBonus');
+    if (creditBonusLevel > 0) {
+        currency = Math.floor(currency * (1 + creditBonusLevel * 0.08));
+    }
+
     return Math.floor(currency);
 }
 
@@ -640,5 +738,61 @@ export function isItemAchievementUnlockedSync(unlockInfo) {
     }
 
     return isAchievementUnlocked(unlockInfo.requiredAchievement);
+}
+
+// ============ COSMETIC FUNCTIONS ============
+
+/**
+ * Get the equipped cosmetic of a specific type
+ * @param {string} type - Type of cosmetic (trail, death, glow)
+ * @returns {string} Key of the equipped cosmetic, or default
+ */
+export function getEquippedCosmetic(type) {
+    const save = loadSave();
+    if (!save.equippedCosmetics) {
+        return type === 'trail' ? 'trailNone' : type === 'death' ? 'deathNone' : 'glowNone';
+    }
+    return save.equippedCosmetics[type] || (type === 'trail' ? 'trailNone' : type === 'death' ? 'deathNone' : 'glowNone');
+}
+
+/**
+ * Set the equipped cosmetic of a specific type
+ * @param {string} type - Type of cosmetic (trail, death, glow)
+ * @param {string} key - Key of the cosmetic to equip
+ * @returns {boolean} True if successful
+ */
+export function setEquippedCosmetic(type, key) {
+    const save = loadSave();
+
+    // Initialize cosmetics object if needed
+    if (!save.equippedCosmetics) {
+        save.equippedCosmetics = {
+            trail: 'trailNone',
+            death: 'deathNone',
+            glow: 'glowNone'
+        };
+    }
+
+    // Check if the cosmetic is owned (either default or purchased)
+    if (!key.includes('None') && !isUnlocked('cosmetics', key)) {
+        return false; // Can't equip what you don't own
+    }
+
+    save.equippedCosmetics[type] = key;
+    saveGame(save);
+    return true;
+}
+
+/**
+ * Get all equipped cosmetics
+ * @returns {Object} Object with trail, death, glow keys
+ */
+export function getEquippedCosmetics() {
+    const save = loadSave();
+    return save.equippedCosmetics || {
+        trail: 'trailNone',
+        death: 'deathNone',
+        glow: 'glowNone'
+    };
 }
 

@@ -199,7 +199,7 @@ export function setupCharacterSelectScene(k) {
                 // Left arrow
                 const leftArrow = k.add([
                     k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 60, paginationY),
+                    k.pos(paginationCenterX - 80, paginationY),
                     k.anchor('center'),
                     k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                     k.area(),
@@ -218,7 +218,7 @@ export function setupCharacterSelectScene(k) {
                 paginationItems.push(leftArrow);
 
                 // Page indicator pips
-                const pipSpacing = 16;
+                const pipSpacing = 20;
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
                 for (let i = 0; i < totalPages; i++) {
@@ -249,7 +249,7 @@ export function setupCharacterSelectScene(k) {
                 // Right arrow
                 const rightArrow = k.add([
                     k.text('>', { size: 24 }),
-                    k.pos(paginationCenterX + 60, paginationY),
+                    k.pos(paginationCenterX + 80, paginationY),
                     k.anchor('center'),
                     k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                     k.area(),

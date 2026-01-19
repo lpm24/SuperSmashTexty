@@ -11,6 +11,7 @@
 
 import { getTodayDateString } from './dailyRuns.js';
 import { getPlayerName } from './metaProgression.js';
+import { submitOnlineScore } from './onlineLeaderboards.js';
 
 const STORAGE_KEY = 'superSmashTextyLeaderboards';
 const MAX_DAILY_ENTRIES = 100;
@@ -177,6 +178,11 @@ export function submitScore(runData) {
     saveLeaderboards(data);
 
     console.log('[Leaderboards] Score submitted:', entry, 'Result:', result);
+
+    // Submit to online leaderboard (non-blocking, fire and forget)
+    submitOnlineScore(entry).catch(err => {
+        console.warn('[Leaderboards] Online submission failed:', err);
+    });
 
     return result;
 }

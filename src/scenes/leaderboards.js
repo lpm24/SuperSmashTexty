@@ -1,10 +1,11 @@
 /**
  * Leaderboards Scene
  *
- * Displays leaderboard data with three tabs:
+ * Displays leaderboard data with four tabs:
  * - Daily: Today's daily run leaderboard
  * - All-Time: Top scores ever
  * - Personal Bests: Best per character
+ * - Global: Online global leaderboard (Dreamlo API)
  */
 
 import {
@@ -14,6 +15,7 @@ import {
     formatScore,
     formatTime
 } from '../systems/leaderboards.js';
+import { getOnlineLeaderboard } from '../systems/onlineLeaderboards.js';
 import { getPlayerName } from '../systems/metaProgression.js';
 import { getTodayDateString, getDailyCharacter } from '../systems/dailyRuns.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -28,7 +30,8 @@ import {
 const TABS = {
     DAILY: 'daily',
     ALL_TIME: 'allTime',
-    PERSONAL: 'personal'
+    PERSONAL: 'personal',
+    GLOBAL: 'global'
 };
 
 export function setupLeaderboardsScene(k) {
@@ -36,9 +39,10 @@ export function setupLeaderboardsScene(k) {
         const initialTab = args.tab || TABS.DAILY;
         let currentTab = initialTab;
 
-        // Pagination for personal bests (5 characters per page)
+        // Pagination settings
+        const ENTRIES_PER_PAGE = 10;
         const CHARACTERS_PER_PAGE = 5;
-        let personalPage = 0;
+        let currentPage = 0; // Used for DAILY, ALL-TIME, and PERSONAL tabs
 
         // Background
         k.add([
@@ -60,14 +64,13 @@ export function setupLeaderboardsScene(k) {
 
         // Tab container
         const tabY = 100;
-        const tabWidth = 150;
-        const tabSpacing = 10;
-        const totalTabWidth = (tabWidth * 3) + (tabSpacing * 2);
+        const tabWidth = 115;
+        const tabSpacing = 8;
+        const totalTabWidth = (tabWidth * 4) + (tabSpacing * 3);
         const startX = (k.width() - totalTabWidth) / 2;
 
         // Content container
         const contentY = 160;
-        const contentHeight = k.height() - contentY - 80;
 
         // Content elements (will be destroyed and recreated on tab change)
         let contentElements = [];
@@ -101,7 +104,7 @@ export function setupLeaderboardsScene(k) {
                 if (currentTab !== tabType) {
                     playMenuNav();
                     currentTab = tabType;
-                    personalPage = 0; // Reset pagination when switching tabs
+                    currentPage = 0; // Reset pagination when switching tabs
                     refreshTabs();
                     renderContent();
                 }
@@ -132,8 +135,9 @@ export function setupLeaderboardsScene(k) {
             const tab1 = createTab('DAILY', TABS.DAILY, startX + tabWidth / 2);
             const tab2 = createTab('ALL-TIME', TABS.ALL_TIME, startX + tabWidth + tabSpacing + tabWidth / 2);
             const tab3 = createTab('PERSONAL', TABS.PERSONAL, startX + (tabWidth + tabSpacing) * 2 + tabWidth / 2);
+            const tab4 = createTab('GLOBAL', TABS.GLOBAL, startX + (tabWidth + tabSpacing) * 3 + tabWidth / 2);
 
-            tabs = [tab1, tab2, tab3];
+            tabs = [tab1, tab2, tab3, tab4];
         }
 
         // Render content based on current tab
@@ -154,6 +158,9 @@ export function setupLeaderboardsScene(k) {
                 case TABS.PERSONAL:
                     renderPersonalContent();
                     break;
+                case TABS.GLOBAL:
+                    renderGlobalContent();
+                    break;
             }
         }
 
@@ -162,8 +169,14 @@ export function setupLeaderboardsScene(k) {
             const today = getTodayDateString();
             const dailyChar = getDailyCharacter(today);
             const charData = CHARACTER_UNLOCKS[dailyChar] || CHARACTER_UNLOCKS.survivor;
-            const entries = getDailyLeaderboard(today, 10);
+            const allEntries = getDailyLeaderboard(today, 100); // Get all entries
             const playerName = getPlayerName() || 'Anonymous';
+
+            const totalPages = Math.ceil(allEntries.length / ENTRIES_PER_PAGE);
+            if (currentPage >= totalPages && totalPages > 0) currentPage = totalPages - 1;
+
+            const startIndex = currentPage * ENTRIES_PER_PAGE;
+            const entries = allEntries.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
 
             // Date and character info
             const dateLabel = k.add([
@@ -191,7 +204,7 @@ export function setupLeaderboardsScene(k) {
             renderLeaderboardHeader(headerY);
 
             // Entries
-            if (entries.length === 0) {
+            if (allEntries.length === 0) {
                 const noData = k.add([
                     k.text('No entries yet. Be the first!', { size: UI_TEXT_SIZES.BODY }),
                     k.pos(k.width() / 2, headerY + 60),
@@ -204,23 +217,35 @@ export function setupLeaderboardsScene(k) {
             } else {
                 entries.forEach((entry, index) => {
                     const rowY = headerY + 40 + (index * 35);
-                    const isPlayer = entry.name === playerName;
-                    renderLeaderboardRow(index + 1, entry, rowY, isPlayer);
+                    const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
+                    const globalRank = startIndex + index + 1;
+                    renderLeaderboardRow(globalRank, entry, rowY, isPlayer);
                 });
+
+                // Pagination controls
+                if (totalPages > 1) {
+                    renderPaginationControls(headerY + 40 + (ENTRIES_PER_PAGE * 35) + 10, totalPages);
+                }
             }
         }
 
         // Render all-time leaderboard
         function renderAllTimeContent() {
-            const entries = getAllTimeLeaderboard(10);
+            const allEntries = getAllTimeLeaderboard(100); // Get all entries
             const playerName = getPlayerName() || 'Anonymous';
+
+            const totalPages = Math.ceil(allEntries.length / ENTRIES_PER_PAGE);
+            if (currentPage >= totalPages && totalPages > 0) currentPage = totalPages - 1;
+
+            const startIndex = currentPage * ENTRIES_PER_PAGE;
+            const entries = allEntries.slice(startIndex, startIndex + ENTRIES_PER_PAGE);
 
             // Header row
             const headerY = contentY + 10;
             renderLeaderboardHeader(headerY);
 
             // Entries
-            if (entries.length === 0) {
+            if (allEntries.length === 0) {
                 const noData = k.add([
                     k.text('No entries yet. Play a game!', { size: UI_TEXT_SIZES.BODY }),
                     k.pos(k.width() / 2, headerY + 60),
@@ -233,9 +258,15 @@ export function setupLeaderboardsScene(k) {
             } else {
                 entries.forEach((entry, index) => {
                     const rowY = headerY + 40 + (index * 35);
-                    const isPlayer = entry.name === playerName;
-                    renderLeaderboardRow(index + 1, entry, rowY, isPlayer);
+                    const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
+                    const globalRank = startIndex + index + 1;
+                    renderLeaderboardRow(globalRank, entry, rowY, isPlayer);
                 });
+
+                // Pagination controls
+                if (totalPages > 1) {
+                    renderPaginationControls(headerY + 40 + (ENTRIES_PER_PAGE * 35) + 10, totalPages);
+                }
             }
         }
 
@@ -246,10 +277,10 @@ export function setupLeaderboardsScene(k) {
             const totalPages = Math.ceil(characters.length / CHARACTERS_PER_PAGE);
 
             // Clamp page to valid range
-            if (personalPage >= totalPages) personalPage = Math.max(0, totalPages - 1);
+            if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
 
             // Get characters for current page
-            const startIndex = personalPage * CHARACTERS_PER_PAGE;
+            const startIndex = currentPage * CHARACTERS_PER_PAGE;
             const pageCharacters = characters.slice(startIndex, startIndex + CHARACTERS_PER_PAGE);
 
             // Header
@@ -344,82 +375,206 @@ export function setupLeaderboardsScene(k) {
                 }
             });
 
-            // Pagination controls (consistent with other pages)
+            // Pagination controls
             if (totalPages > 1) {
                 const paginationY = headerY + 45 + (CHARACTERS_PER_PAGE * 40) + 20;
-                const paginationCenterX = k.width() / 2;
+                renderPaginationControls(paginationY, totalPages);
+            }
+        }
 
-                // Left arrow
-                const leftArrow = k.add([
-                    k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 60, paginationY),
-                    k.anchor('center'),
-                    k.color(personalPage > 0 ? 255 : 80, personalPage > 0 ? 255 : 80, personalPage > 0 ? 255 : 80),
-                    k.area(),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
+        // Render global leaderboard
+        function renderGlobalContent() {
+            const playerName = getPlayerName() || 'Anonymous';
+            const headerY = contentY + 10;
 
-                if (personalPage > 0) {
-                    leftArrow.onClick(() => {
-                        playMenuNav();
-                        personalPage--;
-                        renderContent();
-                    });
-                    leftArrow.cursor = 'pointer';
+            // Show loading state initially
+            const loadingText = k.add([
+                k.text('Connecting to global leaderboard...', { size: UI_TEXT_SIZES.BODY }),
+                k.pos(k.width() / 2, headerY + 100),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+            contentElements.push(loadingText);
+
+            // Fetch global leaderboard
+            getOnlineLeaderboard(10).then(result => {
+                // Remove loading text
+                if (loadingText.exists()) {
+                    k.destroy(loadingText);
+                    const idx = contentElements.indexOf(loadingText);
+                    if (idx > -1) contentElements.splice(idx, 1);
                 }
-                contentElements.push(leftArrow);
 
-                // Page indicator pips
-                const pipSpacing = 16;
-                const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+                // Check if we're still on the GLOBAL tab
+                if (currentTab !== TABS.GLOBAL) return;
 
-                for (let i = 0; i < totalPages; i++) {
-                    const isCurrentPage = i === personalPage;
-                    const pip = k.add([
-                        k.text(isCurrentPage ? '●' : '○', { size: 14 }),
-                        k.pos(pipsStartX + i * pipSpacing, paginationY),
+                if (result.error) {
+                    // Error state
+                    const errorText = k.add([
+                        k.text(result.error, { size: UI_TEXT_SIZES.BODY }),
+                        k.pos(k.width() / 2, headerY + 80),
                         k.anchor('center'),
-                        k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
-                        k.area(),
+                        k.color(...UI_COLORS.DANGER),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
+                    contentElements.push(errorText);
 
-                    const pageIndex = i;
-                    pip.onClick(() => {
-                        if (pageIndex !== personalPage) {
-                            playMenuNav();
-                            personalPage = pageIndex;
-                            renderContent();
-                        }
+                    // Retry button
+                    const retryBg = k.add([
+                        k.rect(120, 35),
+                        k.pos(k.width() / 2, headerY + 130),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.SECONDARY),
+                        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                    ]);
+                    contentElements.push(retryBg);
+
+                    const retryLabel = k.add([
+                        k.text('Try Again', { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(k.width() / 2, headerY + 130),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.TEXT_PRIMARY),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+                    contentElements.push(retryLabel);
+
+                    retryBg.onClick(() => {
+                        playMenuNav();
+                        renderContent();
                     });
-                    pip.cursor = 'pointer';
 
-                    contentElements.push(pip);
+                    retryBg.onHoverUpdate(() => {
+                        retryBg.color = k.rgb(...UI_COLORS.SECONDARY_HOVER);
+                    });
+
+                    retryBg.onHoverEnd(() => {
+                        retryBg.color = k.rgb(...UI_COLORS.SECONDARY);
+                    });
+
+                    return;
                 }
 
-                // Right arrow
-                const rightArrow = k.add([
-                    k.text('>', { size: 24 }),
-                    k.pos(paginationCenterX + 60, paginationY),
+                const entries = result.entries;
+
+                // Header row
+                renderLeaderboardHeader(headerY);
+
+                // Entries
+                if (entries.length === 0) {
+                    const noData = k.add([
+                        k.text('No global entries yet. Be the first!', { size: UI_TEXT_SIZES.BODY }),
+                        k.pos(k.width() / 2, headerY + 60),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.TEXT_DISABLED),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+                    contentElements.push(noData);
+                } else {
+                    entries.forEach((entry, index) => {
+                        const rowY = headerY + 40 + (index * 35);
+                        const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
+                        renderLeaderboardRow(index + 1, entry, rowY, isPlayer);
+                    });
+                }
+
+                // Show total count at bottom
+                if (result.totalCount > 0) {
+                    const totalY = headerY + 40 + (Math.min(entries.length, 10) * 35) + 20;
+                    const totalText = k.add([
+                        k.text(`${result.totalCount} player${result.totalCount !== 1 ? 's' : ''} worldwide`, { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(k.width() / 2, totalY),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.TEXT_SECONDARY),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+                    contentElements.push(totalText);
+                }
+            });
+        }
+
+        // Render pagination controls (reusable)
+        function renderPaginationControls(y, totalPages) {
+            const paginationCenterX = k.width() / 2;
+
+            // Left arrow
+            const leftArrow = k.add([
+                k.text('<', { size: 24 }),
+                k.pos(paginationCenterX - 80, y),
+                k.anchor('center'),
+                k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            if (currentPage > 0) {
+                leftArrow.onClick(() => {
+                    playMenuNav();
+                    currentPage--;
+                    renderContent();
+                });
+                leftArrow.cursor = 'pointer';
+            }
+            contentElements.push(leftArrow);
+
+            // Page indicator pips
+            const pipSpacing = 20;
+            const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+
+            for (let i = 0; i < totalPages; i++) {
+                const isCurrentPagePip = i === currentPage;
+                const pip = k.add([
+                    k.text(isCurrentPagePip ? '●' : '○', { size: 14 }),
+                    k.pos(pipsStartX + i * pipSpacing, y),
                     k.anchor('center'),
-                    k.color(personalPage < totalPages - 1 ? 255 : 80, personalPage < totalPages - 1 ? 255 : 80, personalPage < totalPages - 1 ? 255 : 80),
+                    k.color(isCurrentPagePip ? 255 : 120, isCurrentPagePip ? 255 : 120, isCurrentPagePip ? 255 : 120),
                     k.area(),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
 
-                if (personalPage < totalPages - 1) {
-                    rightArrow.onClick(() => {
+                const pageIndex = i;
+                pip.onClick(() => {
+                    if (pageIndex !== currentPage) {
                         playMenuNav();
-                        personalPage++;
+                        currentPage = pageIndex;
                         renderContent();
-                    });
-                    rightArrow.cursor = 'pointer';
-                }
-                contentElements.push(rightArrow);
+                    }
+                });
+                pip.cursor = 'pointer';
+
+                contentElements.push(pip);
             }
+
+            // Right arrow
+            const rightArrow = k.add([
+                k.text('>', { size: 24 }),
+                k.pos(paginationCenterX + 80, y),
+                k.anchor('center'),
+                k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            if (currentPage < totalPages - 1) {
+                rightArrow.onClick(() => {
+                    playMenuNav();
+                    currentPage++;
+                    renderContent();
+                });
+                rightArrow.cursor = 'pointer';
+            }
+            contentElements.push(rightArrow);
         }
 
         // Render leaderboard header row

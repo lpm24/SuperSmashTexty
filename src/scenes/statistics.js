@@ -1,7 +1,6 @@
 // Statistics and Achievements scene
 import { getSaveStats, getUnlockedAchievements, getCurrencyName, getRunHistory } from '../systems/metaProgression.js';
 import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory, ACHIEVEMENT_COLORS, getAchievementProgress } from '../data/achievements.js';
-import { showAchievementModal } from '../components/achievementModal.js';
 import { playMenuNav } from '../systems/sounds.js';
 import {
     UI_TEXT_SIZES,
@@ -53,8 +52,9 @@ export function setupStatisticsScene(k) {
         let currentTab = 'stats'; // stats, achievements, or history
         let achievementCategory = 'all'; // all, or specific category
         let currentPage = 0;
-        const ACHIEVEMENTS_PER_PAGE = 8; // 4x2 grid
-        let isNavigating = false; // Debounce flag for pagination
+        const ACHIEVEMENTS_PER_PAGE = 15; // 5x3 grid
+        let isNavigating = false; // Debounce flag for pagination and category tabs
+        let selectedAchievement = null; // Currently selected achievement for detail panel
 
         // Background
         k.add([
@@ -114,11 +114,16 @@ export function setupStatisticsScene(k) {
             ]);
 
             tabBg.onClick(() => {
+                if (isNavigating) return;
+                isNavigating = true;
                 playMenuNav();
                 currentTab = tab.key;
                 currentPage = 0;
                 achievementCategory = 'all';
-                refreshContent();
+                k.wait(0, () => {
+                    refreshContent();
+                    k.wait(0.1, () => { isNavigating = false; });
+                });
             });
 
             tabButtons.push({ bg: tabBg, label: tabLabel, key: tab.key });
@@ -226,13 +231,26 @@ export function setupStatisticsScene(k) {
 
             } else if (currentTab === 'achievements') {
                 try {
-                    // Category sub-tabs
-                    const categoryTabY = contentY + 5;
-                    const categoryTabWidth = 80;
-                    const categoryTabHeight = 25;
-                    const categoryTabSpacing = 85;
+                    // ========================================================
+                    // SPLIT PANEL LAYOUT: Grid on left, Detail panel on right
+                    // ========================================================
 
-                    const displayCategories = allCategories.slice(0, 7); // Limit to 7 categories
+                    // Layout constants
+                    const panelGap = 20;
+                    const leftPanelWidth = 320;
+                    const rightPanelWidth = 300;
+                    const totalWidth = leftPanelWidth + panelGap + rightPanelWidth;
+                    const startX = (k.width() - totalWidth) / 2;
+                    const panelTop = contentY + 5;
+                    const panelHeight = viewportBottom - panelTop - 80;
+
+                    // Category tabs (horizontal, above the panels)
+                    const categoryTabY = panelTop;
+                    const categoryTabWidth = 70;
+                    const categoryTabHeight = 22;
+                    const categoryTabSpacing = 75;
+
+                    const displayCategories = allCategories.slice(0, 7);
                     const totalCategoryWidth = (displayCategories.length - 1) * categoryTabSpacing;
                     const firstCategoryX = k.width() / 2 - totalCategoryWidth / 2;
 
@@ -253,7 +271,7 @@ export function setupStatisticsScene(k) {
                         ]);
 
                         const catLabel = k.add([
-                            k.text(catName, { size: 12 }),
+                            k.text(catName, { size: 11 }),
                             k.pos(catX, categoryTabY),
                             k.anchor('center'),
                             k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
@@ -262,10 +280,16 @@ export function setupStatisticsScene(k) {
                         ]);
 
                         catBg.onClick(() => {
+                            if (isNavigating) return;
+                            isNavigating = true;
                             playMenuNav();
                             achievementCategory = cat;
                             currentPage = 0;
-                            refreshContent();
+                            selectedAchievement = null;
+                            k.wait(0, () => {
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
+                            });
                         });
 
                         categoryTabItems.push(catBg, catLabel);
@@ -286,38 +310,55 @@ export function setupStatisticsScene(k) {
                     const startIndex = currentPage * ACHIEVEMENTS_PER_PAGE;
                     const pageAchievements = categoryAchievements.slice(startIndex, startIndex + ACHIEVEMENTS_PER_PAGE);
 
-                    // Grid layout (4x2)
-                    const gridStartY = contentY + 40;
-                    const boxSize = 70;
-                    const boxSpacing = 15;
-                    const boxesPerRow = 4;
-                    const gridWidth = boxesPerRow * (boxSize + boxSpacing) - boxSpacing;
-                    const gridStartX = k.width() / 2 - gridWidth / 2;
+                    // ========== LEFT PANEL: Achievement Grid ==========
+                    const gridTop = panelTop + 35;
+                    const boxSize = 50;
+                    const boxSpacing = 8;
+                    const boxesPerRow = 5;
+                    const rowHeight = boxSize + 22;
+                    const gridStartX = startX;
 
+                    // Left panel background
+                    const leftPanelBg = k.add([
+                        k.rect(leftPanelWidth, panelHeight - 35),
+                        k.pos(startX, gridTop),
+                        k.anchor('topleft'),
+                        k.color(25, 25, 35),
+                        k.outline(2, k.rgb(60, 60, 80)),
+                        k.fixed(),
+                        k.z(999)
+                    ]);
+                    contentItems.push(leftPanelBg);
+
+                    // Achievement grid
+                    const gridPadding = 15;
                     pageAchievements.forEach((achievement, index) => {
                         const isUnlocked = unlockedAchievements.includes(achievement.id);
+                        const isSelected = selectedAchievement && selectedAchievement.id === achievement.id;
                         const row = Math.floor(index / boxesPerRow);
                         const col = index % boxesPerRow;
-                        const boxX = gridStartX + col * (boxSize + boxSpacing);
-                        const boxY = gridStartY + row * (boxSize + boxSpacing + 30); // Extra space for name
+                        const boxX = gridStartX + gridPadding + col * (boxSize + boxSpacing);
+                        const boxY = gridTop + gridPadding + row * rowHeight;
 
                         const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
 
-                        // Icon box background
+                        // Selection highlight
+                        const highlightColor = isSelected ? [100, 100, 180] : (isUnlocked ? [50, 50, 65] : [30, 30, 40]);
+                        const borderColor = isSelected ? [150, 150, 255] : (isUnlocked ? difficultyColor : [50, 50, 60]);
+
                         const boxBg = k.add([
                             k.rect(boxSize, boxSize),
                             k.pos(boxX, boxY),
                             k.anchor('topleft'),
-                            k.color(isUnlocked ? 40 : 25, isUnlocked ? 40 : 25, isUnlocked ? 50 : 25),
-                            k.outline(2, k.rgb(...(isUnlocked ? difficultyColor : [60, 60, 60]))),
+                            k.color(...highlightColor),
+                            k.outline(isSelected ? 3 : 2, k.rgb(...borderColor)),
                             k.area({ width: boxSize, height: boxSize }),
                             k.fixed(),
                             k.z(1000)
                         ]);
 
-                        // Icon
                         const iconText = k.add([
-                            k.text(achievement.icon, { size: 32 }),
+                            k.text(achievement.icon, { size: 24 }),
                             k.pos(boxX + boxSize / 2, boxY + boxSize / 2),
                             k.anchor('center'),
                             k.color(isUnlocked ? 255 : 80, isUnlocked ? 255 : 80, isUnlocked ? 255 : 80),
@@ -325,188 +366,473 @@ export function setupStatisticsScene(k) {
                             k.z(1001)
                         ]);
 
-                        // Achievement name below
-                        const nameText = k.add([
-                            k.text(achievement.name, { size: 11, width: boxSize + 20 }),
-                            k.pos(boxX + boxSize / 2, boxY + boxSize + 10),
-                            k.anchor('center'),
-                            k.color(isUnlocked ? 200 : 100, isUnlocked ? 200 : 100, isUnlocked ? 200 : 100),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-
-                        // Progress indicator for locked achievements with thresholds
+                        // Progress bar under locked achievements
                         if (!isUnlocked) {
                             const progress = getAchievementProgress(achievement.id, stats);
-                            if (progress) {
-                                const progressText = k.add([
-                                    k.text(`${progress.percentage}%`, { size: 10 }),
-                                    k.pos(boxX + boxSize / 2, boxY + boxSize + 22),
-                                    k.anchor('center'),
-                                    k.color(...UI_COLORS.TEXT_DISABLED),
+                            if (progress && progress.percentage > 0) {
+                                const barWidth = boxSize - 4;
+                                const fillWidth = barWidth * progress.progress;
+
+                                const progressBg = k.add([
+                                    k.rect(barWidth, 4),
+                                    k.pos(boxX + 2, boxY + boxSize - 6),
+                                    k.anchor('topleft'),
+                                    k.color(20, 20, 30),
                                     k.fixed(),
                                     k.z(1001)
                                 ]);
-                                contentItems.push(progressText);
+                                contentItems.push(progressBg);
+
+                                if (fillWidth > 0) {
+                                    const progressFill = k.add([
+                                        k.rect(fillWidth, 4),
+                                        k.pos(boxX + 2, boxY + boxSize - 6),
+                                        k.anchor('topleft'),
+                                        k.color(...difficultyColor),
+                                        k.opacity(0.8),
+                                        k.fixed(),
+                                        k.z(1002)
+                                    ]);
+                                    contentItems.push(progressFill);
+                                }
                             }
                         }
 
-                        // Click handler for modal
+                        // Click handler - select achievement
                         boxBg.onClick(() => {
+                            if (isNavigating) return;
                             playMenuNav();
-                            showAchievementModal(k, achievement);
+                            selectedAchievement = achievement;
+                            isNavigating = true;
+                            k.wait(0, () => {
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
+                            });
                         });
 
-                        contentItems.push(boxBg, iconText, nameText);
+                        contentItems.push(boxBg, iconText);
                     });
+
+                    // ========== RIGHT PANEL: Detail View ==========
+                    const rightPanelX = startX + leftPanelWidth + panelGap;
+
+                    // Right panel background
+                    const rightPanelBg = k.add([
+                        k.rect(rightPanelWidth, panelHeight - 35),
+                        k.pos(rightPanelX, gridTop),
+                        k.anchor('topleft'),
+                        k.color(30, 28, 40),
+                        k.outline(2, k.rgb(70, 70, 100)),
+                        k.fixed(),
+                        k.z(999)
+                    ]);
+                    contentItems.push(rightPanelBg);
+
+                    // Detail content
+                    const detailCenterX = rightPanelX + rightPanelWidth / 2;
+                    const detailTop = gridTop + 20;
+
+                    if (selectedAchievement) {
+                        const ach = selectedAchievement;
+                        const isUnlocked = unlockedAchievements.includes(ach.id);
+                        const progress = getAchievementProgress(ach.id, stats);
+                        const difficultyColor = ACHIEVEMENT_COLORS[ach.difficulty] || ACHIEVEMENT_COLORS.normal;
+
+                        // Large icon
+                        const iconBg = k.add([
+                            k.rect(70, 70),
+                            k.pos(detailCenterX, detailTop + 35),
+                            k.anchor('center'),
+                            k.color(isUnlocked ? 45 : 25, isUnlocked ? 45 : 25, isUnlocked ? 55 : 30),
+                            k.outline(3, k.rgb(...(isUnlocked ? difficultyColor : [60, 60, 70]))),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(iconBg);
+
+                        const largeIcon = k.add([
+                            k.text(ach.icon, { size: 40 }),
+                            k.pos(detailCenterX, detailTop + 35),
+                            k.anchor('center'),
+                            k.color(isUnlocked ? 255 : 100, isUnlocked ? 255 : 100, isUnlocked ? 255 : 100),
+                            k.fixed(),
+                            k.z(1001)
+                        ]);
+                        contentItems.push(largeIcon);
+
+                        // Achievement name
+                        const nameText = k.add([
+                            k.text(ach.name, { size: 16 }),
+                            k.pos(detailCenterX, detailTop + 85),
+                            k.anchor('center'),
+                            k.color(...(isUnlocked ? [255, 255, 255] : [180, 180, 180])),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(nameText);
+
+                        // Difficulty badge
+                        const diffName = ach.difficulty.charAt(0).toUpperCase() + ach.difficulty.slice(1);
+                        const diffBadge = k.add([
+                            k.text(diffName, { size: 11 }),
+                            k.pos(detailCenterX, detailTop + 105),
+                            k.anchor('center'),
+                            k.color(...difficultyColor),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(diffBadge);
+
+                        // Description
+                        const descText = k.add([
+                            k.text(ach.description, { size: 12 }),
+                            k.pos(detailCenterX, detailTop + 130),
+                            k.anchor('center'),
+                            k.color(180, 180, 200),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(descText);
+
+                        // Status / Progress
+                        let statusY = detailTop + 160;
+                        if (isUnlocked) {
+                            const statusText = k.add([
+                                k.text('UNLOCKED', { size: 14 }),
+                                k.pos(detailCenterX, statusY),
+                                k.anchor('center'),
+                                k.color(100, 255, 100),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(statusText);
+                        } else if (progress) {
+                            // Progress bar
+                            const barWidth = 200;
+                            const barHeight = 16;
+
+                            const progressBgBar = k.add([
+                                k.rect(barWidth, barHeight),
+                                k.pos(detailCenterX, statusY),
+                                k.anchor('center'),
+                                k.color(30, 30, 45),
+                                k.outline(1, k.rgb(70, 70, 90)),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(progressBgBar);
+
+                            const fillWidth = Math.max(2, barWidth * progress.progress);
+                            const progressFillBar = k.add([
+                                k.rect(fillWidth, barHeight - 4),
+                                k.pos(detailCenterX - barWidth / 2 + fillWidth / 2, statusY),
+                                k.anchor('center'),
+                                k.color(...difficultyColor),
+                                k.opacity(0.9),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            contentItems.push(progressFillBar);
+
+                            const progressLabel = k.add([
+                                k.text(`${progress.current} / ${progress.target}`, { size: 11 }),
+                                k.pos(detailCenterX, statusY + 20),
+                                k.anchor('center'),
+                                k.color(150, 150, 180),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(progressLabel);
+                            statusY += 35;
+                        }
+
+                        // Hint (if locked)
+                        if (!isUnlocked && ach.hint) {
+                            const hintY = statusY + 15;
+                            const hintLabel = k.add([
+                                k.text('Hint:', { size: 10 }),
+                                k.pos(detailCenterX, hintY),
+                                k.anchor('center'),
+                                k.color(120, 120, 140),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(hintLabel);
+
+                            const hintText = k.add([
+                                k.text(ach.hint, { size: 11 }),
+                                k.pos(detailCenterX, hintY + 18),
+                                k.anchor('center'),
+                                k.color(160, 160, 180),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(hintText);
+                        }
+
+                    } else {
+                        // No achievement selected - show prompt
+                        const promptIcon = k.add([
+                            k.text('👈', { size: 32 }),
+                            k.pos(detailCenterX, detailTop + 60),
+                            k.anchor('center'),
+                            k.color(150, 150, 180),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(promptIcon);
+
+                        const promptText = k.add([
+                            k.text('Select an achievement', { size: 14 }),
+                            k.pos(detailCenterX, detailTop + 100),
+                            k.anchor('center'),
+                            k.color(120, 120, 150),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(promptText);
+
+                        const promptText2 = k.add([
+                            k.text('to view details', { size: 12 }),
+                            k.pos(detailCenterX, detailTop + 120),
+                            k.anchor('center'),
+                            k.color(100, 100, 130),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(promptText2);
+                    }
 
                     // Pagination controls
                     if (totalPages > 1) {
-                        const paginationY = viewportBottom - 85;
+                        const paginationY = viewportBottom - 55;
                         const paginationCenterX = k.width() / 2;
 
-                        // Left arrow
-                        const leftArrow = k.add([
+                        // Helper function to handle page change
+                        const goToPage = (newPage) => {
+                            if (isNavigating || newPage === currentPage || newPage < 0 || newPage >= totalPages) return;
+                            isNavigating = true;
+                            playMenuNav();
+                            currentPage = newPage;
+                            // Defer refresh to next frame to ensure clean destruction
+                            k.wait(0, () => {
+                                refreshContent();
+                                k.wait(0.15, () => { isNavigating = false; });
+                            });
+                        };
+
+                        // Left arrow button (with explicit area)
+                        const leftArrowBg = k.add([
+                            k.rect(30, 30),
+                            k.pos(paginationCenterX - 80, paginationY),
+                            k.anchor('center'),
+                            k.color(0, 0, 0),
+                            k.opacity(0),
+                            k.area({ width: 30, height: 30 }),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                        ]);
+                        const leftArrowText = k.add([
                             k.text('<', { size: 24 }),
-                            k.pos(paginationCenterX - 60, paginationY),
+                            k.pos(paginationCenterX - 80, paginationY),
                             k.anchor('center'),
                             k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
-                            k.area(),
                             k.fixed(),
                             k.z(UI_Z_LAYERS.UI_TEXT)
                         ]);
 
                         if (currentPage > 0) {
-                            leftArrow.onClick(() => {
-                                if (isNavigating) return;
-                                isNavigating = true;
-                                playMenuNav();
-                                currentPage--;
-                                refreshContent();
-                                k.wait(0.1, () => { isNavigating = false; });
-                            });
-                            leftArrow.cursor = 'pointer';
+                            const targetPage = currentPage - 1;  // Capture at registration time
+                            leftArrowBg.onClick(() => goToPage(targetPage));
+                            leftArrowBg.cursor = 'pointer';
                         }
-                        contentItems.push(leftArrow);
+                        contentItems.push(leftArrowBg, leftArrowText);
 
-                        // Page indicator pips
-                        const pipSpacing = 16;
+                        // Page indicator pips (with explicit small areas)
+                        const pipSpacing = 20;
                         const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
                         for (let i = 0; i < totalPages; i++) {
-                            const isCurrentPage = i === currentPage;
-                            const pip = k.add([
-                                k.text(isCurrentPage ? '●' : '○', { size: 14 }),
-                                k.pos(pipsStartX + i * pipSpacing, paginationY),
+                            const isCurrentPip = i === currentPage;
+                            const pipX = pipsStartX + i * pipSpacing;
+
+                            const pipBg = k.add([
+                                k.rect(16, 16),
+                                k.pos(pipX, paginationY),
                                 k.anchor('center'),
-                                k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
-                                k.area(),
+                                k.color(0, 0, 0),
+                                k.opacity(0),
+                                k.area({ width: 16, height: 16 }),
+                                k.fixed(),
+                                k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                            ]);
+                            const pipText = k.add([
+                                k.text(isCurrentPip ? '●' : '○', { size: 14 }),
+                                k.pos(pipX, paginationY),
+                                k.anchor('center'),
+                                k.color(isCurrentPip ? 255 : 120, isCurrentPip ? 255 : 120, isCurrentPip ? 255 : 120),
                                 k.fixed(),
                                 k.z(UI_Z_LAYERS.UI_TEXT)
                             ]);
 
                             const pageIndex = i;
-                            pip.onClick(() => {
-                                if (isNavigating || pageIndex === currentPage) return;
-                                isNavigating = true;
-                                playMenuNav();
-                                currentPage = pageIndex;
-                                refreshContent();
-                                k.wait(0.1, () => { isNavigating = false; });
-                            });
-                            pip.cursor = 'pointer';
+                            pipBg.onClick(() => goToPage(pageIndex));
+                            pipBg.cursor = 'pointer';
 
-                            contentItems.push(pip);
+                            contentItems.push(pipBg, pipText);
                         }
 
-                        // Right arrow
-                        const rightArrow = k.add([
+                        // Right arrow button (with explicit area)
+                        const rightArrowBg = k.add([
+                            k.rect(30, 30),
+                            k.pos(paginationCenterX + 80, paginationY),
+                            k.anchor('center'),
+                            k.color(0, 0, 0),
+                            k.opacity(0),
+                            k.area({ width: 30, height: 30 }),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                        ]);
+                        const rightArrowText = k.add([
                             k.text('>', { size: 24 }),
-                            k.pos(paginationCenterX + 60, paginationY),
+                            k.pos(paginationCenterX + 80, paginationY),
                             k.anchor('center'),
                             k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
-                            k.area(),
                             k.fixed(),
                             k.z(UI_Z_LAYERS.UI_TEXT)
                         ]);
 
                         if (currentPage < totalPages - 1) {
-                            rightArrow.onClick(() => {
-                                if (isNavigating) return;
-                                isNavigating = true;
-                                playMenuNav();
-                                currentPage++;
-                                refreshContent();
-                                k.wait(0.1, () => { isNavigating = false; });
-                            });
-                            rightArrow.cursor = 'pointer';
+                            const targetPage = currentPage + 1;  // Capture at registration time
+                            rightArrowBg.onClick(() => goToPage(targetPage));
+                            rightArrowBg.cursor = 'pointer';
                         }
-                        contentItems.push(rightArrow);
+                        contentItems.push(rightArrowBg, rightArrowText);
                     }
 
-                    // Rainbow gradient progress bar (moved above back button)
+                    // Achievement Trophy Meter - satisfying progress display
                     const totalAchievements = Object.keys(ACHIEVEMENTS).length;
                     const unlockedCount = unlockedAchievements.length;
                     const progressPercent = unlockedCount / totalAchievements;
+                    const isComplete = progressPercent >= 1;
 
-                    const progressBarY = viewportBottom - 45;
-                    const progressBarWidth = 500;
-                    const progressBarHeight = 20;
-                    const progressBarX = k.width() / 2;
+                    const meterY = viewportBottom - 20;
+                    const meterX = k.width() / 2;
 
-                    // Progress bar background
-                    const progressBarBg = k.add([
-                        k.rect(progressBarWidth, progressBarHeight),
-                        k.pos(progressBarX, progressBarY),
+                    // Trophy icon on the left
+                    const trophyIcon = k.add([
+                        k.text(isComplete ? '🏆' : '🏆', { size: 24 }),
+                        k.pos(meterX - 220, meterY),
                         k.anchor('center'),
-                        k.color(30, 30, 40),
-                        k.outline(2, k.rgb(100, 100, 150)),
+                        k.color(isComplete ? 255 : 150, isComplete ? 215 : 150, isComplete ? 0 : 150),
                         k.fixed(),
-                        k.z(1000)
+                        k.z(1002)
                     ]);
-                    contentItems.push(progressBarBg);
+                    contentItems.push(trophyIcon);
 
-                    // Rainbow gradient fill
-                    const fillWidth = progressBarWidth * progressPercent;
-                    if (fillWidth > 2 && progressPercent > 0 && isFinite(fillWidth)) {
-                        const segmentCount = Math.min(15, Math.max(3, Math.floor(fillWidth / 15)));
-                        if (segmentCount > 0 && isFinite(segmentCount)) {
-                            const segmentWidth = fillWidth / segmentCount;
-
-                            if (segmentWidth > 0 && isFinite(segmentWidth)) {
-                                for (let i = 0; i < segmentCount; i++) {
-                                    const segmentX = progressBarX - progressBarWidth / 2 + i * segmentWidth;
-                                    const hue = (i / segmentCount) * 360;
-                                    const rgb = hslToRgb(hue / 360, 1, 0.5);
-
-                                    if (isFinite(segmentX) && segmentWidth > 0) {
-                                        const segment = k.add([
-                                            k.rect(segmentWidth, progressBarHeight - 4),
-                                            k.pos(segmentX + segmentWidth / 2, progressBarY),
-                                            k.anchor('center'),
-                                            k.color(rgb[0], rgb[1], rgb[2]),
-                                            k.fixed(),
-                                            k.z(1001)
-                                        ]);
-                                        if (segment) {
-                                            contentItems.push(segment);
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                    // Animated trophy for 100% completion
+                    if (isComplete) {
+                        let trophyTime = 0;
+                        trophyIcon.onUpdate(() => {
+                            trophyTime += k.dt();
+                            // Gentle pulse effect
+                            const scale = 1 + Math.sin(trophyTime * 3) * 0.1;
+                            trophyIcon.scale = k.vec2(scale, scale);
+                        });
                     }
 
-                    // Progress text (above progress bar)
-                    const progressText = k.add([
-                        k.text(`${unlockedCount}/${totalAchievements} (${Math.round(progressPercent * 100)}%)`, { size: 14 }),
-                        k.pos(progressBarX, progressBarY - 18),
+                    // ASCII-style progress meter: |████████░░░░|
+                    const totalBlocks = 20;
+                    const filledBlocks = Math.floor(progressPercent * totalBlocks);
+                    const emptyBlocks = totalBlocks - filledBlocks;
+
+                    // Build the meter string with blocks
+                    let meterString = '';
+                    for (let i = 0; i < filledBlocks; i++) {
+                        meterString += '█';
+                    }
+                    for (let i = 0; i < emptyBlocks; i++) {
+                        meterString += '░';
+                    }
+
+                    // Meter background frame
+                    const meterFrame = k.add([
+                        k.text('|' + '░'.repeat(totalBlocks) + '|', { size: 16 }),
+                        k.pos(meterX, meterY),
                         k.anchor('center'),
-                        k.color(200, 200, 255),
+                        k.color(60, 60, 80),
                         k.fixed(),
                         k.z(1000)
                     ]);
-                    contentItems.push(progressText);
+                    contentItems.push(meterFrame);
+
+                    // Filled portion with color based on progress
+                    let fillColor;
+                    if (isComplete) {
+                        fillColor = [255, 215, 0]; // Gold for 100%
+                    } else if (progressPercent >= 0.75) {
+                        fillColor = [100, 255, 100]; // Green for 75%+
+                    } else if (progressPercent >= 0.5) {
+                        fillColor = [255, 255, 100]; // Yellow for 50%+
+                    } else if (progressPercent >= 0.25) {
+                        fillColor = [255, 180, 100]; // Orange for 25%+
+                    } else {
+                        fillColor = [200, 200, 200]; // Gray for less
+                    }
+
+                    const filledMeter = k.add([
+                        k.text('|' + meterString + '|', { size: 16 }),
+                        k.pos(meterX, meterY),
+                        k.anchor('center'),
+                        k.color(...fillColor),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    contentItems.push(filledMeter);
+
+                    // Animate fill color for 100% completion (rainbow cycle)
+                    if (isComplete) {
+                        let colorTime = 0;
+                        filledMeter.onUpdate(() => {
+                            colorTime += k.dt();
+                            const hue = (colorTime * 60) % 360;
+                            const rgb = hslToRgb(hue / 360, 1, 0.6);
+                            filledMeter.color = k.rgb(rgb[0], rgb[1], rgb[2]);
+                        });
+                    }
+
+                    // Progress count and percentage
+                    const percentText = Math.round(progressPercent * 100);
+                    const statusText = isComplete ? 'COMPLETE!' : `${percentText}%`;
+                    const progressLabel = k.add([
+                        k.text(`${unlockedCount}/${totalAchievements}`, { size: 14 }),
+                        k.pos(meterX + 180, meterY - 8),
+                        k.anchor('center'),
+                        k.color(180, 180, 200),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+                    contentItems.push(progressLabel);
+
+                    const statusLabel = k.add([
+                        k.text(statusText, { size: 12 }),
+                        k.pos(meterX + 180, meterY + 8),
+                        k.anchor('center'),
+                        k.color(...(isComplete ? [255, 215, 0] : [150, 150, 180])),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+                    contentItems.push(statusLabel);
+
+                    // Sparkle effect for 100% completion
+                    if (isComplete) {
+                        let sparkleTime = 0;
+                        statusLabel.onUpdate(() => {
+                            sparkleTime += k.dt();
+                            const pulse = Math.sin(sparkleTime * 4) * 0.3 + 0.7;
+                            statusLabel.opacity = pulse;
+                        });
+                    }
                 } catch (e) {
                     console.error('Error rendering achievements:', e);
                     // Fallback: show error message

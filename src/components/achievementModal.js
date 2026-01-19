@@ -5,8 +5,24 @@
 
 import { UI_Z_LAYERS, UI_COLORS, UI_TEXT_SIZES } from '../config/uiConfig.js';
 import { ACHIEVEMENT_COLORS, getAchievementProgress } from '../data/achievements.js';
+import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { getSaveStats, isAchievementUnlocked } from '../systems/metaProgression.js';
 import { playMenuNav } from '../systems/sounds.js';
+
+/**
+ * Get characters unlocked by a specific achievement
+ * @param {string} achievementId - The achievement ID to check
+ * @returns {Array} Array of character objects that this achievement unlocks
+ */
+function getCharactersUnlockedByAchievement(achievementId) {
+    const characters = [];
+    for (const [key, char] of Object.entries(CHARACTER_UNLOCKS)) {
+        if (char.unlockRequirement?.type === 'achievement' && char.unlockRequirement?.value === achievementId) {
+            characters.push({ key, ...char });
+        }
+    }
+    return characters;
+}
 
 // Modal state
 let modalState = {
@@ -37,9 +53,9 @@ export function showAchievementModal(k, achievement, onClose = null) {
     const progress = getAchievementProgress(achievement.id, stats);
     const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
 
-    // Modal dimensions
-    const modalWidth = 400;
-    const modalHeight = 350;
+    // Modal dimensions - taller to fit unlocks and progress info
+    const modalWidth = 420;
+    const modalHeight = 400;
     const centerX = k.width() / 2;
     const centerY = k.height() / 2;
 
@@ -205,13 +221,18 @@ export function showAchievementModal(k, achievement, onClose = null) {
         modalState.elements.push(hintText);
     }
 
-    // Unlocks section (if achievement unlocks shop items)
-    if (achievement.unlocks && achievement.unlocks.length > 0) {
+    // Unlocks section (if achievement unlocks shop items or characters)
+    const characterUnlocks = getCharactersUnlockedByAchievement(achievement.id);
+    const hasShopUnlocks = achievement.unlocks && achievement.unlocks.length > 0;
+    const hasCharacterUnlocks = characterUnlocks.length > 0;
+
+    if (hasShopUnlocks || hasCharacterUnlocks) {
         const unlocksY = centerY + (isUnlocked ? 65 : 115);
+        let currentY = unlocksY;
 
         const unlocksLabel = k.add([
             k.text('-- UNLOCKS --', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(centerX, unlocksY),
+            k.pos(centerX, currentY),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
             k.fixed(),
@@ -219,29 +240,49 @@ export function showAchievementModal(k, achievement, onClose = null) {
             'achievementModal'
         ]);
         modalState.elements.push(unlocksLabel);
+        currentY += 20;
 
-        achievement.unlocks.forEach((unlockKey, index) => {
-            // Convert unlock key to display name
-            const displayName = unlockKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-            const unlockText = k.add([
-                k.text(`* ${displayName} (Shop)`, { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(centerX, unlocksY + 20 + index * 18),
+        // Show character unlocks
+        characterUnlocks.forEach((char) => {
+            const charText = k.add([
+                k.text(`${char.char} ${char.name}`, { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(centerX, currentY),
                 k.anchor('center'),
-                k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_TERTIARY)),
+                k.color(...(isUnlocked ? char.color : UI_COLORS.TEXT_TERTIARY)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.MODAL + 1),
                 'achievementModal'
             ]);
-            modalState.elements.push(unlockText);
+            modalState.elements.push(charText);
+            currentY += 18;
         });
+
+        // Show shop unlocks
+        if (hasShopUnlocks) {
+            achievement.unlocks.forEach((unlockKey) => {
+                // Convert unlock key to display name
+                const displayName = unlockKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const unlockText = k.add([
+                    k.text(`${displayName} (Shop)`, { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(centerX, currentY),
+                    k.anchor('center'),
+                    k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_TERTIARY)),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL + 1),
+                    'achievementModal'
+                ]);
+                modalState.elements.push(unlockText);
+                currentY += 18;
+            });
+        }
     }
 
-    // Difficulty badge
+    // Difficulty badge - positioned near bottom of modal
     // Using lenticular brackets instead of square brackets to avoid KAPLAY styled text tag parsing
     const difficultyName = achievement.difficulty.charAt(0).toUpperCase() + achievement.difficulty.slice(1);
     const difficultyBadge = k.add([
         k.text(`【${difficultyName}】`, { size: UI_TEXT_SIZES.SMALL }),
-        k.pos(centerX, centerY + 140),
+        k.pos(centerX, centerY + modalHeight / 2 - 60),
         k.anchor('center'),
         k.color(...difficultyColor),
         k.fixed(),

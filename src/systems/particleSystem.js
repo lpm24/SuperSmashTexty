@@ -370,3 +370,286 @@ export function spawnLevelUpEffect(k, x, y) {
         });
     }
 }
+
+// ============================================
+// COSMETIC EFFECTS
+// ============================================
+
+/**
+ * Spawn a trail particle behind the player
+ * @param {Object} k - Kaplay instance
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {string} trailType - Trail type key (trailFire, trailIce, etc.)
+ * @param {Array} color - RGB color array or 'rainbow'
+ */
+export function spawnTrailParticle(k, x, y, trailType, color) {
+    const chars = {
+        trailFire: ['░', '▒', '▓', '█'],
+        trailIce: ['*', '❄', '·', '°'],
+        trailPoison: ['~', '≈', '∞', '◦'],
+        trailShadow: ['░', '▒', '▓', '█'],
+        trailRainbow: ['★', '◆', '●', '♦']
+    };
+
+    const trailChars = chars[trailType] || ['·', '°', '*'];
+    const char = trailChars[Math.floor(Math.random() * trailChars.length)];
+
+    // Handle rainbow color
+    let particleColor = color;
+    if (color === 'rainbow') {
+        const hue = (Date.now() * 0.1) % 360;
+        particleColor = hslToRgb(hue, 100, 60);
+    }
+
+    // Random slight offset
+    const offsetX = (Math.random() - 0.5) * 8;
+    const offsetY = (Math.random() - 0.5) * 8;
+
+    createParticle(k, x + offsetX, y + offsetY, {
+        char,
+        size: 10 + Math.random() * 6,
+        color: particleColor,
+        velocity: { x: (Math.random() - 0.5) * 0.3, y: (Math.random() - 0.5) * 0.3 },
+        gravity: trailType === 'trailFire' ? -0.02 : 0.01,
+        lifetime: 0.4 + Math.random() * 0.2,
+        fadeStart: 0.2,
+        friction: 0.98,
+        zIndex: -10
+    });
+}
+
+/**
+ * Convert HSL to RGB (for rainbow effects)
+ */
+function hslToRgb(h, s, l) {
+    s /= 100;
+    l /= 100;
+    const a = s * Math.min(l, 1 - l);
+    const f = n => {
+        const k = (n + h / 30) % 12;
+        return l - a * Math.max(Math.min(k - 3, 9 - k, 1), -1);
+    };
+    return [Math.round(f(0) * 255), Math.round(f(8) * 255), Math.round(f(4) * 255)];
+}
+
+/**
+ * Create a glow entity around a target
+ * @param {Object} k - Kaplay instance
+ * @param {Object} target - Entity to glow around
+ * @param {string} glowType - Glow type key (glowGold, glowCrimson, etc.)
+ * @param {Array} color - RGB color array
+ * @returns {Object} - Glow entity
+ */
+export function createGlowEffect(k, target, glowType, color) {
+    const glowEntity = k.add([
+        k.text('○', { size: 48 }),
+        k.pos(target.pos.x, target.pos.y),
+        k.anchor('center'),
+        k.color(...color),
+        k.opacity(0.3),
+        k.z(-5),
+        'playerGlow'
+    ]);
+
+    // Store glow properties
+    glowEntity.target = target;
+    glowEntity.glowType = glowType;
+    glowEntity.pulseTime = 0;
+    glowEntity.baseOpacity = 0.25;
+
+    return glowEntity;
+}
+
+/**
+ * Update glow effect (call in game loop)
+ * @param {Object} k - Kaplay instance
+ * @param {Object} glow - Glow entity
+ */
+export function updateGlowEffect(k, glow) {
+    if (!glow || !glow.exists() || !glow.target || !glow.target.exists()) {
+        if (glow && glow.exists()) k.destroy(glow);
+        return;
+    }
+
+    // Follow target
+    glow.pos = glow.target.pos.clone();
+
+    // Pulse effect
+    glow.pulseTime += k.dt() * 3;
+    const pulse = Math.sin(glow.pulseTime) * 0.1;
+    glow.opacity = glow.baseOpacity + pulse;
+
+    // Electric glow has a flicker
+    if (glow.glowType === 'glowElectric' && Math.random() < 0.05) {
+        glow.opacity = glow.baseOpacity + 0.3;
+    }
+}
+
+/**
+ * Spawn cosmetic death effect
+ * @param {Object} k - Kaplay instance
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {string} deathType - Death effect type
+ * @param {Array} enemyColor - Enemy's color
+ */
+export function spawnCosmeticDeath(k, x, y, deathType, enemyColor = [255, 100, 100]) {
+    switch (deathType) {
+        case 'deathExplosion':
+            spawnExplosiveDeath(k, x, y, enemyColor);
+            break;
+        case 'deathDisintegrate':
+            spawnDisintegrateDeath(k, x, y, enemyColor);
+            break;
+        case 'deathVaporize':
+            spawnVaporizeDeath(k, x, y, enemyColor);
+            break;
+        case 'deathPixelate':
+            spawnPixelateDeath(k, x, y, enemyColor);
+            break;
+        default:
+            // Standard death - use existing spawnDeathExplosion
+            spawnDeathExplosion(k, x, y, { color: enemyColor });
+    }
+}
+
+/**
+ * Explosive death - large burst with bright flash
+ */
+function spawnExplosiveDeath(k, x, y, color) {
+    const chars = ['*', '#', '@', 'X', '+', '※'];
+    const count = 20;
+
+    // Bright flash in center
+    const flash = k.add([
+        k.text('●', { size: 40 }),
+        k.pos(x, y),
+        k.anchor('center'),
+        k.color(255, 255, 200),
+        k.opacity(1),
+        k.z(200),
+        'particle'
+    ]);
+    flash.age = 0;
+    flash.lifetime = 0.2;
+    flash.fadeStart = 0;
+    flash.velocity = { x: 0, y: 0 };
+    flash.gravity = 0;
+    flash.friction = 1;
+
+    // Explosion ring
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count;
+        const speed = 4 + Math.random() * 2;
+        createParticle(k, x, y, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 14 + Math.random() * 10,
+            color: [255, 200, 100],
+            velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+            gravity: 0.05,
+            lifetime: 0.6 + Math.random() * 0.3,
+            fadeStart: 0.2,
+            friction: 0.92
+        });
+    }
+
+    // Secondary debris
+    for (let i = 0; i < count / 2; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 2 + Math.random() * 2;
+        createParticle(k, x, y, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 10 + Math.random() * 6,
+            color,
+            velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+            gravity: 0.1,
+            lifetime: 0.8 + Math.random() * 0.4,
+            fadeStart: 0.3,
+            friction: 0.94
+        });
+    }
+}
+
+/**
+ * Disintegrate death - particles fall and scatter
+ */
+function spawnDisintegrateDeath(k, x, y, color) {
+    const chars = ['░', '▒', '▓', '█', '▪', '▫'];
+    const count = 25;
+
+    for (let i = 0; i < count; i++) {
+        const offsetX = (Math.random() - 0.5) * 20;
+        const offsetY = (Math.random() - 0.5) * 20;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.5 + Math.random() * 1.5;
+
+        createParticle(k, x + offsetX, y + offsetY, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 8 + Math.random() * 8,
+            color: [color[0] * (0.6 + Math.random() * 0.4), color[1] * (0.6 + Math.random() * 0.4), color[2] * (0.6 + Math.random() * 0.4)],
+            velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+            gravity: 0.2, // Heavy gravity - fall down
+            lifetime: 1.0 + Math.random() * 0.5,
+            fadeStart: 0.5,
+            friction: 0.96
+        });
+    }
+}
+
+/**
+ * Vaporize death - particles rise and fade
+ */
+function spawnVaporizeDeath(k, x, y, color) {
+    const chars = ['~', '≈', '∼', '°', '·'];
+    const count = 20;
+
+    // Smoke puff
+    for (let i = 0; i < count; i++) {
+        const offsetX = (Math.random() - 0.5) * 15;
+        const angle = Math.random() * Math.PI * 2;
+        const speed = 0.3 + Math.random() * 0.5;
+
+        createParticle(k, x + offsetX, y, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 10 + Math.random() * 10,
+            color: [Math.min(255, color[0] + 100), Math.min(255, color[1] + 100), Math.min(255, color[2] + 100)],
+            velocity: { x: Math.cos(angle) * speed, y: -1.5 - Math.random() * 1.5 }, // Rise upward
+            gravity: -0.05, // Negative gravity - float up
+            lifetime: 1.2 + Math.random() * 0.5,
+            fadeStart: 0.3,
+            friction: 0.98
+        });
+    }
+}
+
+/**
+ * Pixelate death - square pixel particles
+ */
+function spawnPixelateDeath(k, x, y, color) {
+    const chars = ['■', '□', '▪', '▫', '◾', '◽'];
+    const gridSize = 5;
+    const spacing = 6;
+
+    // Create a grid of pixels that scatter
+    for (let gx = -gridSize / 2; gx <= gridSize / 2; gx++) {
+        for (let gy = -gridSize / 2; gy <= gridSize / 2; gy++) {
+            const offsetX = gx * spacing;
+            const offsetY = gy * spacing;
+            const dist = Math.sqrt(gx * gx + gy * gy);
+            const angle = Math.atan2(gy, gx);
+            const speed = 1 + dist * 0.3 + Math.random() * 0.5;
+
+            createParticle(k, x + offsetX, y + offsetY, {
+                char: chars[Math.floor(Math.random() * chars.length)],
+                size: 8 + Math.random() * 4,
+                color,
+                velocity: { x: Math.cos(angle) * speed, y: Math.sin(angle) * speed },
+                gravity: 0.08,
+                lifetime: 0.6 + Math.random() * 0.4,
+                fadeStart: 0.4,
+                friction: 0.94
+            });
+        }
+    }
+}

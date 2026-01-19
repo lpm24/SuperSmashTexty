@@ -1,5 +1,5 @@
 // Game over scene - TV Station themed with currency bucket animation
-import { getCurrency, getCurrencyName, getSaveData, getSelectedCharacter } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, getSaveData, getSelectedCharacter, getPlayerName } from '../systems/metaProgression.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
@@ -10,6 +10,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_COLORS } from '../data/achievements.js';
 import { getRunUnlockedAchievements } from '../systems/achievementChecker.js';
 import { showAchievementModal } from '../components/achievementModal.js';
 import { calculateScore, submitScore, formatScore } from '../systems/leaderboards.js';
+import { getGlobalRank } from '../systems/onlineLeaderboards.js';
 import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
 import {
     UI_TEXT_SIZES,
@@ -187,6 +188,33 @@ export function setupGameOverScene(k) {
                 k.z(UI_Z_LAYERS.MODAL)
             ]);
         }
+
+        // Fetch and display global rank asynchronously
+        const globalRankY = rankText ? 126 : 108;
+        const globalRankLabel = k.add([
+            k.text('Global Rank: ...', { size: 12 }),
+            k.pos(k.width() / 2, globalRankY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL)
+        ]);
+
+        const playerName = getPlayerName() || 'Anonymous';
+        getGlobalRank(playerName, score).then(result => {
+            if (!globalRankLabel.exists()) return;
+
+            if (result.error) {
+                globalRankLabel.text = 'Global Rank: offline';
+                globalRankLabel.color = k.rgb(...UI_COLORS.TEXT_DISABLED);
+            } else if (result.rank) {
+                globalRankLabel.text = `Global Rank: #${result.rank} of ${result.total}`;
+                globalRankLabel.color = k.rgb(...UI_COLORS.GOLD);
+            } else {
+                globalRankLabel.text = 'Global Rank: unranked';
+                globalRankLabel.color = k.rgb(...UI_COLORS.TEXT_DISABLED);
+            }
+        });
 
         // Calculate awards
         const awardWinners = {};
