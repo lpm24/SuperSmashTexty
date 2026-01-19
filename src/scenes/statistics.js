@@ -54,6 +54,7 @@ export function setupStatisticsScene(k) {
         let achievementCategory = 'all'; // all, or specific category
         let currentPage = 0;
         const ACHIEVEMENTS_PER_PAGE = 8; // 4x2 grid
+        let isNavigating = false; // Debounce flag for pagination
 
         // Background
         k.add([
@@ -377,9 +378,12 @@ export function setupStatisticsScene(k) {
 
                         if (currentPage > 0) {
                             leftArrow.onClick(() => {
+                                if (isNavigating) return;
+                                isNavigating = true;
                                 playMenuNav();
                                 currentPage--;
                                 refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
                             });
                             leftArrow.cursor = 'pointer';
                         }
@@ -403,11 +407,12 @@ export function setupStatisticsScene(k) {
 
                             const pageIndex = i;
                             pip.onClick(() => {
-                                if (pageIndex !== currentPage) {
-                                    playMenuNav();
-                                    currentPage = pageIndex;
-                                    refreshContent();
-                                }
+                                if (isNavigating || pageIndex === currentPage) return;
+                                isNavigating = true;
+                                playMenuNav();
+                                currentPage = pageIndex;
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
                             });
                             pip.cursor = 'pointer';
 
@@ -427,9 +432,12 @@ export function setupStatisticsScene(k) {
 
                         if (currentPage < totalPages - 1) {
                             rightArrow.onClick(() => {
+                                if (isNavigating) return;
+                                isNavigating = true;
                                 playMenuNav();
                                 currentPage++;
                                 refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
                             });
                             rightArrow.cursor = 'pointer';
                         }

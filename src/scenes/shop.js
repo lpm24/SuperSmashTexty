@@ -241,9 +241,10 @@ export function setupShopScene(k) {
                 }
 
                 // Lock icon for achievement-locked items
+                // Using parentheses instead of square brackets to avoid KAPLAY styled text tag parsing
                 if (isAchievementLocked) {
                     const lockIcon = k.add([
-                        k.text('[X]', { size: 16 }),
+                        k.text('(X)', { size: 16 }),
                         k.pos(itemX + 300, itemY + 10),
                         k.anchor('topright'),
                         k.color(150, 100, 100),

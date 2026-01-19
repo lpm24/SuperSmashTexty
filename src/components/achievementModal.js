@@ -237,9 +237,10 @@ export function showAchievementModal(k, achievement, onClose = null) {
     }
 
     // Difficulty badge
+    // Using lenticular brackets instead of square brackets to avoid KAPLAY styled text tag parsing
     const difficultyName = achievement.difficulty.charAt(0).toUpperCase() + achievement.difficulty.slice(1);
     const difficultyBadge = k.add([
-        k.text(`[${difficultyName}]`, { size: UI_TEXT_SIZES.SMALL }),
+        k.text(`【${difficultyName}】`, { size: UI_TEXT_SIZES.SMALL }),
         k.pos(centerX, centerY + 140),
         k.anchor('center'),
         k.color(...difficultyColor),
