@@ -608,24 +608,38 @@ export function setupMenuScene(k) {
         // CENTER: Title + Main Buttons
         // ==========================================
 
-        // Compact animated title
-        const titleY = 60;
-        const compactTitle = [
-            '╔═╗╦ ╦╔═╗╔═╗╦═╗  ╔═╗╔╦╗╔═╗╔═╗╦ ╦',
-            '╚═╗║ ║╠═╝║╣ ╠╦╝  ╚═╗║║║╠═╣╚═╗╠═╣',
-            '╚═╝╚═╝╩  ╚═╝╩╚═  ╚═╝╩ ╩╩ ╩╚═╝╩ ╩',
-            '      ╔╦╗╔═╗═╗ ╦╔╦╗╦ ╦',
-            '       ║ ║╣ ╔╩╦╝ ║ ╚╦╝',
-            '       ╩ ╚═╝╩ ╚═ ╩  ╩ '
+        // ASCII Art Title with Animation
+        const titleY = 100;
+        const asciiTitle = [
+            '███████╗██╗   ██╗██████╗ ███████╗██████╗ ',
+            '██╔════╝██║   ██║██╔══██╗██╔════╝██╔══██╗',
+            '███████╗██║   ██║██████╔╝█████╗  ██████╔╝',
+            '╚════██║██║   ██║██╔═══╝ ██╔══╝  ██╔══██╗',
+            '███████║╚██████╔╝██║     ███████╗██║  ██║',
+            '╚══════╝ ╚═════╝ ╚═╝     ╚══════╝╚═╝  ╚═╝',
+            '',
+            '███████╗███╗   ███╗ █████╗ ███████╗██╗  ██╗',
+            '██╔════╝████╗ ████║██╔══██╗██╔════╝██║  ██║',
+            '███████╗██╔████╔██║███████║███████╗███████║',
+            '╚════██║██║╚██╔╝██║██╔══██║╚════██║██╔══██║',
+            '███████║██║ ╚═╝ ██║██║  ██║███████║██║  ██║',
+            '╚══════╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝',
+            '',
+            '████████╗███████╗██╗  ██╗████████╗██╗   ██╗',
+            '╚══██╔══╝██╔════╝╚██╗██╔╝╚══██╔══╝╚██╗ ██╔╝',
+            '   ██║   █████╗   ╚███╔╝    ██║    ╚████╔╝ ',
+            '   ██║   ██╔══╝   ██╔██╗    ██║     ╚██╔╝  ',
+            '   ██║   ███████╗██╔╝ ██╗   ██║      ██║   ',
+            '   ╚═╝   ╚══════╝╚═╝  ╚═╝   ╚═╝      ╚═╝   '
         ];
 
         const titleLines = [];
-        const lineSpacing = 14;
-        const startY = titleY;
+        const lineSpacing = 12;
+        const startY = titleY - (asciiTitle.length * lineSpacing) / 2;
 
-        compactTitle.forEach((line, index) => {
+        asciiTitle.forEach((line, index) => {
             const titleLine = k.add([
-                k.text(line, { size: 12, font: 'monospace' }),
+                k.text(line, { size: 10, font: 'monospace' }),
                 k.pos(centerX, startY + index * lineSpacing),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -640,12 +654,22 @@ export function setupMenuScene(k) {
         k.onUpdate(() => {
             colorTime += k.dt();
             titleLines.forEach((line, index) => {
-                const hue = (colorTime * 50 + index * 30) % 360;
+                const hue = (colorTime * 50 + index * 20) % 360;
                 const color = hslToRgb(hue, 80, 60);
                 line.color = k.rgb(...color);
 
-                const offset = Math.sin(colorTime * 2 + index * 0.3) * 1.5;
+                const offset = Math.sin(colorTime * 2 + index * 0.3) * 2;
                 line.pos.y = startY + index * lineSpacing + offset;
+
+                // Glitch effect (random chance)
+                if (Math.random() < 0.001) {
+                    line.pos.x = centerX + (Math.random() - 0.5) * 10;
+                    k.wait(0.1, () => {
+                        if (line.exists()) {
+                            line.pos.x = centerX;
+                        }
+                    });
+                }
             });
         });
 
