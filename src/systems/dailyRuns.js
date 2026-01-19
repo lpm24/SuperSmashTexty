@@ -13,8 +13,8 @@ import { SeededRandom, seedFromString } from '../utils/seededRandom.js';
 // Storage key for daily run data
 const DAILY_RUN_STORAGE_KEY = 'superSmashTextyDailyRuns';
 
-// Available characters for daily runs
-const DAILY_CHARACTERS = ['survivor', 'scout', 'tank', 'sniper', 'pyro'];
+// Available characters for daily runs (includes ALL characters, even locked ones)
+const DAILY_CHARACTERS = ['survivor', 'scout', 'tank', 'sniper', 'pyro', 'bomber', 'engineer', 'vampire', 'berserker', 'ghost'];
 
 /**
  * Get today's date string in ISO format (YYYY-MM-DD)

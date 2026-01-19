@@ -129,10 +129,10 @@ export async function checkFloorUnlocks(floorCompleted) {
     const { CHARACTER_UNLOCKS } = await import('../data/unlocks.js');
     const save = loadSave();
     let unlocked = false;
-    
+
     for (const [key, char] of Object.entries(CHARACTER_UNLOCKS)) {
-        if (char.unlockRequirement && 
-            char.unlockRequirement.type === 'floor' && 
+        if (char.unlockRequirement &&
+            char.unlockRequirement.type === 'floor' &&
             floorCompleted >= char.unlockRequirement.value) {
             if (!isUnlocked('characters', key)) {
                 unlockItem('characters', key);
@@ -140,8 +140,41 @@ export async function checkFloorUnlocks(floorCompleted) {
             }
         }
     }
-    
+
     return unlocked;
+}
+
+// Check and unlock characters based on achievement completion
+// Call this after unlocking an achievement
+export async function checkAchievementUnlocks(achievementId) {
+    // Dynamic import to avoid circular dependency
+    const { CHARACTER_UNLOCKS } = await import('../data/unlocks.js');
+    let unlocked = [];
+
+    for (const [key, char] of Object.entries(CHARACTER_UNLOCKS)) {
+        if (char.unlockRequirement &&
+            char.unlockRequirement.type === 'achievement' &&
+            char.unlockRequirement.value === achievementId) {
+            if (!isUnlocked('characters', key)) {
+                unlockItem('characters', key);
+                unlocked.push({ type: 'character', key, name: char.name });
+            }
+        }
+    }
+
+    return unlocked;
+}
+
+// Check if a character is unlocked (handles both floor and achievement requirements)
+export function isCharacterUnlocked(characterKey) {
+    // First check if explicitly unlocked in save data
+    if (isUnlocked('characters', characterKey)) {
+        return true;
+    }
+
+    // Import CHARACTER_UNLOCKS synchronously (already loaded)
+    // This is a convenience function - for async contexts use checkAchievementUnlocks
+    return false; // If not in save data, it's not unlocked
 }
 
 // Get selected character (stored in save)
@@ -389,6 +422,14 @@ export function unlockAchievement(achievementId) {
     if (!save.achievements.includes(achievementId)) {
         save.achievements.push(achievementId);
         saveGame(save);
+
+        // Check if this achievement unlocks any characters
+        checkAchievementUnlocks(achievementId).then(unlockedChars => {
+            if (unlockedChars.length > 0) {
+                console.log('[MetaProgression] Achievement unlocked characters:', unlockedChars);
+            }
+        });
+
         return true; // Newly unlocked
     }
     return false; // Already unlocked

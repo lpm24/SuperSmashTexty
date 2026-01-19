@@ -816,20 +816,21 @@ export function setupSettingsScene(k) {
         function addToggle(k, label, value, y, onChange) {
             // Label (moved left for more space, with max width to prevent overflow)
             const labelText = k.add([
-                k.text(label + ':', { size: 16, width: 250 }),
+                k.text(label + ':', { size: 16, width: 280 }),
                 k.pos(150, y),
                 k.anchor('left'),
                 k.color(200, 200, 200),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
-            
-            // Toggle background (moved right for more space)
-            const toggleWidth = 60;
+
+            // Toggle background (wider to fit ON/OFF text, moved further right)
+            const toggleWidth = 80;
             const toggleHeight = 30;
+            const toggleX = 550;
             const toggleBg = k.add([
                 k.rect(toggleWidth, toggleHeight),
-                k.pos(500, y),
+                k.pos(toggleX, y),
                 k.anchor('center'),
                 k.color(value ? 50 : 70, value ? 150 : 50, value ? 50 : 70),
                 k.outline(2, k.rgb(100, 100, 120)),
@@ -837,10 +838,10 @@ export function setupSettingsScene(k) {
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
-            
+
             // Toggle handle
             const handleSize = 24;
-            const handleX = value ? 500 + toggleWidth / 2 - handleSize / 2 - 4 : 500 - toggleWidth / 2 + handleSize / 2 + 4;
+            const handleX = value ? toggleX + toggleWidth / 2 - handleSize / 2 - 4 : toggleX - toggleWidth / 2 + handleSize / 2 + 4;
             const toggleHandle = k.add([
                 k.rect(handleSize, handleSize),
                 k.pos(handleX, y),
@@ -850,27 +851,30 @@ export function setupSettingsScene(k) {
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
-            
-            // Toggle text
+
+            // Toggle text (positioned based on current state)
+            const textX = value ? toggleX - 12 : toggleX + 8;
             const toggleText = k.add([
-                k.text(value ? 'ON' : 'OFF', { size: 14 }),
-                k.pos(500, y),
+                k.text(value ? 'ON' : 'OFF', { size: 12 }),
+                k.pos(textX, y),
                 k.anchor('center'),
                 k.color(value ? 100 : 150, value ? 255 : 150, value ? 100 : 150),
                 k.fixed(),
                 k.z(1002)
             ]);
-            
+
             // Click handler
             toggleBg.onClick(() => {
                 const newValue = !value;
+                value = newValue; // Update local value for text positioning
                 toggleBg.color = k.rgb(
                     newValue ? 50 : 70,
                     newValue ? 150 : 50,
                     newValue ? 50 : 70
                 );
-                toggleHandle.pos.x = newValue ? 500 + toggleWidth / 2 - handleSize / 2 - 4 : 500 - toggleWidth / 2 + handleSize / 2 + 4;
+                toggleHandle.pos.x = newValue ? toggleX + toggleWidth / 2 - handleSize / 2 - 4 : toggleX - toggleWidth / 2 + handleSize / 2 + 4;
                 toggleText.text = newValue ? 'ON' : 'OFF';
+                toggleText.pos.x = newValue ? toggleX - 12 : toggleX + 8;
                 toggleText.color = k.rgb(
                     newValue ? 100 : 150,
                     newValue ? 255 : 150,
@@ -878,7 +882,7 @@ export function setupSettingsScene(k) {
                 );
                 onChange(newValue);
             });
-            
+
             settingsItems.push(labelText, toggleBg, toggleHandle, toggleText);
             return y + itemSpacing;
         }

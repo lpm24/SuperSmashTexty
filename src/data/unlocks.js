@@ -80,11 +80,88 @@ export const CHARACTER_UNLOCKS = {
         },
         weapon: 'flamethrower',
         ability: 'fireDot' // +25% fire DoT (requires DoT system)
+    },
+    // === NEW CHARACTERS (achievement-locked) ===
+    bomber: {
+        name: 'The Bomber',
+        description: 'Explosive specialist, +50% blast radius, projectiles explode on hit',
+        cost: 0,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'achievement', value: 'boss10' },
+        char: '●',
+        color: [255, 100, 100],
+        stats: {
+            health: 85,
+            speed: 130,
+            damage: 15
+        },
+        weapon: 'launcher',
+        ability: 'explosiveShots' // Projectiles explode, +50% blast radius
+    },
+    engineer: {
+        name: 'The Engineer',
+        description: 'Support class, +2 orbital drones that auto-attack nearby enemies',
+        cost: 0,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'achievement', value: 'level20' },
+        char: '◆',
+        color: [100, 200, 255],
+        stats: {
+            health: 80,
+            speed: 140,
+            damage: 8
+        },
+        weapon: 'pistol',
+        ability: 'orbitalDrones' // Start with 2 orbital drones
+    },
+    vampire: {
+        name: 'The Vampire',
+        description: 'Lifesteal specialist, +15% lifesteal, -20% max health',
+        cost: 0,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'achievement', value: 'kill1000' },
+        char: '♦',
+        color: [180, 50, 180],
+        stats: {
+            health: 70,
+            speed: 160,
+            damage: 14
+        },
+        weapon: 'smg',
+        ability: 'vampiric' // +15% lifesteal, -20% max health
+    },
+    berserker: {
+        name: 'The Berserker',
+        description: 'Rage mode, +100% damage below 30% HP, takes +25% more damage',
+        cost: 0,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'achievement', value: 'glassCannonWin' },
+        char: '▼',
+        color: [255, 50, 50],
+        stats: {
+            health: 120,
+            speed: 140,
+            damage: 18
+        },
+        weapon: 'shotgun',
+        ability: 'rage' // +100% damage below 30% HP, +25% damage taken
+    },
+    ghost: {
+        name: 'The Ghost',
+        description: 'Evasion master, +25% dodge chance, +15% crit, lower health',
+        cost: 0,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'achievement', value: 'perfectFloor' },
+        char: '◊',
+        color: [200, 200, 255],
+        stats: {
+            health: 60,
+            speed: 180,
+            damage: 11
+        },
+        weapon: 'smg',
+        ability: 'ethereal' // +25% dodge, +15% crit chance
     }
-    // Note: Additional characters could get:
-    // - orbital (defensive/support character)
-    // - explosive (area damage specialist)
-    // - chainLightning (multi-target specialist)
 };
 
 // Weapon unlocks
