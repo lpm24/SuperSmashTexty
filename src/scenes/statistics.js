@@ -391,7 +391,7 @@ export function setupStatisticsScene(k) {
                         for (let i = 0; i < totalPages; i++) {
                             const isCurrentPage = i === currentPage;
                             const pip = k.add([
-                                k.text(isCurrentPage ? '|' : '.', { size: 14 }),
+                                k.text(isCurrentPage ? '●' : '○', { size: 14 }),
                                 k.pos(pipsStartX + i * pipSpacing, paginationY),
                                 k.anchor('center'),
                                 k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),

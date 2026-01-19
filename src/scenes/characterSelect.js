@@ -191,78 +191,81 @@ export function setupCharacterSelectScene(k) {
             });
 
             // Pagination controls (only show if more than one page)
+            // Matches shop/statistics pagination style
             if (totalPages > 1) {
-                const paginationY = startY + rowsPerPage * (cardHeight + cardSpacing) + 10;
+                const paginationY = startY + rowsPerPage * (cardHeight + cardSpacing) + 15;
                 const paginationCenterX = leftPanelWidth / 2;
 
-                // Previous button
+                // Left arrow
+                const leftArrow = k.add([
+                    k.text('<', { size: 24 }),
+                    k.pos(paginationCenterX - 60, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
                 if (currentPage > 0) {
-                    const prevBtn = k.add([
-                        k.rect(40, 30),
-                        k.pos(paginationCenterX - 60, paginationY),
-                        k.anchor('center'),
-                        k.color(...UI_COLORS.BG_MEDIUM),
-                        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-                        k.area(),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                    ]);
-                    const prevText = k.add([
-                        k.text('<', { size: UI_TEXT_SIZES.BODY }),
-                        k.pos(paginationCenterX - 60, paginationY),
-                        k.anchor('center'),
-                        k.color(...UI_COLORS.TEXT_PRIMARY),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_TEXT)
-                    ]);
-                    prevBtn.onClick(() => {
+                    leftArrow.onClick(() => {
                         playMenuNav();
                         currentPage--;
                         refreshDisplay();
                     });
-                    prevBtn.cursor = 'pointer';
-                    paginationItems.push(prevBtn, prevText);
+                    leftArrow.cursor = 'pointer';
                 }
+                paginationItems.push(leftArrow);
 
-                // Page indicator
-                const pageText = k.add([
-                    k.text(`${currentPage + 1} / ${totalPages}`, { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(paginationCenterX, paginationY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.TEXT_SECONDARY),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
-                paginationItems.push(pageText);
+                // Page indicator pips
+                const pipSpacing = 16;
+                const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
-                // Next button
-                if (currentPage < totalPages - 1) {
-                    const nextBtn = k.add([
-                        k.rect(40, 30),
-                        k.pos(paginationCenterX + 60, paginationY),
+                for (let i = 0; i < totalPages; i++) {
+                    const isCurrentPage = i === currentPage;
+                    const pip = k.add([
+                        k.text(isCurrentPage ? '●' : '○', { size: 14 }),
+                        k.pos(pipsStartX + i * pipSpacing, paginationY),
                         k.anchor('center'),
-                        k.color(...UI_COLORS.BG_MEDIUM),
-                        k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                        k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
                         k.area(),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                    ]);
-                    const nextText = k.add([
-                        k.text('>', { size: UI_TEXT_SIZES.BODY }),
-                        k.pos(paginationCenterX + 60, paginationY),
-                        k.anchor('center'),
-                        k.color(...UI_COLORS.TEXT_PRIMARY),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
-                    nextBtn.onClick(() => {
+
+                    const pageIndex = i;
+                    pip.onClick(() => {
+                        if (pageIndex !== currentPage) {
+                            playMenuNav();
+                            currentPage = pageIndex;
+                            refreshDisplay();
+                        }
+                    });
+                    pip.cursor = 'pointer';
+
+                    paginationItems.push(pip);
+                }
+
+                // Right arrow
+                const rightArrow = k.add([
+                    k.text('>', { size: 24 }),
+                    k.pos(paginationCenterX + 60, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                if (currentPage < totalPages - 1) {
+                    rightArrow.onClick(() => {
                         playMenuNav();
                         currentPage++;
                         refreshDisplay();
                     });
-                    nextBtn.cursor = 'pointer';
-                    paginationItems.push(nextBtn, nextText);
+                    rightArrow.cursor = 'pointer';
                 }
+                paginationItems.push(rightArrow);
             }
             
             // Render character details (right side)
