@@ -691,14 +691,19 @@ function setupClientHandlers() {
     });
 
     // Handle player revival events
-    onMessage('players_revived', (payload) => {
+    onMessage('players_revived', async (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
+
+        // Get Second Wind level for revive health bonus
+        const { getPermanentUpgradeLevel } = await import('../systems/metaProgression.js');
+        const secondWindLevel = getPermanentUpgradeLevel('secondWind');
+        const revivePercent = 0.05 + (secondWindLevel * 0.05);
 
         // Revive all dead players
         mpGame.players.forEach((player, slotIndex) => {
             if (player && player.exists() && (player.hp() <= 0 || player.isDead)) {
-                // Revive player at 5% health (can be upgraded later)
-                const reviveHealth = Math.max(1, Math.floor(player.maxHealth * 0.05));
+                // Revive player at 5% health + 5% per Second Wind level
+                const reviveHealth = Math.max(1, Math.floor(player.maxHealth * revivePercent));
                 player.setHP(reviveHealth);
                 player.isDead = false;
 
@@ -708,9 +713,10 @@ function setupClientHandlers() {
                     player.canShoot = true;
                 }
 
-                // Show revival effect
+                // Show revival effect with HP percentage
+                const reviveHealthPercent = Math.round(revivePercent * 100);
                 const reviveEffect = mpGame.k.add([
-                    mpGame.k.text('★ REVIVED ★', { size: 16 }),
+                    mpGame.k.text(`★ REVIVED (${reviveHealthPercent}% HP) ★`, { size: 16 }),
                     mpGame.k.pos(player.pos.x, player.pos.y - 40),
                     mpGame.k.anchor('center'),
                     mpGame.k.color(100, 255, 100),

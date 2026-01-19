@@ -215,8 +215,17 @@ export function setupCombatSystem(k, player) {
 
         if (shouldFire && baseDirection) {
             
+            // Calculate effective fire rate (with bulletTime bonus if moving)
+            let effectiveFireRate = player.fireRate;
+            if (player.bulletTimeEnabled && player.bulletTimeBonus && player.move) {
+                const isMoving = player.move.x !== 0 || player.move.y !== 0;
+                if (isMoving) {
+                    effectiveFireRate = player.fireRate * (1 + player.bulletTimeBonus);
+                }
+            }
+
             // Fire if enough time has passed
-            if (time - lastFireTime >= 1 / player.fireRate) {
+            if (time - lastFireTime >= 1 / effectiveFireRate) {
                 const projectileCount = player.projectileCount || 1;
                 const spreadAngle = player.spreadAngle || 0;
                 
@@ -341,6 +350,31 @@ export function setupCombatSystem(k, player) {
                                     chainRange: projectile.chainRange,
                                     maxJumps: projectile.maxJumps,
                                     chainDamageReduction: projectile.chainDamageReduction
+                                });
+                            }
+                        } else if (player.weaponKey === 'boomerang') {
+                            // Boomerang - create returning projectile
+                            const projectile = createProjectile(k, player.pos.x, player.pos.y, direction,
+                                player.projectileSpeed, finalDamage,
+                                player.piercing || 0, player.obstaclePiercing || 0, isCrit, weaponRange);
+
+                            // Set boomerang properties
+                            projectile.isBoomerang = true;
+                            projectile.ownerPlayer = player;
+                            projectile.returnSpeedMultiplier = player.weaponDef?.returnSpeedMultiplier || 1.2;
+
+                            if (player.weaponDef) {
+                                projectile.useWeaponVisual(player.weaponDef);
+                            }
+
+                            // Track projectile owner for kill attribution
+                            projectile.ownerSlotIndex = player.slotIndex;
+
+                            // Register projectile for multiplayer sync
+                            if (isMultiplayerActive() && isHost()) {
+                                registerProjectile(projectile, {
+                                    weaponKey: player.weaponKey,
+                                    isBoomerang: true
                                 });
                             }
                         } else {
@@ -469,6 +503,36 @@ export function setupCombatSystem(k, player) {
             return;
         }
 
+        // Check if enemy reflects projectiles (reflector enemy type)
+        // Max 2 bounces to prevent infinite loops, damage reduced by 30% per bounce
+        const maxReflections = 2;
+        const reflectionCount = projectile.reflectionCount || 0;
+        if (enemy.reflectsProjectiles && !projectile.isReflected && reflectionCount < maxReflections) {
+            const reflectRoll = Math.random();
+            if (reflectRoll < (enemy.reflectChance || 0.4)) {
+                // Reflect the projectile back at the player
+                projectile.isReflected = true;
+                projectile.reflectionCount = reflectionCount + 1;
+                projectile.isEnemyProjectile = true; // Now damages player instead
+                projectile.direction = k.vec2(-projectile.direction.x, -projectile.direction.y); // Reverse direction
+                projectile.color = k.rgb(255, 100, 100); // Change color to indicate reflected
+                // Reduce damage by 30% per reflection to prevent reflected projectiles being too strong
+                projectile.damage = Math.floor(projectile.damage * 0.7);
+
+                // Visual feedback for reflection
+                const reflectEffect = k.add([
+                    k.text('*', { size: 20 }),
+                    k.pos(enemy.pos.x, enemy.pos.y),
+                    k.anchor('center'),
+                    k.color(200, 200, 255),
+                    k.opacity(1),
+                    k.lifespan(0.3),
+                    k.z(500)
+                ]);
+                return; // Don't damage the enemy
+            }
+        }
+
         // Handle explosive projectiles
         if (projectile.isExplosive) {
             explodeProjectile(k, projectile, enemy.pos.x, enemy.pos.y);
@@ -542,6 +606,20 @@ export function setupCombatSystem(k, player) {
             enemy.takeDamage(projectile.damage);
         } else {
             enemy.hurt(projectile.damage);
+        }
+
+        // Vampiric Rounds synergy: heal player on crit damage
+        if (projectile.isCrit && projectile.ownerSlotIndex !== undefined) {
+            // Find the player who owns this projectile
+            const allPlayers = k.get('player');
+            const ownerPlayer = allPlayers.find(p => p.slotIndex === projectile.ownerSlotIndex);
+            if (ownerPlayer && ownerPlayer.vampiricCrits && ownerPlayer.vampiricHealPercent) {
+                const healAmount = Math.floor(projectile.damage * ownerPlayer.vampiricHealPercent);
+                if (healAmount > 0 && ownerPlayer.hp() < ownerPlayer.maxHealth) {
+                    const newHP = Math.min(ownerPlayer.maxHealth, ownerPlayer.hp() + healAmount);
+                    ownerPlayer.setHP(newHP);
+                }
+            }
         }
 
         // Track who last hit this enemy for kill attribution
@@ -870,6 +948,16 @@ export function setupCombatSystem(k, player) {
             const maxHP = enemy.maxHealth;
             if (currentHP < maxHP) {
                 const newHP = Math.min(maxHP, currentHP + enemy.lifesteal);
+                enemy.setHP(newHP);
+            }
+        }
+
+        // Vampiric elite: heal enemy when it hits player
+        if (enemy.isVampiric && enemy.vampiricHealAmount && enemy.exists()) {
+            const currentHP = enemy.hp();
+            const maxHP = enemy.maxHealth;
+            if (currentHP < maxHP) {
+                const newHP = Math.min(maxHP, currentHP + enemy.vampiricHealAmount);
                 enemy.setHP(newHP);
             }
         }

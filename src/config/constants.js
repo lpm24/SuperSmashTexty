@@ -109,6 +109,11 @@ export const COMBAT_CONFIG = {
     BASE_MINIBOSS_DAMAGE: 15,
     BASE_BOSS_DAMAGE: 18,
 
+    // Enemy scaling per floor
+    ENEMY_HP_SCALING_PER_FLOOR: 0.3, // +30% HP per floor
+    ENEMY_DAMAGE_SCALING_PER_FLOOR: 0.15, // +15% damage per floor (new)
+    ENEMY_SPEED_SCALING_PER_FLOOR: 0.1, // +10% speed per floor
+
     // Boss enrage multiplier
     BOSS_ENRAGE_DAMAGE_MULTIPLIER: 1.25, // +25% damage when enraged
 

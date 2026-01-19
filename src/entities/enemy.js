@@ -67,7 +67,11 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     if (baseConfig.projectileSpeed) enemy.projectileSpeed = baseConfig.projectileSpeed;
     if (baseConfig.projectileDamage) enemy.projectileDamage = baseConfig.projectileDamage;
     if (baseConfig.chargeCooldown) enemy.chargeCooldown = baseConfig.chargeCooldown;
-    if (baseConfig.splits) enemy.splits = true;
+    if (baseConfig.splits) {
+        enemy.splits = true;
+        enemy.splitCount = baseConfig.splitCount || 2;
+        enemy.splitType = baseConfig.splitType || type; // Type to spawn on split (default: same type)
+    }
     if (baseConfig.explodes) {
         enemy.explodes = true;
         enemy.explosionDamage = baseConfig.explosionDamage;
@@ -283,6 +287,16 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     if (baseConfig.slowRadius) enemy.slowRadius = baseConfig.slowRadius;
     if (baseConfig.slowAmount) enemy.slowAmount = baseConfig.slowAmount;
     if (baseConfig.lifesteal) enemy.lifesteal = baseConfig.lifesteal;
+
+    // New enemy properties
+    if (baseConfig.phaseOpacity) enemy.phaseOpacity = baseConfig.phaseOpacity;
+    if (baseConfig.phaseThroughObstacles) enemy.phaseThroughObstacles = baseConfig.phaseThroughObstacles;
+    if (baseConfig.mimicDuration) enemy.mimicDuration = baseConfig.mimicDuration;
+    if (baseConfig.mimicCooldown) enemy.mimicCooldown = baseConfig.mimicCooldown;
+    if (baseConfig.reflectsProjectiles) enemy.reflectsProjectiles = baseConfig.reflectsProjectiles;
+    if (baseConfig.reflectChance) enemy.reflectChance = baseConfig.reflectChance;
+    if (baseConfig.homingStrength) enemy.homingStrength = baseConfig.homingStrength;
+    if (baseConfig.bombExplosionRadius) enemy.bombExplosionRadius = baseConfig.bombExplosionRadius;
     
     // Initialize visual with armor/shields if they exist (after all properties are set)
     enemy.updateVisual();
@@ -298,7 +312,18 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
     enemy.spawnTimer = 0;
     enemy.healTimer = 0;
     enemy.buffedEnemies = new Set(); // Track which enemies are buffed by this buffer
-    
+
+    // New behavior timers
+    enemy.mimicTimer = 0;
+    enemy.mimicMovementHistory = []; // Store player movement for mimic
+    enemy.isMimicking = false;
+    enemy.mimicMoveIndex = 0;
+
+    // Set phase opacity for phaser enemies (semi-transparent)
+    if (enemy.phaseOpacity) {
+        enemy.opacity = enemy.phaseOpacity;
+    }
+
     // Obstacle avoidance state
     enemy.stuckTimer = 0; // Track how long enemy has been stuck
     enemy.stuckThreshold = 1.0; // Seconds before considered stuck
@@ -1026,7 +1051,147 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
             }
             return;
         }
-        
+
+        if (enemy.behavior === 'phase') {
+            // Phaser: Moves directly toward player, ignoring obstacles (semi-transparent)
+            // But still respect room boundaries to prevent getting stuck outside playable area
+            if (distance > 0) {
+                const normalized = dir.unit();
+                // No obstacle avoidance - phase through everything
+                enemy.pos.x += normalized.x * enemy.speed * k.dt();
+                enemy.pos.y += normalized.y * enemy.speed * k.dt();
+
+                // Keep phaser in bounds (important - phasers can't escape room boundaries)
+                const roomWidth = k.width();
+                const roomHeight = k.height();
+                const margin = 20;
+                const enemySize = enemy.size || 12;
+                enemy.pos.x = k.clamp(enemy.pos.x, margin + enemySize, roomWidth - margin - enemySize);
+                enemy.pos.y = k.clamp(enemy.pos.y, margin + enemySize, roomHeight - margin - enemySize);
+            }
+            return;
+        }
+
+        if (enemy.behavior === 'mimic') {
+            // Mimic: Records player movement, then replays it
+            enemy.mimicTimer += k.dt();
+
+            if (enemy.isMimicking) {
+                // Currently mimicking - replay stored movements
+                if (enemy.mimicMoveIndex < enemy.mimicMovementHistory.length) {
+                    const move = enemy.mimicMovementHistory[enemy.mimicMoveIndex];
+                    const desiredMove = k.vec2(move.x * k.dt() * 60, move.y * k.dt() * 60); // Scale for deltatime
+                    const finalMove = applyObstacleAvoidance(desiredMove);
+                    enemy.pos.x += finalMove.x;
+                    enemy.pos.y += finalMove.y;
+                    enemy.mimicMoveIndex++;
+                } else {
+                    // Finished mimicking
+                    enemy.isMimicking = false;
+                    enemy.mimicTimer = 0;
+                    enemy.mimicMovementHistory = [];
+                    enemy.mimicMoveIndex = 0;
+                }
+            } else {
+                // Not mimicking - record player movement and approach
+                if (enemy.mimicTimer < enemy.mimicDuration) {
+                    // Recording phase - store player movement direction
+                    if (player.move && (player.move.x !== 0 || player.move.y !== 0)) {
+                        enemy.mimicMovementHistory.push({ x: player.move.x, y: player.move.y });
+                    }
+
+                    // Move toward player while recording
+                    if (distance > 0) {
+                        const normalized = dir.unit();
+                        const desiredMove = normalized.scale(enemy.speed * 0.5 * k.dt()); // Slower while recording
+                        const finalMove = applyObstacleAvoidance(desiredMove);
+                        enemy.pos.x += finalMove.x;
+                        enemy.pos.y += finalMove.y;
+                    }
+                } else if (enemy.mimicTimer >= enemy.mimicCooldown) {
+                    // Start mimicking
+                    if (enemy.mimicMovementHistory.length > 0) {
+                        enemy.isMimicking = true;
+                        enemy.mimicMoveIndex = 0;
+                        // Flash to indicate mimic start
+                        enemy.color = k.rgb(255, 255, 255);
+                        k.wait(0.15, () => {
+                            if (enemy.exists()) {
+                                enemy.color = k.rgb(...enemy.originalColor);
+                            }
+                        });
+                    } else {
+                        // No movement recorded - player was standing still
+                        // Rush directly toward player for a short burst instead of doing nothing
+                        if (distance > 0) {
+                            const rushDir = dir.unit();
+                            const rushMove = rushDir.scale(enemy.speed * 1.5 * k.dt()); // Faster rush
+                            const finalMove = applyObstacleAvoidance(rushMove);
+                            enemy.pos.x += finalMove.x;
+                            enemy.pos.y += finalMove.y;
+                        }
+                        // Reset timer to try again
+                        enemy.mimicTimer = 0;
+                    }
+                } else {
+                    // Wait period between recording and mimicking - approach player
+                    if (distance > 0) {
+                        const normalized = dir.unit();
+                        const desiredMove = normalized.scale(enemy.speed * k.dt());
+                        const finalMove = applyObstacleAvoidance(desiredMove);
+                        enemy.pos.x += finalMove.x;
+                        enemy.pos.y += finalMove.y;
+                    }
+                }
+            }
+            return;
+        }
+
+        if (enemy.behavior === 'bomber') {
+            // Bomber: Stationary, launches slow homing bombs
+            enemy.attackTimer += k.dt();
+            if (distance > 0 && enemy.attackTimer >= 1 / enemy.fireRate) {
+                const direction = dir.unit();
+                const bomb = createProjectile(
+                    k,
+                    enemy.pos.x,
+                    enemy.pos.y,
+                    direction,
+                    enemy.projectileSpeed,
+                    enemy.projectileDamage,
+                    0, // piercing
+                    0, // obstaclePiercing
+                    false // isCrit
+                );
+                bomb.isEnemyProjectile = true;
+                bomb.isBomb = true;
+                bomb.homingStrength = enemy.homingStrength;
+                bomb.bombExplosionRadius = enemy.bombExplosionRadius;
+                bomb.targetPlayer = player;
+                bomb.color = k.rgb(255, 100, 0);
+                bomb.text = '●'; // Bomb visual
+
+                // Add homing behavior to bomb
+                bomb.onUpdate(() => {
+                    if (bomb.targetPlayer && bomb.targetPlayer.exists() && !bomb.targetPlayer.isDead) {
+                        const toPlayer = k.vec2(
+                            bomb.targetPlayer.pos.x - bomb.pos.x,
+                            bomb.targetPlayer.pos.y - bomb.pos.y
+                        );
+                        const toPlayerNorm = toPlayer.len() > 0 ? toPlayer.unit() : k.vec2(0, 0);
+                        // Gradually adjust direction toward player
+                        bomb.direction = k.vec2(
+                            bomb.direction.x + (toPlayerNorm.x - bomb.direction.x) * bomb.homingStrength * k.dt(),
+                            bomb.direction.y + (toPlayerNorm.y - bomb.direction.y) * bomb.homingStrength * k.dt()
+                        ).unit();
+                    }
+                });
+
+                enemy.attackTimer = 0;
+            }
+            return; // Bombers don't move
+        }
+
         // Default behavior: rush (direct charge)
         if (enemy.behavior === 'rush') {
             if (distance > 0) {
@@ -1095,33 +1260,35 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
             });
         }
 
-        // Slime splitting - only spawn on host in multiplayer to avoid desyncs
+        // Enemy splitting - only spawn on host in multiplayer to avoid desyncs
         if (enemy.splits && enemy.hp() <= 0) {
             // In multiplayer, only host spawns split enemies and broadcasts them
             if (isMultiplayerActive() && !isHost()) {
                 return; // Clients skip spawning - they'll receive spawn_entity messages
             }
 
-            const splitCount = 2; // Split into 2 smaller slimes
+            const splitCount = enemy.splitCount || 2;
+            const splitType = enemy.splitType || 'slime'; // Fallback to slime for legacy behavior
             for (let i = 0; i < splitCount; i++) {
                 const angle = (Math.PI * 2 / splitCount) * i;
                 const spawnDistance = 20;
                 const spawnX = enemy.pos.x + Math.cos(angle) * spawnDistance;
                 const spawnY = enemy.pos.y + Math.sin(angle) * spawnDistance;
 
-                // Create smaller slime (half health, smaller size)
-                const smallSlime = createEnemy(k, spawnX, spawnY, 'slime', enemy.floor);
-                smallSlime.maxHealth = Math.floor(smallSlime.maxHealth / 2);
-                smallSlime.setHP(smallSlime.maxHealth);
-                smallSlime.size = Math.floor(smallSlime.size * 0.8);
-                smallSlime.splits = false; // Don't split again
-                smallSlime.isSplitEnemy = true; // Mark as split enemy for tracking
+                // Create smaller enemy (half health, smaller size)
+                // Ensure minimum health of 10 to prevent 0 HP enemies
+                const splitEnemy = createEnemy(k, spawnX, spawnY, splitType, enemy.floor);
+                splitEnemy.maxHealth = Math.max(10, Math.floor(splitEnemy.maxHealth / 2));
+                splitEnemy.setHP(splitEnemy.maxHealth);
+                splitEnemy.size = Math.max(8, Math.floor(splitEnemy.size * 0.8)); // Minimum size of 8
+                splitEnemy.splits = false; // Don't split again
+                splitEnemy.isSplitEnemy = true; // Mark as split enemy for tracking
 
                 // Register split enemy for multiplayer sync (host only)
                 if (isMultiplayerActive() && isHost() && registerEnemy) {
-                    registerEnemy(smallSlime, {
-                        enemyType: 'slime',
-                        maxHealth: smallSlime.maxHealth,
+                    registerEnemy(splitEnemy, {
+                        enemyType: splitType,
+                        maxHealth: splitEnemy.maxHealth,
                         floor: enemy.floor,
                         isSplitEnemy: true
                     });

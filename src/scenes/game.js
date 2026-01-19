@@ -28,11 +28,13 @@ import { SpatialGrid } from '../systems/spatialGrid.js';
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
+import { tryMakeElite } from '../systems/eliteSystem.js';
+import { showMovementHint, showLevelUpHint } from '../systems/tutorial.js';
 import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks } from '../systems/metaProgression.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun } from '../systems/metaProgression.js';
 import { checkAchievements } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion } from '../systems/particleSystem.js';
@@ -74,7 +76,9 @@ let gameState = {
     playerStats: null, // Store player stats between rooms
     entryDirection: null, // Direction player entered from (opposite of exit direction)
     floorMap: null, // NEW: Floor map grid system
-    minimap: null // NEW: Minimap UI instance
+    minimap: null, // NEW: Minimap UI instance
+    rerollsRemaining: 0, // Per-run rerolls from Mulligan upgrade
+    playersRevivedThisRun: new Set() // Track which players have been revived (one revival per player per run)
 };
 
 // Run statistics (reset on new game)
@@ -159,6 +163,7 @@ export function setupGameScene(k) {
             gameState.allPlayerStats = null; // Clear multiplayer stats
             gameState.entryDirection = null;
             gameState.floorMap = null; // Clear old floor map
+            gameState.playersRevivedThisRun = new Set(); // Reset revival tracking
             resetRoomTemplateHistory(); // Reset room template variation
             // Reset run statistics
             runStats = {
@@ -166,10 +171,17 @@ export function setupGameScene(k) {
                 roomsCleared: 0,
                 enemiesKilled: 0,
                 bossesKilled: 0,
-                killsByType: {}
+                killsByType: {},
+                startTime: Date.now() // Track run start time
             };
+            // Initialize per-run rerolls from Mulligan permanent upgrade
+            const mulliganLevel = getPermanentUpgradeLevel('mulligan');
+            gameState.rerollsRemaining = mulliganLevel;
             // Reset client message handler registration flag (allows re-registration on new game)
             gameSceneMessageHandlersRegistered = false;
+
+            // Show tutorial movement hint for new players
+            k.wait(1.0, () => showMovementHint(k));
             // Reset weapon detail saved state
             if (k.gameData) {
                 k.gameData.weaponDetailSavedState = undefined;
@@ -1080,13 +1092,28 @@ export function setupGameScene(k) {
             // Only in multiplayer with multiple players
             if (partySize <= 1) return;
 
+            // Check if Second Wind is purchased (required for revivals)
+            const secondWindLevel = getPermanentUpgradeLevel('secondWind');
+            if (secondWindLevel <= 0) return; // No Second Wind = no revivals
+
             let revivedCount = 0;
             players.forEach((p, index) => {
                 if (!p) return; // Skip null entries
+
                 // Check if player is dead (hp <= 0 or destroyed)
                 if ((p.exists() && p.hp() <= 0) || (p.exists() && p.isDead)) {
-                    // Revive player at 5% health (can be upgraded later)
-                    const reviveHealth = Math.max(1, Math.floor(p.maxHealth * 0.05));
+                    // One revival per player per run - check if already revived
+                    const playerKey = `player_${index}`;
+                    if (gameState.playersRevivedThisRun.has(playerKey)) {
+                        return; // Already revived this run, skip
+                    }
+
+                    // Mark as revived for this run
+                    gameState.playersRevivedThisRun.add(playerKey);
+
+                    // Revive player at 5% health + 5% per Second Wind level
+                    const revivePercent = 0.05 + (secondWindLevel * 0.05);
+                    const reviveHealth = Math.max(1, Math.floor(p.maxHealth * revivePercent));
                     p.setHP(reviveHealth);
                     p.isDead = false;
 
@@ -1094,9 +1121,10 @@ export function setupGameScene(k) {
                     p.canMove = true;
                     p.canShoot = true;
 
-                    // Show revival effect
+                    // Show revival effect with HP percentage
+                    const reviveHealthPercent = Math.round(revivePercent * 100);
                     const reviveEffect = k.add([
-                        k.text('★ REVIVED ★', { size: 16 }),
+                        k.text(`★ REVIVED (${reviveHealthPercent}% HP) ★`, { size: 16 }),
                         k.pos(p.pos.x, p.pos.y - 40),
                         k.anchor('center'),
                         k.color(100, 255, 100),
@@ -2963,9 +2991,12 @@ export function setupGameScene(k) {
                         const enemyType = getRandomEnemyType(currentFloor, spawnRng);
                         const enemy = createEnemy(k, offsetX, offsetY, enemyType, currentFloor, spawnRng);
 
+                        // Try to make elite (10-15% chance on floor 2+)
+                        tryMakeElite(k, enemy, currentFloor, spawnRng);
+
                         // Register enemy for multiplayer sync (only if host)
                         if (isMultiplayerActive() && isHost()) {
-                            registerEnemy(enemy, { type: enemyType, floor: currentFloor });
+                            registerEnemy(enemy, { type: enemyType, floor: currentFloor, isElite: enemy.isElite, eliteModifier: enemy.eliteModifier });
                         }
                     } else {
                         // Fallback to edge spawning if no doors (shouldn't happen)
@@ -2996,9 +3027,12 @@ export function setupGameScene(k) {
                         const enemyType = getRandomEnemyType(currentFloor, spawnRng);
                         const enemy = createEnemy(k, x, y, enemyType, currentFloor, spawnRng);
 
+                        // Try to make elite (10-15% chance on floor 2+)
+                        tryMakeElite(k, enemy, currentFloor, spawnRng);
+
                         // Register enemy for multiplayer sync (only if host)
                         if (isMultiplayerActive() && isHost()) {
-                            registerEnemy(enemy, { type: enemyType, floor: currentFloor });
+                            registerEnemy(enemy, { type: enemyType, floor: currentFloor, isElite: enemy.isElite, eliteModifier: enemy.eliteModifier });
                         }
                     }
                 }
@@ -3841,11 +3875,19 @@ export function setupGameScene(k) {
                 // Determine player name for display
                 const playerName = levelUpPlayer.playerName || (levelUpPlayer.isRemote ? `Player ${levelUpPlayer.slotIndex + 1}` : 'You');
 
+                // Show tutorial hint for level up
+                showLevelUpHint(k);
+
                 // Show upgrade draft for this player (pass level for proper RNG seeding)
-                showUpgradeDraft(k, levelUpPlayer, () => {
+                // Pass per-run rerolls remaining from gameState
+                showUpgradeDraft(k, levelUpPlayer, (selected, remainingRerolls) => {
+                    // Update gameState with remaining rerolls for per-run persistence
+                    if (remainingRerolls !== undefined) {
+                        gameState.rerollsRemaining = remainingRerolls;
+                    }
                     // Callback when upgrade is selected - show next level up
                     showNextLevelUp();
-                }, playerName, level);
+                }, playerName, level, gameState.rerollsRemaining);
             }
 
             // Start showing level ups
@@ -4209,6 +4251,23 @@ export function setupGameScene(k) {
             // Update persistent stats and add currency
             updateRunStats(fullRunStats);
             addCurrency(currencyEarned);
+
+            // Record run to history
+            const runDuration = runStats.startTime ? Math.floor((Date.now() - runStats.startTime) / 1000) : 0;
+            recordRun({
+                character: player.characterData?.key || 'survivor',
+                weapon: player.weaponKey || 'pistol',
+                floorsReached: runStats.floorsReached,
+                roomsCleared: runStats.roomsCleared,
+                enemiesKilled: runStats.enemiesKilled,
+                bossesKilled: runStats.bossesKilled,
+                level: player.level || 1,
+                currencyEarned: currencyEarned,
+                duration: runDuration,
+                deathCause: 'Enemy',
+                upgrades: player.selectedUpgrades ? Array.from(player.selectedUpgrades) : [],
+                synergies: player.activeSynergies ? Array.from(player.activeSynergies) : []
+            });
 
             // Check for achievements
             checkAchievements(k);

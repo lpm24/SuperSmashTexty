@@ -151,6 +151,45 @@ export const WEAPON_DEFINITIONS = {
         chainDamageReduction: 0.15, // -15% damage per jump
         category: 'multiTarget',
         upgradeCategories: ['damage', 'chainJumps', 'chainRange', 'fireRate', 'chainDamage']
+    },
+    boomerang: {
+        name: 'Boomerang Blaster',
+        icon: '⟲', // Circular arrow
+        char: '⟳', // Clockwise arrow
+        color: [100, 255, 200],
+        fireRate: 2.0, // Shots per second
+        projectileSpeed: 250,
+        baseDamage: 14, // Higher base damage since hits twice
+        projectileCount: 1,
+        spreadAngle: 0,
+        piercing: 0, // No pierce, but returns to hit again
+        obstaclePiercing: 0,
+        critChance: 0.05,
+        critDamage: 2.0,
+        range: 400, // Medium range - travels out and back
+        returnsToPlayer: true, // Projectiles return, hitting enemies twice
+        returnSpeedMultiplier: 1.2, // Returns faster
+        category: 'multiTarget',
+        upgradeCategories: ['damage', 'fireRate', 'range', 'crit', 'projectileSpeed']
+    },
+    railgun: {
+        name: 'Railgun',
+        icon: '═', // Double horizontal line
+        char: '═', // Rail
+        color: [150, 200, 255],
+        fireRate: 0.33, // 3 second cooldown (very slow)
+        projectileSpeed: 800, // Very fast
+        baseDamage: 50, // Very high damage
+        projectileCount: 1,
+        spreadAngle: 0,
+        piercing: 999, // Effectively infinite - pierces ALL enemies
+        obstaclePiercing: 1, // Can pierce one obstacle
+        critChance: 0.1, // Higher crit chance
+        critDamage: 3.0, // Higher crit damage
+        range: 1000, // Very long range
+        infinitePierce: true, // Special flag for railgun
+        category: 'precision',
+        upgradeCategories: ['damage', 'crit', 'critDamage', 'fireRate', 'obstaclePiercing']
     }
 };
 

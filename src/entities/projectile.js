@@ -40,6 +40,12 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     projectile.distanceTraveled = 0;
     projectile.direction = direction; // Store direction for manual movement
     projectile.speed = speed; // Store speed for manual movement
+
+    // Boomerang properties (set by weapon system when creating boomerang projectiles)
+    projectile.isBoomerang = false;
+    projectile.isReturning = false;
+    projectile.ownerPlayer = null; // Reference to player for return targeting
+    projectile.returnSpeedMultiplier = 1.2;
     
     // Method to apply weapon visual properties
     projectile.useWeaponVisual = function(weaponDef) {
@@ -61,21 +67,75 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     // Manual movement and range management
     projectile.onUpdate(() => {
         if (k.paused) return;
-        
-        // Move projectile manually
+
+        // Boomerang return logic
+        if (projectile.isBoomerang) {
+            if (!projectile.isReturning) {
+                // Moving outward
+                const moveAmount = projectile.direction.scale(projectile.speed * k.dt());
+                projectile.distanceTraveled += moveAmount.len();
+
+                projectile.pos.x += moveAmount.x;
+                projectile.pos.y += moveAmount.y;
+
+                // Check if should start returning
+                if (projectile.distanceTraveled >= projectile.maxRange) {
+                    projectile.isReturning = true;
+                    projectile.piercedEnemies.clear(); // Reset hit tracking so it can hit enemies on return
+                    projectile.distanceTraveled = 0;
+                }
+            } else {
+                // Returning to player
+                if (projectile.ownerPlayer && projectile.ownerPlayer.exists() && !projectile.ownerPlayer.isDead) {
+                    const toPlayer = k.vec2(
+                        projectile.ownerPlayer.pos.x - projectile.pos.x,
+                        projectile.ownerPlayer.pos.y - projectile.pos.y
+                    );
+                    const distToPlayer = toPlayer.len();
+
+                    // Move toward player
+                    if (distToPlayer > 0) {
+                        const returnDir = toPlayer.unit();
+                        const returnSpeed = projectile.speed * projectile.returnSpeedMultiplier;
+                        const moveAmount = returnDir.scale(returnSpeed * k.dt());
+
+                        projectile.pos.x += moveAmount.x;
+                        projectile.pos.y += moveAmount.y;
+                        projectile.direction = returnDir; // Update direction for rotation
+
+                        // Destroy when close to player
+                        if (distToPlayer < 30) {
+                            k.destroy(projectile);
+                            return;
+                        }
+                    }
+                } else {
+                    // No player to return to - destroy
+                    k.destroy(projectile);
+                    return;
+                }
+            }
+
+            // Update rotation for boomerang visual
+            const angle = (Math.atan2(projectile.direction.y, projectile.direction.x) * (180 / Math.PI)) + 90;
+            projectile.angle = angle;
+            return;
+        }
+
+        // Normal projectile movement
         const moveAmount = projectile.direction.scale(projectile.speed * k.dt());
         const distanceThisFrame = moveAmount.len();
         projectile.distanceTraveled += distanceThisFrame;
-        
+
         projectile.pos.x += moveAmount.x;
         projectile.pos.y += moveAmount.y;
-        
+
         // Remove if exceeded max range
         if (projectile.distanceTraveled >= projectile.maxRange) {
             k.destroy(projectile);
             return;
         }
-        
+
         // Remove if out of bounds
         if (projectile.pos.x < 0 || projectile.pos.x > k.width() ||
             projectile.pos.y < 0 || projectile.pos.y > k.height()) {

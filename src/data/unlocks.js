@@ -95,17 +95,20 @@ export const WEAPON_UNLOCKS = {
         cost: 0,
         unlockedByDefault: true
     },
-    // Future weapons can be added here
-    // spread: {
-    //     name: 'Spread Shot',
-    //     description: 'Fires 3 projectiles in a spread',
-    //     cost: 200
-    // },
-    // rapid: {
-    //     name: 'Rapid Fire',
-    //     description: 'Higher fire rate',
-    //     cost: 250
-    // }
+    boomerang: {
+        name: 'Boomerang Blaster',
+        description: 'Projectiles return, hitting enemies twice',
+        cost: 400,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'floor', value: 3 }
+    },
+    railgun: {
+        name: 'Railgun',
+        description: 'Pierces ALL enemies in a line, 3s cooldown',
+        cost: 600,
+        unlockedByDefault: false,
+        unlockRequirement: { type: 'floor', value: 4 }
+    }
 };
 
 // Permanent upgrade unlocks
@@ -139,6 +142,24 @@ export const PERMANENT_UPGRADE_UNLOCKS = {
         description: '+5% prop drop chance per level',
         cost: 100,
         maxLevel: 5 // Max +25% (5% per level)
+    },
+    toughChoices: {
+        name: 'Tough Choices',
+        description: '+1 upgrade option in drafts (4 total)',
+        cost: 500,
+        maxLevel: 1
+    },
+    mulligan: {
+        name: 'Mulligan',
+        description: '+1 reroll per run for upgrade drafts',
+        cost: 300,
+        maxLevel: 3
+    },
+    secondWind: {
+        name: 'Second Wind',
+        description: '+5% revive health per level (up to 25%)',
+        cost: 150,
+        maxLevel: 4
     }
 };
 

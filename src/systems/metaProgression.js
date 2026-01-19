@@ -30,8 +30,12 @@ const DEFAULT_SAVE = {
         bestLevel: 1,
         totalCurrencyEarned: 0
     },
-    achievements: [] // Array of unlocked achievement IDs
+    achievements: [], // Array of unlocked achievement IDs
+    runHistory: [] // Array of last 20 run records
 };
+
+// Maximum number of runs to store in history
+const MAX_RUN_HISTORY = 20;
 
 // Load save data from localStorage
 export function loadSave() {
@@ -482,5 +486,67 @@ export function setInviteCode(code) {
 export function resetSave() {
     localStorage.removeItem(STORAGE_KEY);
     return { ...DEFAULT_SAVE };
+}
+
+/**
+ * Record a completed run to history
+ * @param {Object} runData - Run data to record
+ * @param {string} runData.character - Character used
+ * @param {string} runData.weapon - Weapon used
+ * @param {number} runData.floorsReached - Floors reached
+ * @param {number} runData.roomsCleared - Rooms cleared
+ * @param {number} runData.enemiesKilled - Enemies killed
+ * @param {number} runData.bossesKilled - Bosses killed
+ * @param {number} runData.level - Final player level
+ * @param {number} runData.currencyEarned - Currency earned
+ * @param {number} runData.duration - Run duration in seconds
+ * @param {string} runData.deathCause - What killed the player
+ * @param {Array} runData.upgrades - Upgrades collected
+ * @param {Array} runData.synergies - Synergies activated
+ */
+export function recordRun(runData) {
+    const save = loadSave();
+
+    // Ensure runHistory array exists
+    if (!save.runHistory) {
+        save.runHistory = [];
+    }
+
+    // Create run record
+    const runRecord = {
+        timestamp: Date.now(),
+        character: runData.character || 'survivor',
+        weapon: runData.weapon || 'pistol',
+        floorsReached: runData.floorsReached || 1,
+        roomsCleared: runData.roomsCleared || 0,
+        enemiesKilled: runData.enemiesKilled || 0,
+        bossesKilled: runData.bossesKilled || 0,
+        level: runData.level || 1,
+        currencyEarned: runData.currencyEarned || 0,
+        duration: runData.duration || 0,
+        deathCause: runData.deathCause || 'Unknown',
+        upgrades: runData.upgrades || [],
+        synergies: runData.synergies || []
+    };
+
+    // Add to history (most recent first)
+    save.runHistory.unshift(runRecord);
+
+    // Keep only last MAX_RUN_HISTORY runs
+    if (save.runHistory.length > MAX_RUN_HISTORY) {
+        save.runHistory = save.runHistory.slice(0, MAX_RUN_HISTORY);
+    }
+
+    saveGame(save);
+    return runRecord;
+}
+
+/**
+ * Get run history
+ * @returns {Array} Array of run records (most recent first)
+ */
+export function getRunHistory() {
+    const save = loadSave();
+    return save.runHistory || [];
 }
 

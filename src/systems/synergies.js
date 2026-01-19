@@ -1,4 +1,5 @@
 // Synergy system - handles upgrade combinations and special effects
+import { showSynergyHint } from './tutorial.js';
 
 // Synergy definitions
 // Each synergy requires specific upgrades and applies a special effect
@@ -102,6 +103,58 @@ export const SYNERGIES = {
                 player.xpMultiplier = (player.xpMultiplier || 1) + 0.5; // 50% more XP
             }
         }
+    },
+
+    // NEW SYNERGIES
+
+    // Glass Canon: Trade health for massive damage
+    glassCannon: {
+        name: 'Glass Cannon',
+        description: 'Damage x3 + Health: -25% max HP, +100% damage',
+        required: ['damage', 'damage', 'damage', 'health'], // Requires 3x damage upgrades
+        requiredCounts: { damage: 3, health: 1 }, // Alternative counting method
+        apply: (player) => {
+            // Only apply if player has at least 3 damage upgrades
+            const damageStacks = player.upgradeStacks?.damage || 0;
+            if (damageStacks >= 3) {
+                // Reduce max HP by 25%
+                const newMaxHealth = Math.floor(player.maxHealth * 0.75);
+                player.maxHealth = newMaxHealth;
+
+                // Ensure player HP doesn't drop below 25% of new max (safety threshold)
+                // This prevents the synergy from leaving the player in a near-death state
+                const minSafeHP = Math.max(1, Math.floor(newMaxHealth * 0.25));
+                const newHP = Math.max(minSafeHP, Math.min(player.hp(), newMaxHealth));
+                player.setHP(newHP);
+
+                // Double damage (+100%)
+                player.projectileDamage = Math.floor(player.projectileDamage * 2);
+            }
+        }
+    },
+
+    // Vampiric Rounds: Heal on critical hits
+    vampiricRounds: {
+        name: 'Vampiric Rounds',
+        description: 'Crit Chance + Crit Damage + Health: Heal 5% of crit damage',
+        required: ['critChance', 'critDamage', 'health'],
+        apply: (player) => {
+            // Enable vampiric healing on crits
+            player.vampiricCrits = true;
+            player.vampiricHealPercent = 0.05; // 5% of crit damage healed
+        }
+    },
+
+    // Bullet Time: Faster fire rate while moving
+    bulletTime: {
+        name: 'Bullet Time',
+        description: 'Speed + Fire Rate: +20% fire rate while moving',
+        required: ['speed', 'fireRate'],
+        apply: (player) => {
+            // Enable bullet time effect
+            player.bulletTimeEnabled = true;
+            player.bulletTimeBonus = 0.2; // +20% fire rate while moving
+        }
     }
 };
 
@@ -118,34 +171,51 @@ export function checkAndApplySynergies(k, player) {
     if (!player.selectedUpgrades || player.selectedUpgrades.size < 2) {
         return; // Need at least 2 upgrades for synergies
     }
-    
+
     const activeSynergies = [];
-    
+
     // Check each synergy
     for (const [synergyKey, synergy] of Object.entries(SYNERGIES)) {
-        // Check if player has all required upgrades
-        const hasAllRequired = synergy.required.every(upgradeKey => 
-            player.selectedUpgrades.has(upgradeKey)
-        );
-        
+        let hasAllRequired = false;
+
+        // Check if synergy uses requiredCounts (for synergies needing multiple stacks of same upgrade)
+        if (synergy.requiredCounts) {
+            hasAllRequired = true;
+            for (const [upgradeKey, count] of Object.entries(synergy.requiredCounts)) {
+                const stacks = player.upgradeStacks?.[upgradeKey] || 0;
+                if (stacks < count) {
+                    hasAllRequired = false;
+                    break;
+                }
+            }
+        } else {
+            // Standard check - player has all required upgrades (any count)
+            hasAllRequired = synergy.required.every(upgradeKey =>
+                player.selectedUpgrades.has(upgradeKey)
+            );
+        }
+
         if (hasAllRequired) {
             // Check if synergy is already active (prevent double application)
             if (!player.activeSynergies) {
                 player.activeSynergies = new Set();
             }
-            
+
             if (!player.activeSynergies.has(synergyKey)) {
                 // Apply synergy effect
                 synergy.apply(player);
                 player.activeSynergies.add(synergyKey);
                 activeSynergies.push(synergy);
-                
+
+                // Show tutorial hint for synergies
+                showSynergyHint(k);
+
                 // Show synergy notification
                 showSynergyNotification(k, synergy);
             }
         }
     }
-    
+
     return activeSynergies;
 }
 

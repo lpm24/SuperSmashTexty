@@ -20,26 +20,31 @@ const ENEMY_SPAWN_WEIGHTS = {
         bat: 20        // Bat ▼
     },
     2: {
-        charger: 20,   // Charger →
-        turret: 15,    // Turret ┼
-        heavyTank: 20, // Heavy Tank █
-        zippy: 20,     // Zippy ◐
-        exploder: 25   // Exploder ◎
+        charger: 18,   // Charger →
+        turret: 12,    // Turret ┼
+        heavyTank: 18, // Heavy Tank █
+        zippy: 18,     // Zippy ◐
+        exploder: 20,  // Exploder ◎
+        splitter: 14   // Intern ◇ - Splits into 2 smaller copies on death
     },
     3: {
-        mage: 20,        // Mage ✦
-        shieldBearer: 15, // Shield Bearer ▓
-        golem: 15,       // Golem ◼
-        wraith: 15,      // Wraith ≈
-        spawner: 15,     // Spawner ◔
-        buffer: 20,      // Buffer ✚
-        orbiter: 10      // Orbiter ◉ - Walks perimeter, explodes into shrapnel
+        mage: 15,        // Mage ✦
+        shieldBearer: 12, // Shield Bearer ▓
+        golem: 12,       // Golem ◼
+        wraith: 12,      // Wraith ≈
+        spawner: 12,     // Spawner ◔
+        buffer: 15,      // Buffer ✚
+        orbiter: 7,      // Orbiter ◉ - Walks perimeter, explodes into shrapnel
+        phaser: 8,       // Ghost Writer ◌ - Phases through obstacles
+        mimic: 7         // Stunt Double @ - Copies player movement
     },
     4: {
-        healer: 25,     // Healer ✛
-        teleporter: 20, // Teleporter ◖
-        freezer: 25,    // Freezer ❄
-        leech: 30       // Leech ◗
+        healer: 18,     // Healer ✛
+        teleporter: 15, // Teleporter ◖
+        freezer: 18,    // Freezer ❄
+        leech: 20,      // Leech ◗
+        reflector: 14,  // Mirror Master ◈ - Reflects projectiles
+        bomber: 15      // Demolitions Expert ◆ - Launches homing bombs
     }
 };
 

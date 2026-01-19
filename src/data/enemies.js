@@ -155,6 +155,20 @@ export const ENEMY_TYPES = {
         shrapnel: true, // Shoots projectiles in all directions on death
         shrapnelCount: 12 // Number of projectiles
     },
+    splitter: {
+        name: 'Intern',
+        char: '◇', // White diamond
+        color: [200, 255, 200],
+        baseHealth: 40, // 35-45 range
+        baseSpeed: 75, // 70-80 range
+        size: 20,
+        baseXPValue: 3,
+        behavior: 'rush',
+        pathfindingMode: 'smart',
+        damage: 8,
+        splits: true, // Splits into 2 smaller copies on death
+        splitCount: 2
+    },
 
     // =================================================================
     // FLOOR 3 ENEMIES
@@ -236,6 +250,34 @@ export const ENEMY_TYPES = {
         buffRadius: 100, // Buffs enemies within this radius
         buffAmount: 0.2 // +20% speed and damage
     },
+    phaser: {
+        name: 'Ghost Writer',
+        char: '◌', // Dotted circle
+        color: [180, 180, 255],
+        baseHealth: 25, // 20-30 range
+        baseSpeed: 100, // 90-110 range
+        size: 18,
+        baseXPValue: 3,
+        behavior: 'phase',
+        pathfindingMode: 'none', // Phases through obstacles, no pathfinding needed
+        damage: 10,
+        phaseOpacity: 0.5, // Semi-transparent
+        phaseThroughObstacles: true // Can move through obstacles
+    },
+    mimic: {
+        name: 'Stunt Double',
+        char: '@', // Same as player
+        color: [255, 100, 100],
+        baseHealth: 35, // 30-40 range
+        baseSpeed: 150, // Matches player speed
+        size: 18,
+        baseXPValue: 4,
+        behavior: 'mimic',
+        pathfindingMode: 'none',
+        damage: 12,
+        mimicDuration: 2.0, // Seconds to copy player movement
+        mimicCooldown: 4.0 // Seconds between mimic attempts
+    },
 
     // =================================================================
     // FLOOR 4 ENEMIES
@@ -292,6 +334,35 @@ export const ENEMY_TYPES = {
         pathfindingMode: 'smart', // Uses A* pathfinding
         damage: 8,
         lifesteal: 7 // 5-10 range, heals this much on hit
+    },
+    reflector: {
+        name: 'Mirror Master',
+        char: '◈', // Diamond with dot
+        color: [200, 200, 255],
+        baseHealth: 80, // 70-90 range
+        baseSpeed: 45, // 40-50 range
+        size: 22,
+        baseXPValue: 5,
+        behavior: 'shield',
+        pathfindingMode: 'smart',
+        damage: 12,
+        reflectsProjectiles: true, // Reflects projectiles back at player
+        reflectChance: 0.4 // 40% chance to reflect
+    },
+    bomber: {
+        name: 'Demolitions Expert',
+        char: '◆', // Black diamond
+        color: [255, 150, 100],
+        baseHealth: 70, // 60-80 range
+        baseSpeed: 0, // Stationary
+        size: 22,
+        baseXPValue: 5,
+        behavior: 'bomber',
+        fireRate: 0.4, // Launches a bomb every 2.5 seconds
+        projectileSpeed: 100, // Slow moving bombs
+        projectileDamage: 20,
+        homingStrength: 0.5, // How strongly bombs home in on player
+        bombExplosionRadius: 50 // Explosion radius when bomb hits
     },
 
     // =================================================================
@@ -351,9 +422,9 @@ export function getEnemyDefinition(type) {
  */
 export function getEnemiesForFloor(floor) {
     const floor1 = ['rusher', 'shooter', 'zombie', 'slime', 'bat'];
-    const floor2 = ['charger', 'turret', 'heavyTank', 'zippy', 'exploder'];
-    const floor3 = ['mage', 'shieldBearer', 'golem', 'wraith', 'spawner', 'buffer'];
-    const floor4 = ['healer', 'teleporter', 'freezer', 'leech'];
+    const floor2 = ['charger', 'turret', 'heavyTank', 'zippy', 'exploder', 'splitter'];
+    const floor3 = ['mage', 'shieldBearer', 'golem', 'wraith', 'spawner', 'buffer', 'phaser', 'mimic'];
+    const floor4 = ['healer', 'teleporter', 'freezer', 'leech', 'reflector', 'bomber'];
 
     if (floor === 1) return floor1;
     if (floor === 2) return [...floor1, ...floor2];

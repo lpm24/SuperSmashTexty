@@ -45,14 +45,14 @@ export function setupShopScene(k) {
         // Background particle effects
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
-        // Title
-        createAnimatedTitle(k, 'MERCH', k.width() / 2, 60, 8);
+        // Title (moved up to avoid collision with tabs)
+        createAnimatedTitle(k, 'MERCH', k.width() / 2, 35, 8);
 
         // Currency display (standardized)
         const creditIndicator = createCreditIndicator(k, currency, currencyName);
-        
+
         // Category tabs
-        const tabY = 90;
+        const tabY = 80;
         const tabSpacing = 120;
         const tabWidth = 100;
         const tabHeight = 30;
@@ -95,6 +95,7 @@ export function setupShopScene(k) {
             tabBg.onClick(() => {
                 playMenuNav();
                 currentCategory = cat.key;
+                currentPage = 0; // Reset to first page when switching tabs
                 refreshShop();
             });
             
@@ -102,10 +103,15 @@ export function setupShopScene(k) {
         });
         
         // Content area
-        const contentY = 140;
-        const contentHeight = k.height() - contentY - 60;
+        const contentY = 130;
+        const contentHeight = k.height() - contentY - 100; // Leave room for pagination
         let unlockItems = [];
-        
+
+        // Pagination state
+        let currentPage = 0;
+        const ITEMS_PER_PAGE = 6; // 2 columns x 3 rows
+        let paginationItems = []; // Store pagination UI elements
+
         // Flag to prevent multiple simultaneous purchases
         let isPurchasing = false;
         
@@ -138,7 +144,13 @@ export function setupShopScene(k) {
                 if (item.exists()) k.destroy(item);
             });
             unlockItems = [];
-            
+
+            // Clear pagination items
+            paginationItems.forEach(item => {
+                if (item.exists()) k.destroy(item);
+            });
+            paginationItems = [];
+
             // Get unlocks for current category
             const unlocks = getUnlocksForCategory(currentCategory);
             const unlockKeys = Object.keys(unlocks);
@@ -165,14 +177,21 @@ export function setupShopScene(k) {
                 return;
             }
             
+            // Pagination calculations
+            const totalPages = Math.ceil(displayUnlocks.length / ITEMS_PER_PAGE);
+            // Clamp currentPage to valid range
+            if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+
+            // Get items for current page
+            const startIndex = currentPage * ITEMS_PER_PAGE;
+            const pageItems = displayUnlocks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
+
             // Display unlocks
             const itemSpacing = 100;
-            const startY = contentY + 20;
-            const maxItemsPerColumn = Math.floor(contentHeight / itemSpacing);
-            // Cap at 3 items per column to prevent overflow (but allow fewer if there aren't enough items)
-            const itemsPerColumn = Math.min(3, maxItemsPerColumn, displayUnlocks.length);
-            
-            displayUnlocks.forEach((key, index) => {
+            const startY = contentY + 10;
+            const itemsPerColumn = 3;
+
+            pageItems.forEach((key, index) => {
                 const unlock = unlocks[key];
                 const column = Math.floor(index / itemsPerColumn);
                 const row = index % itemsPerColumn;
@@ -492,6 +511,81 @@ export function setupShopScene(k) {
                     unlockItems.push(statusLabel);
                 }
             });
+
+            // Add pagination controls if more than one page
+            if (totalPages > 1) {
+                const paginationY = k.height() - 115;
+                const paginationCenterX = k.width() / 2;
+
+                // Left arrow
+                const leftArrow = k.add([
+                    k.text('<', { size: 24 }),
+                    k.pos(paginationCenterX - 60, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                if (currentPage > 0) {
+                    leftArrow.onClick(() => {
+                        playMenuNav();
+                        currentPage--;
+                        refreshShop();
+                    });
+                }
+                paginationItems.push(leftArrow);
+
+                // Page indicator pips
+                const pipSpacing = 16;
+                const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+
+                for (let i = 0; i < totalPages; i++) {
+                    const isCurrentPage = i === currentPage;
+                    const pip = k.add([
+                        k.text(isCurrentPage ? '●' : '○', { size: 14 }),
+                        k.pos(pipsStartX + i * pipSpacing, paginationY),
+                        k.anchor('center'),
+                        k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
+                        k.area(),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+
+                    // Allow clicking pips to jump to page
+                    const pageIndex = i;
+                    pip.onClick(() => {
+                        if (pageIndex !== currentPage) {
+                            playMenuNav();
+                            currentPage = pageIndex;
+                            refreshShop();
+                        }
+                    });
+
+                    paginationItems.push(pip);
+                }
+
+                // Right arrow
+                const rightArrow = k.add([
+                    k.text('>', { size: 24 }),
+                    k.pos(paginationCenterX + 60, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                if (currentPage < totalPages - 1) {
+                    rightArrow.onClick(() => {
+                        playMenuNav();
+                        currentPage++;
+                        refreshShop();
+                    });
+                }
+                paginationItems.push(rightArrow);
+            }
         }
         
         // Refund button (only shown on permanent upgrades tab)

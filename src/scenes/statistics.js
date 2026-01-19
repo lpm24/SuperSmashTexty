@@ -1,5 +1,5 @@
 // Statistics and Achievements scene
-import { getSaveStats, getUnlockedAchievements, getCurrencyName } from '../systems/metaProgression.js';
+import { getSaveStats, getUnlockedAchievements, getCurrencyName, getRunHistory } from '../systems/metaProgression.js';
 import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory } from '../data/achievements.js';
 import {
     UI_TEXT_SIZES,
@@ -63,18 +63,19 @@ export function setupStatisticsScene(k) {
         // Background particle effects
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
-        // Title
-        createAnimatedTitle(k, 'RATINGS AND RECORDS', k.width() / 2, 60, 8);
-        
+        // Title (moved up to avoid collision with tabs)
+        createAnimatedTitle(k, 'RATINGS AND RECORDS', k.width() / 2, 35, 8);
+
         // Tab buttons (centered like Settings menu)
-        const tabY = 90;
+        const tabY = 80;
         const tabSpacing = 160; // Increased spacing to add padding between buttons
         const tabWidth = 150;
         const tabHeight = 30;
         
         const tabs = [
             { key: 'stats', label: 'Statistics' },
-            { key: 'achievements', label: 'Achievements' }
+            { key: 'achievements', label: 'Achievements' },
+            { key: 'history', label: 'History' }
         ];
         
         // Calculate centered positions for tabs (same as Settings menu)
@@ -417,6 +418,84 @@ export function setupStatisticsScene(k) {
                         k.z(1000)
                     ]);
                     contentItems.push(errorText);
+                }
+            } else if (currentTab === 'history') {
+                // Display run history
+                const runHistory = getRunHistory();
+                const historyY = contentY + 10;
+                const rowHeight = 40;
+
+                if (runHistory.length === 0) {
+                    // No history yet
+                    const noHistoryText = k.add([
+                        k.text('No run history yet. Complete a run to see it here!', { size: 16 }),
+                        k.pos(k.width() / 2, historyY + 50),
+                        k.anchor('center'),
+                        k.color(150, 150, 150),
+                        k.fixed(),
+                        k.z(1000)
+                    ]);
+                    contentItems.push(noHistoryText);
+                } else {
+                    // Header row
+                    const headers = ['#', 'Floor', 'Rooms', 'Kills', 'Level', 'Credits', 'Time'];
+                    const headerPositions = [60, 120, 200, 280, 360, 450, 550];
+
+                    headers.forEach((header, i) => {
+                        const headerText = k.add([
+                            k.text(header, { size: 14 }),
+                            k.pos(headerPositions[i], historyY),
+                            k.anchor('left'),
+                            k.color(255, 200, 100),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+                        contentItems.push(headerText);
+                    });
+
+                    // Run history rows (limit to 10 most recent)
+                    const displayRuns = runHistory.slice(0, 10);
+                    displayRuns.forEach((run, index) => {
+                        const y = historyY + (index + 1) * rowHeight;
+
+                        // Format duration
+                        const mins = Math.floor(run.duration / 60);
+                        const secs = run.duration % 60;
+                        const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
+
+                        const rowData = [
+                            `${index + 1}`,
+                            `${run.floorsReached}`,
+                            `${run.roomsCleared}`,
+                            `${run.enemiesKilled}`,
+                            `${run.level}`,
+                            `${currencyName}${run.currencyEarned}`,
+                            timeStr
+                        ];
+
+                        rowData.forEach((value, i) => {
+                            const cellText = k.add([
+                                k.text(value, { size: 14 }),
+                                k.pos(headerPositions[i], y),
+                                k.anchor('left'),
+                                k.color(200, 200, 200),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+                            contentItems.push(cellText);
+                        });
+                    });
+
+                    // Show total runs count
+                    const totalText = k.add([
+                        k.text(`Showing ${displayRuns.length} of ${runHistory.length} recent runs`, { size: 12 }),
+                        k.pos(k.width() / 2, viewportBottom - 30),
+                        k.anchor('center'),
+                        k.color(100, 100, 150),
+                        k.fixed(),
+                        k.z(1000)
+                    ]);
+                    contentItems.push(totalText);
                 }
             }
         }
