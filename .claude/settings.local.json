@@ -29,7 +29,8 @@
       "Bash(npx gh-pages -d dist)",
       "Bash(node:*)",
       "Bash(wc:*)",
-      "Bash(npx eslint:*)"
+      "Bash(npx eslint:*)",
+      "Bash(git fetch:*)"
     ],
     "deny": [],
     "ask": []

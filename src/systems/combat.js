@@ -681,6 +681,13 @@ export function setupCombatSystem(k, player) {
         // Track who last hit this enemy for kill attribution
         if (projectile.ownerSlotIndex !== undefined) {
             enemy.lastHitBySlot = projectile.ownerSlotIndex;
+
+            // Update survivalist combat time when dealing damage (not just taking damage)
+            const allPlayers = k.get('player');
+            const ownerPlayer = allPlayers.find(p => p.slotIndex === projectile.ownerSlotIndex);
+            if (ownerPlayer && ownerPlayer.survivalistEnabled) {
+                ownerPlayer.survivalistLastCombatTime = k.time();
+            }
         }
 
         // Broadcast damage event for multiplayer

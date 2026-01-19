@@ -46,7 +46,7 @@ import { createMinimap } from '../systems/minimap.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
 import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay, updatePowerupWeapon, restoreOriginalWeapon } from '../systems/powerupWeapons.js';
 import { getParty, getPartySize } from '../systems/partySystem.js';
-import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, broadcastObstacles } from '../systems/multiplayerGame.js';
+import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, broadcastObstacles, broadcastHealEvent } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 
 // Data imports
@@ -233,6 +233,19 @@ export function setupGameScene(k) {
 
         // Get party size early for multiplayer checks throughout the scene
         const partySize = getPartySize();
+
+        // Helper function to get seeded RNG for the current room
+        // Priority: daily run > multiplayer > random (for single player consistency)
+        function getSeededRoomRNG() {
+            if (gameState.isDailyRun && gameState.dailySeed) {
+                // Create room-specific seed for daily runs
+                const roomSeed = gameState.dailySeed + currentFloor * 10000 + currentRoom * 100;
+                return new SeededRandom(roomSeed);
+            } else if (partySize > 1) {
+                return getRoomRNG();
+            }
+            return null; // Single player non-daily: use Math.random()
+        }
 
         // Helper function to generate floor map and minimap
         const generateFloorMapAndMinimap = () => {
@@ -952,6 +965,41 @@ export function setupGameScene(k) {
                         restoreOriginalWeapon(expiringPlayer);
                     }
                 });
+
+                // Handle player heal events from host (lifesteal, regen, etc.)
+                onMessage('player_healed', (data) => {
+                    const healedPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (healedPlayer && healedPlayer.exists()) {
+                        healedPlayer.setHP(data.newHP);
+                    }
+                });
+
+                // Handle player dodge events from host
+                onMessage('player_dodged', (data) => {
+                    const dodgingPlayer = players.find(p => p.slotIndex === data.slotIndex);
+                    if (dodgingPlayer && dodgingPlayer.exists()) {
+                        // Show dodge visual feedback
+                        const dodgeText = k.add([
+                            k.text('DODGE!', { size: 14 }),
+                            k.pos(data.x, data.y - 30),
+                            k.anchor('center'),
+                            k.color(100, 200, 255),
+                            k.opacity(1),
+                            k.z(500)
+                        ]);
+
+                        // Fade out and destroy
+                        let elapsed = 0;
+                        dodgeText.onUpdate(() => {
+                            elapsed += k.dt();
+                            dodgeText.pos.y -= 30 * k.dt();
+                            dodgeText.opacity = Math.max(0, 1 - elapsed / 0.8);
+                            if (elapsed >= 0.8) {
+                                k.destroy(dodgeText);
+                            }
+                        });
+                    }
+                });
                 } // End of handler registration guard
             }
         } else {
@@ -1252,7 +1300,7 @@ export function setupGameScene(k) {
             roomTemplate = currentRoomNode.template;
         } else {
             // Fallback to weighted generation
-            roomTemplate = getWeightedRoomTemplate(currentFloor, partySize > 1 ? getRoomRNG() : null);
+            roomTemplate = getWeightedRoomTemplate(currentFloor, getSeededRoomRNG());
         }
         const floorColors = getFloorColors(k, currentFloor);
         const margin = 20;
@@ -2020,22 +2068,23 @@ export function setupGameScene(k) {
             const dt = k.dt();
 
             // Berserker synergy: +50% damage/speed below 30% HP
+            // Uses multiplier approach to avoid issues with upgrades changing base stats
             if (player.berserkerEnabled) {
                 const hpPercent = player.hp() / player.maxHealth;
                 const isBelowThreshold = hpPercent < (player.berserkerThreshold || 0.3);
+                const speedMultiplier = 1 + (player.berserkerSpeedBonus || 0.5);
+                const damageMultiplier = 1 + (player.berserkerDamageBonus || 0.5);
 
                 if (isBelowThreshold && !player.berserkerActive) {
-                    // Activate berserker mode
+                    // Activate berserker mode - apply multiplier to current stats
                     player.berserkerActive = true;
-                    player.berserkerOriginalSpeed = player.speed;
-                    player.berserkerOriginalDamage = player.projectileDamage;
-                    player.speed = Math.floor(player.speed * (1 + (player.berserkerSpeedBonus || 0.5)));
-                    player.projectileDamage = Math.floor(player.projectileDamage * (1 + (player.berserkerDamageBonus || 0.5)));
+                    player.speed = Math.floor(player.speed * speedMultiplier);
+                    player.projectileDamage = Math.floor(player.projectileDamage * damageMultiplier);
                 } else if (!isBelowThreshold && player.berserkerActive) {
-                    // Deactivate berserker mode
+                    // Deactivate berserker mode - remove multiplier from current stats
                     player.berserkerActive = false;
-                    if (player.berserkerOriginalSpeed) player.speed = player.berserkerOriginalSpeed;
-                    if (player.berserkerOriginalDamage) player.projectileDamage = player.berserkerOriginalDamage;
+                    player.speed = Math.floor(player.speed / speedMultiplier);
+                    player.projectileDamage = Math.floor(player.projectileDamage / damageMultiplier);
                 }
             }
 
@@ -2060,6 +2109,16 @@ export function setupGameScene(k) {
                         player.survivalistRegenAccum -= healAmount;
                         const newHP = Math.min(player.maxHealth, player.hp() + healAmount);
                         player.setHP(newHP);
+
+                        // Broadcast heal for multiplayer sync
+                        if (isMultiplayerActive() && isHost()) {
+                            broadcastHealEvent({
+                                slotIndex: player.slotIndex,
+                                healAmount: healAmount,
+                                newHP: newHP,
+                                source: 'survivalist'
+                            });
+                        }
                     }
                 }
             }
@@ -2718,8 +2777,8 @@ export function setupGameScene(k) {
         
         // Determine if this room should have a miniboss (random chance, not in boss rooms)
         // 15% chance for miniboss room, increases with floor
-        // Use seeded RNG for multiplayer consistency (and single player for consistency)
-        const roomRng = partySize > 1 ? getRoomRNG() : new SeededRandom(Date.now());
+        // Use seeded RNG for multiplayer consistency, daily runs, or single player
+        const roomRng = getSeededRoomRNG() || new SeededRandom(Date.now());
         if (!isBossRoom && currentRoom !== 1) { // Don't spawn miniboss in first room or boss room
             const minibossChance = 0.15 + (currentFloor - 1) * 0.05; // 15% base, +5% per floor
             isMinibossRoom = roomRng.next() < minibossChance;
@@ -2832,7 +2891,7 @@ export function setupGameScene(k) {
                     const bossType = getBossTypeForFloor(currentFloor);
 
                     // Use seeded RNG for boss spawn position in multiplayer
-                    const bossRng = partySize > 1 ? getRoomRNG() : null;
+                    const bossRng = getSeededRoomRNG();
 
                     // Special handling for Twin Guardians - spawn from opposite doors
                     if (bossType === 'twinGuardian') {
@@ -2973,7 +3032,7 @@ export function setupGameScene(k) {
                     const minibossType = getRandomMinibossType(currentFloor, roomRng);
 
                     // Use seeded RNG for miniboss spawn position in multiplayer
-                    const minibossRng = partySize > 1 ? getRoomRNG() : null;
+                    const minibossRng = getSeededRoomRNG();
 
                     // Spawn miniboss at a random door (avoid entrance door)
                     const availableDoors = spawnDoors.filter(d => d.direction !== gameState.entryDirection);
@@ -3035,7 +3094,7 @@ export function setupGameScene(k) {
                     enemiesSpawned++;
 
                     // Get spawn RNG (seeded by room + spawn wave number for multiplayer sync)
-                    const spawnRng = partySize > 1 ? getRoomRNG() : null;
+                    const spawnRng = getSeededRoomRNG();
 
                     // Use consistent seed for this specific spawn
                     if (spawnRng) {
@@ -3262,7 +3321,7 @@ export function setupGameScene(k) {
                     // Pickups will be broadcast to clients via registerPickup()
                     if (!isMultiplayerActive() || isHost()) {
                         // Get loot RNG (seeded for multiplayer to ensure consistent drops)
-                        const lootRng = partySize > 1 ? getRoomRNG() : null;
+                        const lootRng = getSeededRoomRNG();
 
                         // Spawn XP pickup at enemy position
                         // Note: createXPPickup handles multiplayer registration internally
@@ -3326,7 +3385,7 @@ export function setupGameScene(k) {
                     // Only spawn pickups if we're the host (or not in multiplayer)
                     if (!isMultiplayerActive() || isHost()) {
                         // Get loot RNG (seeded for multiplayer)
-                        const lootRng = partySize > 1 ? getRoomRNG() : null;
+                        const lootRng = getSeededRoomRNG();
 
                         // Spawn XP pickup at miniboss position (minibosses give more XP than regular enemies)
                         // Note: createXPPickup handles multiplayer registration internally
@@ -3396,7 +3455,7 @@ export function setupGameScene(k) {
                     // Only spawn pickups if we're the host (or not in multiplayer)
                     if (!isMultiplayerActive() || isHost()) {
                         // Get loot RNG (seeded for multiplayer)
-                        const lootRng = partySize > 1 ? getRoomRNG() : null;
+                        const lootRng = getSeededRoomRNG();
 
                         // Spawn XP pickup at boss position (bosses give more XP)
                         // Note: createXPPickup handles multiplayer registration internally
@@ -3883,7 +3942,7 @@ export function setupGameScene(k) {
             const numCurrencyPickups = Math.floor((baseCurrency + floorBonus) * currencyMultiplier);
 
             // Use seeded RNG for multiplayer consistency
-            const rewardRng = partySize > 1 ? getRoomRNG() : null;
+            const rewardRng = getSeededRoomRNG();
 
             // Spawn XP pickups in a spread pattern
             for (let i = 0; i < numXPPickups; i++) {

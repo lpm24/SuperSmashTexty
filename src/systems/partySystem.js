@@ -831,10 +831,11 @@ export function toggleReady() {
 
 /**
  * Get local player slot index
- * @returns {number|null} - Local player slot index
+ * @returns {number|null} - Local player slot index, or null if not found
  */
 export function getLocalPlayerSlot() {
-    return party.slots.findIndex(s => s.isLocal);
+    const index = party.slots.findIndex(s => s.isLocal);
+    return index >= 0 ? index : null;
 }
 
 /**
