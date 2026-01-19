@@ -366,6 +366,7 @@ export function setupLeaderboardsScene(k) {
                         personalPage--;
                         renderContent();
                     });
+                    leftArrow.cursor = 'pointer';
                 }
                 contentElements.push(leftArrow);
 
@@ -393,6 +394,7 @@ export function setupLeaderboardsScene(k) {
                             renderContent();
                         }
                     });
+                    pip.cursor = 'pointer';
 
                     contentElements.push(pip);
                 }
@@ -414,6 +416,7 @@ export function setupLeaderboardsScene(k) {
                         personalPage++;
                         renderContent();
                     });
+                    rightArrow.cursor = 'pointer';
                 }
                 contentElements.push(rightArrow);
             }

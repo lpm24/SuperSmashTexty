@@ -590,6 +590,7 @@ export function setupShopScene(k) {
                         currentPage--;
                         refreshShop();
                     });
+                    leftArrow.cursor = 'pointer';
                 }
                 paginationItems.push(leftArrow);
 
@@ -618,6 +619,7 @@ export function setupShopScene(k) {
                             refreshShop();
                         }
                     });
+                    pip.cursor = 'pointer';
 
                     paginationItems.push(pip);
                 }
@@ -639,6 +641,7 @@ export function setupShopScene(k) {
                         currentPage++;
                         refreshShop();
                     });
+                    rightArrow.cursor = 'pointer';
                 }
                 paginationItems.push(rightArrow);
             }

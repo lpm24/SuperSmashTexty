@@ -367,7 +367,7 @@ export function setupStatisticsScene(k) {
                         // Left arrow
                         const leftArrow = k.add([
                             k.text('<', { size: 24 }),
-                            k.pos(paginationCenterX - 80, paginationY),
+                            k.pos(paginationCenterX - 60, paginationY),
                             k.anchor('center'),
                             k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                             k.area(),
@@ -381,6 +381,7 @@ export function setupStatisticsScene(k) {
                                 currentPage--;
                                 refreshContent();
                             });
+                            leftArrow.cursor = 'pointer';
                         }
                         contentItems.push(leftArrow);
 
@@ -408,6 +409,7 @@ export function setupStatisticsScene(k) {
                                     refreshContent();
                                 }
                             });
+                            pip.cursor = 'pointer';
 
                             contentItems.push(pip);
                         }
@@ -415,7 +417,7 @@ export function setupStatisticsScene(k) {
                         // Right arrow
                         const rightArrow = k.add([
                             k.text('>', { size: 24 }),
-                            k.pos(paginationCenterX + 80, paginationY),
+                            k.pos(paginationCenterX + 60, paginationY),
                             k.anchor('center'),
                             k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                             k.area(),
@@ -429,6 +431,7 @@ export function setupStatisticsScene(k) {
                                 currentPage++;
                                 refreshContent();
                             });
+                            rightArrow.cursor = 'pointer';
                         }
                         contentItems.push(rightArrow);
                     }
