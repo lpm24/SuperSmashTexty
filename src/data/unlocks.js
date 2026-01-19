@@ -107,7 +107,8 @@ export const WEAPON_UNLOCKS = {
         description: 'Pierces ALL enemies in a line, 3s cooldown',
         cost: 600,
         unlockedByDefault: false,
-        unlockRequirement: { type: 'floor', value: 4 }
+        unlockRequirement: { type: 'floor', value: 4 },
+        requiredAchievement: 'boss25' // Requires "Boss Crusher" achievement
     }
 };
 

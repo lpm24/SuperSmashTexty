@@ -1,6 +1,8 @@
 // Shop scene - allows players to purchase unlocks
-import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
+import { getAchievementById } from '../data/achievements.js';
+import { showAchievementModal } from '../components/achievementModal.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
 import {
     UI_TEXT_SIZES,
@@ -197,55 +199,79 @@ export function setupShopScene(k) {
                 const row = index % itemsPerColumn;
                 const itemX = 50 + column * 350;
                 const itemY = startY + row * itemSpacing;
-                
+
+                // Check achievement requirement
+                const isAchievementLocked = !isItemAchievementUnlockedSync(unlock);
+                const requiredAchievement = unlock.requiredAchievement ? getAchievementById(unlock.requiredAchievement) : null;
+
                 // Item card background
                 // For characters, use green border if unlocked
                 const isUnlockedChar = currentCategory === 'characters' && isUnlocked('characters', key);
-                const borderColor = isUnlockedChar ? k.rgb(100, 255, 100) : k.rgb(80, 80, 100);
-                
+                let borderColor;
+                if (isAchievementLocked) {
+                    borderColor = k.rgb(60, 50, 50); // Dim red-gray for achievement-locked
+                } else if (isUnlockedChar) {
+                    borderColor = k.rgb(100, 255, 100);
+                } else {
+                    borderColor = k.rgb(80, 80, 100);
+                }
+
                 const cardBg = k.add([
                     k.rect(320, 90),
                     k.pos(itemX, itemY),
                     k.anchor('topleft'),
-                    k.color(40, 40, 50),
+                    k.color(isAchievementLocked ? 30 : 40, isAchievementLocked ? 25 : 40, isAchievementLocked ? 25 : 50),
                     k.outline(2, borderColor),
                     k.area(),
                     k.fixed(),
                     k.z(1000)
                 ]);
-                
+
                 // Character icon (if this is a character) - centered vertically
                 if (currentCategory === 'characters' && unlock.char) {
                     const iconText = k.add([
                         k.text(unlock.char, { size: 32 }),
                         k.pos(itemX + 25, itemY + 45), // Center vertically: itemY + 90/2 = itemY + 45
                         k.anchor('center'),
-                        k.color(...(isUnlockedChar && unlock.color ? unlock.color : [100, 100, 100])),
+                        k.color(...(isAchievementLocked ? [50, 50, 50] : (isUnlockedChar && unlock.color ? unlock.color : [100, 100, 100]))),
                         k.fixed(),
                         k.z(1001)
                     ]);
                     unlockItems.push(iconText);
                 }
-                
+
+                // Lock icon for achievement-locked items
+                if (isAchievementLocked) {
+                    const lockIcon = k.add([
+                        k.text('[X]', { size: 16 }),
+                        k.pos(itemX + 300, itemY + 10),
+                        k.anchor('topright'),
+                        k.color(150, 100, 100),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+                    unlockItems.push(lockIcon);
+                }
+
                 // Item name (offset right if character icon is present)
                 const nameX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
                 const nameText = k.add([
                     k.text(unlock.name, { size: 18 }),
                     k.pos(nameX, itemY + 10),
                     k.anchor('topleft'),
-                    k.color(255, 255, 255),
+                    k.color(isAchievementLocked ? 120 : 255, isAchievementLocked ? 120 : 255, isAchievementLocked ? 120 : 255),
                     k.fixed(),
                     k.z(1001)
                 ]);
-                
+
                 // Item description (with width constraint to prevent overflow, offset if character icon present)
                 const descX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
-                const descWidth = (currentCategory === 'characters' && unlock.char) ? 230 : 300;
+                const descWidth = (currentCategory === 'characters' && unlock.char) ? 180 : 200; // Reduced width to prevent button overlap
                 const descText = k.add([
-                    k.text(unlock.description, { size: 14, width: descWidth }),
+                    k.text(isAchievementLocked ? `Requires: ${requiredAchievement?.name || 'Unknown Achievement'}` : unlock.description, { size: 14, width: descWidth }),
                     k.pos(descX, itemY + 35),
                     k.anchor('topleft'),
-                    k.color(200, 200, 200),
+                    k.color(isAchievementLocked ? 150 : 200, isAchievementLocked ? 100 : 200, isAchievementLocked ? 100 : 200),
                     k.fixed(),
                     k.z(1001)
                 ]);
@@ -306,8 +332,38 @@ export function setupShopScene(k) {
                     ]);
                 }
                 
-                // Purchase button
-                if (canPurchase || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) < (unlock.maxLevel || 1))) {
+                // Purchase button or View Achievement button
+                if (isAchievementLocked) {
+                    // Show "View" button for achievement-locked items
+                    const viewButtonBg = k.add([
+                        k.rect(80, 30),
+                        k.pos(itemX + 230, itemY + 55),
+                        k.anchor('topleft'),
+                        k.color(60, 50, 80),
+                        k.outline(2, k.rgb(100, 80, 150)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+
+                    const viewButtonText = k.add([
+                        k.text('VIEW', { size: 14 }),
+                        k.pos(itemX + 270, itemY + 70),
+                        k.anchor('center'),
+                        k.color(180, 150, 255),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+
+                    viewButtonBg.onClick(() => {
+                        playMenuNav();
+                        if (requiredAchievement) {
+                            showAchievementModal(k, requiredAchievement);
+                        }
+                    });
+
+                    unlockItems.push(viewButtonBg, viewButtonText);
+                } else if (canPurchase || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) < (unlock.maxLevel || 1))) {
                     const buttonBg = k.add([
                         k.rect(80, 30),
                         k.pos(itemX + 230, itemY + 55),
@@ -318,7 +374,7 @@ export function setupShopScene(k) {
                         k.fixed(),
                         k.z(1001)
                     ]);
-                    
+
                     const buttonText = k.add([
                         k.text(`$${purchaseCost}`, { size: 14 }),
                         k.pos(itemX + 270, itemY + 70),

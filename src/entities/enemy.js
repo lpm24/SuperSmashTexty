@@ -610,8 +610,8 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
         }
 
         // Find nearest alive player (support multiplayer)
-        const allPlayers = k.get('player');
-        const alivePlayers = allPlayers.filter(p => p.exists() && !p.isDead && p.hp() > 0);
+        // Use cached alivePlayers from gameData for performance (updated each frame in game.js)
+        const alivePlayers = k.gameData?.alivePlayers || k.get('player').filter(p => p.exists() && !p.isDead && p.hp() > 0);
 
         if (alivePlayers.length === 0) return; // No alive players to target
 

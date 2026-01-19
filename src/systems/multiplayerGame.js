@@ -9,6 +9,7 @@ import { createEnemy } from '../entities/enemy.js';
 import { createBoss } from '../entities/boss.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
 import { SeededRandom, createSeed } from '../utils/seededRandom.js';
+import { initConnectionQuality } from './connectionQuality.js';
 
 // Debug flag - set to true to enable verbose multiplayer logging
 const MP_DEBUG = false;
@@ -56,6 +57,9 @@ export function initMultiplayerGame(isHost, localSlot = 0, kaplayInstance = null
     mpGame.inputBuffer = [];
     mpGame.lastSyncTime = 0;
     mpGame.k = kaplayInstance;
+
+    // Initialize connection quality monitoring (registers ping/pong handlers)
+    initConnectionQuality();
 
     // Clear entity tracking
     mpGame.enemies.clear();
@@ -254,6 +258,18 @@ function setupHostHandlers() {
         });
 
         if (MP_DEBUG) console.log('[Multiplayer] Host broadcasted synergy activation for slot:', payload.slotIndex);
+    });
+
+    // Handle achievement unlock from clients (rebroadcast to all)
+    onMessage('achievement_unlocked', (payload, fromPeerId) => {
+        if (MP_DEBUG) console.log('[Multiplayer] Received achievement unlock from client:', fromPeerId, 'achievement:', payload.achievementId);
+
+        // Broadcast to ALL clients so everyone can show the toast
+        broadcast('achievement_unlocked', {
+            achievementId: payload.achievementId,
+            playerSlotIndex: payload.playerSlotIndex,
+            playerName: payload.playerName
+        });
     });
 }
 
@@ -870,6 +886,29 @@ function setupClientHandlers() {
             mpGame.k.go('menu');
         }
     });
+
+    // Receive achievement unlock notification from other players
+    onMessage('achievement_unlocked', async (payload) => {
+        // Only show toast if it's not from the local player
+        if (payload.playerSlotIndex !== mpGame.localPlayerSlot) {
+            if (MP_DEBUG) console.log('[Multiplayer] Achievement unlocked by player:', payload.playerName, 'achievement:', payload.achievementId);
+
+            try {
+                // Import achievement data and toast system
+                const { ACHIEVEMENTS } = await import('../data/achievements.js');
+                const { showMultiplayerAchievementToast, initToastSystem } = await import('./toastNotifications.js');
+
+                const achievement = ACHIEVEMENTS[payload.achievementId];
+                if (achievement && mpGame.k) {
+                    // Make sure toast system is initialized
+                    initToastSystem(mpGame.k);
+                    showMultiplayerAchievementToast(payload.playerName, achievement);
+                }
+            } catch (e) {
+                console.warn('[Multiplayer] Failed to show achievement toast:', e);
+            }
+        }
+    });
 }
 
 /**
@@ -1171,6 +1210,60 @@ export function sendInitialGameState(peerId) {
 
     console.log('Sending initial game state to new joiner:', peerId);
     sendToPeer(peerId, 'game_state', collectGameState());
+
+    // Also send all existing entities for mid-game join
+    sendAllExistingEntities(peerId);
+}
+
+/**
+ * Send all existing entities to a newly joined peer (host only)
+ * This ensures mid-game joiners see all enemies and pickups
+ * @param {string} peerId - Peer ID to send entities to
+ */
+export function sendAllExistingEntities(peerId) {
+    if (!mpGame.isHost || !mpGame.isActive || !mpGame.k) return;
+
+    const k = mpGame.k;
+    console.log('[Multiplayer] Sending existing entities to new joiner:', peerId);
+
+    // Send all enemies
+    mpGame.enemies.forEach((enemy, entityId) => {
+        if (enemy && enemy.exists()) {
+            const entityData = {
+                entityId: entityId,
+                entityType: 'enemy',
+                x: enemy.pos.x,
+                y: enemy.pos.y,
+                enemyType: enemy.type || 'basic',
+                floor: enemy.floor || 1,
+                isBoss: enemy.is('boss') || false,
+                isMiniboss: enemy.is('miniboss') || false,
+                health: enemy.hp(),
+                maxHealth: enemy.maxHealth,
+                armorHealth: enemy.armorHealth || 0,
+                shieldHealth: enemy.shieldHealth || 0
+            };
+            sendToPeer(peerId, 'spawn_entity', entityData);
+        }
+    });
+
+    // Send all pickups
+    mpGame.pickups.forEach((pickup, entityId) => {
+        if (pickup && pickup.exists()) {
+            const entityData = {
+                entityId: entityId,
+                entityType: 'pickup',
+                x: pickup.pos.x,
+                y: pickup.pos.y,
+                pickupType: pickup.pickupType || (pickup.is('xpPickup') ? 'xp' : pickup.is('currencyPickup') ? 'currency' : 'powerup'),
+                xpValue: pickup.xpValue || 0,
+                currencyValue: pickup.currencyValue || 0
+            };
+            sendToPeer(peerId, 'spawn_entity', entityData);
+        }
+    });
+
+    console.log('[Multiplayer] Sent', mpGame.enemies.size, 'enemies and', mpGame.pickups.size, 'pickups to new joiner');
 }
 
 /**
@@ -1411,6 +1504,42 @@ export function broadcastDamageEvent(params) {
         damage: Number(params.damage),
         isCrit: Boolean(params.isCrit || false),
         attackerId: params.attackerId !== undefined ? Number(params.attackerId) : null,
+        x: Number(params.x),
+        y: Number(params.y)
+    });
+}
+
+/**
+ * Broadcast a heal event to all clients (host only)
+ * @param {Object} params - Heal event parameters
+ * @param {number} params.slotIndex - Player slot index
+ * @param {number} params.healAmount - Amount healed
+ * @param {number} params.newHP - New HP value
+ * @param {string} params.source - Source of healing ('lifesteal', 'regen', 'vampiric', 'pickup')
+ */
+export function broadcastHealEvent(params) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('player_healed', {
+        slotIndex: Number(params.slotIndex),
+        healAmount: Number(params.healAmount),
+        newHP: Number(params.newHP),
+        source: String(params.source || 'unknown')
+    });
+}
+
+/**
+ * Broadcast a dodge event to all clients (host only)
+ * @param {Object} params - Dodge event parameters
+ * @param {number} params.slotIndex - Player slot index
+ * @param {number} params.x - X position for visual
+ * @param {number} params.y - Y position for visual
+ */
+export function broadcastDodgeEvent(params) {
+    if (!mpGame.isHost || !mpGame.isActive) return;
+
+    broadcast('player_dodged', {
+        slotIndex: Number(params.slotIndex),
         x: Number(params.x),
         y: Number(params.y)
     });
@@ -1863,4 +1992,32 @@ export function requestResync() {
     if (mpGame.isHost) return; // Host doesn't request resyncs
 
     sendToHost('resync_request', { timestamp: Date.now() });
+}
+
+/**
+ * Get the local player's slot index
+ * @returns {number} Local player's slot index
+ */
+export function getLocalPlayerSlot() {
+    return mpGame.localPlayerSlot;
+}
+
+/**
+ * Broadcast achievement unlock to all players
+ * @param {string} achievementId - ID of the achievement that was unlocked
+ * @param {number} playerSlotIndex - Slot index of the player who unlocked it
+ */
+export function broadcastAchievementUnlocked(achievementId, playerSlotIndex) {
+    if (!mpGame.isActive) return;
+
+    const party = getParty();
+    const player = party.slots[playerSlotIndex];
+    const playerName = player?.name || `Player ${playerSlotIndex + 1}`;
+
+    // Broadcast to all players (including ourselves for consistency)
+    broadcast('achievement_unlocked', {
+        achievementId,
+        playerSlotIndex,
+        playerName
+    });
 }

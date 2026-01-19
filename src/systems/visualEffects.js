@@ -7,6 +7,14 @@ let shakeTimer = 0;
 let shakeIntensity = 0;
 let inHitFreeze = false;
 
+// Rate limiting for screen shake to prevent performance issues
+let lastShakeTime = 0;
+const MIN_SHAKE_INTERVAL = 0.05; // Minimum 50ms between shake calls
+
+// Rate limiting for hit freeze
+let lastFreezeTime = 0;
+const MIN_FREEZE_INTERVAL = 100; // Minimum 100ms between freeze calls
+
 /**
  * Initialize the visual effects system
  * @param {object} k - Kaplay instance
@@ -25,6 +33,18 @@ export function screenShake(intensity = 5, duration = 0.1) {
 
     // Check if screen shake is enabled in settings
     if (!getSetting('visual', 'showScreenShake')) return;
+
+    // Rate limit screen shake to prevent performance issues
+    const currentTime = kInstance.time();
+    if (currentTime - lastShakeTime < MIN_SHAKE_INTERVAL) {
+        // Still allow extending duration/intensity of existing shake
+        if (shakeTimer > 0) {
+            shakeIntensity = Math.max(shakeIntensity, intensity);
+            shakeTimer = Math.max(shakeTimer, duration);
+        }
+        return;
+    }
+    lastShakeTime = currentTime;
 
     // Store original position if not already shaking
     if (shakeTimer <= 0) {
@@ -73,8 +93,15 @@ export function hitFreeze(duration = 50) {
     // Check if hit freeze is enabled in settings
     if (!getSetting('visual', 'showHitFreeze')) return;
 
-    // Don't freeze if already paused
-    if (kInstance.paused) return;
+    // Don't freeze if already paused or in freeze
+    if (kInstance.paused || inHitFreeze) return;
+
+    // Rate limit hit freeze to prevent performance issues
+    const currentTime = Date.now();
+    if (currentTime - lastFreezeTime < MIN_FREEZE_INTERVAL) {
+        return;
+    }
+    lastFreezeTime = currentTime;
 
     // Pause the game briefly
     kInstance.paused = true;
@@ -173,4 +200,7 @@ export function resetVisualEffects() {
         kInstance.camPos(originalCamPos);
     }
     originalCamPos = null;
+    lastShakeTime = 0;
+    lastFreezeTime = 0;
+    inHitFreeze = false;
 }

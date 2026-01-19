@@ -1,6 +1,8 @@
 // Statistics and Achievements scene
 import { getSaveStats, getUnlockedAchievements, getCurrencyName, getRunHistory } from '../systems/metaProgression.js';
-import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory } from '../data/achievements.js';
+import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory, ACHIEVEMENT_COLORS, getAchievementProgress } from '../data/achievements.js';
+import { showAchievementModal } from '../components/achievementModal.js';
+import { playMenuNav } from '../systems/sounds.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -16,7 +18,7 @@ function hslToRgb(h, s, l) {
     h = Math.max(0, Math.min(1, h));
     s = Math.max(0, Math.min(1, s));
     l = Math.max(0, Math.min(1, l));
-    
+
     let r, g, b;
     if (s === 0) {
         r = g = b = l; // achromatic
@@ -48,8 +50,11 @@ export function setupStatisticsScene(k) {
         const stats = getSaveStats();
         const unlockedAchievements = getUnlockedAchievements();
         const currencyName = getCurrencyName();
-        let currentTab = 'stats'; // stats or achievements
-        
+        let currentTab = 'stats'; // stats, achievements, or history
+        let achievementCategory = 'all'; // all, or specific category
+        let currentPage = 0;
+        const ACHIEVEMENTS_PER_PAGE = 8; // 4x2 grid
+
         // Background
         k.add([
             k.rect(k.width(), k.height()),
@@ -71,22 +76,22 @@ export function setupStatisticsScene(k) {
         const tabSpacing = 160; // Increased spacing to add padding between buttons
         const tabWidth = 150;
         const tabHeight = 30;
-        
+
         const tabs = [
             { key: 'stats', label: 'Statistics' },
             { key: 'achievements', label: 'Achievements' },
             { key: 'history', label: 'History' }
         ];
-        
+
         // Calculate centered positions for tabs (same as Settings menu)
         const totalTabWidth = (tabs.length - 1) * tabSpacing;
         const firstTabX = k.width() / 2 - totalTabWidth / 2;
-        
+
         const tabButtons = [];
         tabs.forEach((tab, index) => {
             const tabX = firstTabX + index * tabSpacing;
             const isActive = currentTab === tab.key;
-            
+
             const tabBg = k.add([
                 k.rect(tabWidth, tabHeight),
                 k.pos(tabX, tabY),
@@ -106,24 +111,28 @@ export function setupStatisticsScene(k) {
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
-            
+
             tabBg.onClick(() => {
+                playMenuNav();
                 currentTab = tab.key;
+                currentPage = 0;
+                achievementCategory = 'all';
                 refreshContent();
             });
-            
+
             tabButtons.push({ bg: tabBg, label: tabLabel, key: tab.key });
         });
-        
+
         // Content area
         const contentY = 140;
-        const progressAreaHeight = 40; // Space for progress text
-        const backButtonArea = 60; // Space for back button
-        const bottomButtonArea = progressAreaHeight + backButtonArea; // Total reserved space
-        const viewportTop = contentY;
-        const viewportBottom = k.height() - bottomButtonArea; // Content area stops before progress text
+        const backButtonArea = 80; // Increased space for back button
+        const viewportBottom = k.height() - backButtonArea;
         let contentItems = [];
-        
+        let categoryTabItems = [];
+
+        // Get all achievement categories
+        const allCategories = ['all', ...getAchievementCategories()];
+
         // Refresh content display
         function refreshContent() {
             // Verify k is available
@@ -131,7 +140,7 @@ export function setupStatisticsScene(k) {
                 console.error('k is not available or k.add is not a function');
                 return;
             }
-            
+
             // Update tab visuals
             tabButtons.forEach(tab => {
                 const isActive = currentTab === tab.key;
@@ -146,7 +155,7 @@ export function setupStatisticsScene(k) {
                     isActive ? 255 : 150
                 );
             });
-            
+
             // Clear existing items
             contentItems.forEach(item => {
                 if (item && typeof item.exists === 'function' && item.exists()) {
@@ -158,12 +167,24 @@ export function setupStatisticsScene(k) {
                 }
             });
             contentItems = [];
-            
+
+            // Clear category tab items
+            categoryTabItems.forEach(item => {
+                if (item && typeof item.exists === 'function' && item.exists()) {
+                    try {
+                        k.destroy(item);
+                    } catch (e) {
+                        console.warn('Error destroying category tab item:', e);
+                    }
+                }
+            });
+            categoryTabItems = [];
+
             if (currentTab === 'stats') {
                 // Display statistics
                 const statsY = contentY + 20;
                 const statsSpacing = 30;
-                
+
                 const statLabels = [
                     { label: 'Total Runs', value: stats.totalRuns || 0 },
                     { label: 'Best Floor', value: stats.bestFloor || 1 },
@@ -175,10 +196,10 @@ export function setupStatisticsScene(k) {
                     { label: 'Total Floors Reached', value: stats.totalFloorsReached || 0 },
                     { label: `Total ${currencyName} Earned`, value: stats.totalCurrencyEarned || 0 }
                 ];
-                
+
                 statLabels.forEach((stat, index) => {
                     const y = statsY + index * statsSpacing;
-                    
+
                     // Label
                     const labelText = k.add([
                         k.text(stat.label + ':', { size: 18 }),
@@ -188,7 +209,7 @@ export function setupStatisticsScene(k) {
                         k.fixed(),
                         k.z(1000)
                     ]);
-                    
+
                     // Value
                     const valueText = k.add([
                         k.text(stat.value.toString(), { size: 18 }),
@@ -198,214 +219,283 @@ export function setupStatisticsScene(k) {
                         k.fixed(),
                         k.z(1000)
                     ]);
-                    
+
                     contentItems.push(labelText, valueText);
                 });
-                
+
             } else if (currentTab === 'achievements') {
                 try {
-                // Redesigned: Small icon boxes in grid layout, all on one page
-                // Categories displayed in two columns
-                const categories = getAchievementCategories();
-                const boxSize = 50; // Size of each achievement icon box
-                const boxSpacing = 10; // Spacing between boxes
-                const categorySpacing = 25; // Spacing between categories
-                const categoryHeaderHeight = 25;
-                const columnSpacing = 40; // Spacing between the two columns
-                
-                // Calculate layout to fit everything on one page with two columns
-                const availableWidth = (k.width() - 100 - columnSpacing) / 2; // Half width for each column
-                const availableHeight = viewportBottom - viewportTop - 20; // Leave some margin
-                
-                // Two columns
-                const leftColumnX = 50;
-                const rightColumnX = k.width() / 2 + columnSpacing / 2;
-                
-                let leftColumnY = contentY + 10;
-                let rightColumnY = contentY + 10;
-                
-                categories.forEach((category, categoryIndex) => {
-                    // Achievements in this category as icon boxes
-                    const categoryAchievements = getAchievementsByCategory(category);
-                    if (categoryAchievements.length === 0) return; // Skip empty categories
-                    
-                    // Alternate between left and right columns
-                    const isLeftColumn = categoryIndex % 2 === 0;
-                    const columnX = isLeftColumn ? leftColumnX : rightColumnX;
-                    let currentY = isLeftColumn ? leftColumnY : rightColumnY;
-                    
-                    // Category header
-                    const categoryName = category.charAt(0).toUpperCase() + category.slice(1);
-                    const headerText = k.add([
-                        k.text(categoryName, { size: 18 }),
-                        k.pos(columnX + availableWidth / 2, currentY),
-                        k.anchor('center'),
-                        k.color(255, 200, 100),
-                        k.fixed(),
-                        k.z(1000)
-                    ]);
-                    contentItems.push(headerText);
-                    currentY += categoryHeaderHeight + 5;
-                    
-                    const boxesPerRow = Math.max(1, Math.floor(availableWidth / (boxSize + boxSpacing)));
-                    const actualBoxesInRow = Math.min(boxesPerRow, categoryAchievements.length);
-                    const rowWidth = actualBoxesInRow * (boxSize + boxSpacing) - boxSpacing;
-                    const startX = columnX + (availableWidth - rowWidth) / 2;
-                    
-                    categoryAchievements.forEach((achievement, index) => {
+                    // Category sub-tabs
+                    const categoryTabY = contentY + 5;
+                    const categoryTabWidth = 80;
+                    const categoryTabHeight = 25;
+                    const categoryTabSpacing = 85;
+
+                    const displayCategories = allCategories.slice(0, 7); // Limit to 7 categories
+                    const totalCategoryWidth = (displayCategories.length - 1) * categoryTabSpacing;
+                    const firstCategoryX = k.width() / 2 - totalCategoryWidth / 2;
+
+                    displayCategories.forEach((cat, index) => {
+                        const catX = firstCategoryX + index * categoryTabSpacing;
+                        const isActive = achievementCategory === cat;
+                        const catName = cat === 'all' ? 'All' : cat.charAt(0).toUpperCase() + cat.slice(1);
+
+                        const catBg = k.add([
+                            k.rect(categoryTabWidth, categoryTabHeight),
+                            k.pos(catX, categoryTabY),
+                            k.anchor('center'),
+                            k.color(isActive ? 80 : 40, isActive ? 80 : 40, isActive ? 120 : 60),
+                            k.outline(1, k.rgb(100, 100, 150)),
+                            k.area(),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+
+                        const catLabel = k.add([
+                            k.text(catName, { size: 12 }),
+                            k.pos(catX, categoryTabY),
+                            k.anchor('center'),
+                            k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
+                            k.fixed(),
+                            k.z(1001)
+                        ]);
+
+                        catBg.onClick(() => {
+                            playMenuNav();
+                            achievementCategory = cat;
+                            currentPage = 0;
+                            refreshContent();
+                        });
+
+                        categoryTabItems.push(catBg, catLabel);
+                    });
+
+                    // Get achievements for current category
+                    let categoryAchievements;
+                    if (achievementCategory === 'all') {
+                        categoryAchievements = Object.values(ACHIEVEMENTS);
+                    } else {
+                        categoryAchievements = getAchievementsByCategory(achievementCategory);
+                    }
+
+                    // Pagination
+                    const totalPages = Math.ceil(categoryAchievements.length / ACHIEVEMENTS_PER_PAGE);
+                    if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+
+                    const startIndex = currentPage * ACHIEVEMENTS_PER_PAGE;
+                    const pageAchievements = categoryAchievements.slice(startIndex, startIndex + ACHIEVEMENTS_PER_PAGE);
+
+                    // Grid layout (4x2)
+                    const gridStartY = contentY + 40;
+                    const boxSize = 70;
+                    const boxSpacing = 15;
+                    const boxesPerRow = 4;
+                    const gridWidth = boxesPerRow * (boxSize + boxSpacing) - boxSpacing;
+                    const gridStartX = k.width() / 2 - gridWidth / 2;
+
+                    pageAchievements.forEach((achievement, index) => {
                         const isUnlocked = unlockedAchievements.includes(achievement.id);
                         const row = Math.floor(index / boxesPerRow);
                         const col = index % boxesPerRow;
-                        const boxX = startX + col * (boxSize + boxSpacing);
-                        const boxY = currentY + row * (boxSize + boxSpacing);
-                        
-                        // Validate positions
-                        if (!isFinite(boxX) || !isFinite(boxY) || boxX < 0 || boxY < 0) {
-                            console.warn('Invalid box position:', { boxX, boxY, index, col, row });
-                            return; // Skip this achievement
-                        }
-                        
+                        const boxX = gridStartX + col * (boxSize + boxSpacing);
+                        const boxY = gridStartY + row * (boxSize + boxSpacing + 30); // Extra space for name
+
+                        const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
+
                         // Icon box background
-                        let boxBg, iconText, tooltipBg, tooltipName, tooltipDesc;
-                        
-                        try {
-                            boxBg = k.add([
-                                k.rect(boxSize, boxSize),
-                                k.pos(boxX, boxY),
-                                k.anchor('topleft'),
-                                k.color(isUnlocked ? 40 : 25, isUnlocked ? 40 : 25, isUnlocked ? 50 : 25),
-                                k.outline(2, k.rgb(isUnlocked ? 150 : 60, isUnlocked ? 150 : 60, isUnlocked ? 200 : 60)),
-                                k.area({ width: boxSize, height: boxSize }), // Explicit area definition
-                                k.fixed(),
-                                k.z(1000)
-                            ]);
-                        } catch (e) {
-                            console.error('Error creating boxBg:', e, { boxX, boxY, boxSize });
-                            return; // Skip this achievement
-                        }
-                        
+                        const boxBg = k.add([
+                            k.rect(boxSize, boxSize),
+                            k.pos(boxX, boxY),
+                            k.anchor('topleft'),
+                            k.color(isUnlocked ? 40 : 25, isUnlocked ? 40 : 25, isUnlocked ? 50 : 25),
+                            k.outline(2, k.rgb(...(isUnlocked ? difficultyColor : [60, 60, 60]))),
+                            k.area({ width: boxSize, height: boxSize }),
+                            k.fixed(),
+                            k.z(1000)
+                        ]);
+
                         // Icon
-                        try {
-                            iconText = k.add([
-                                k.text(achievement.icon, { size: 28 }),
-                                k.pos(boxX + boxSize / 2, boxY + boxSize / 2),
-                                k.anchor('center'),
-                                k.color(isUnlocked ? 255 : 80, isUnlocked ? 255 : 80, isUnlocked ? 255 : 80),
-                                k.fixed(),
-                                k.z(1001)
-                            ]);
-                        } catch (e) {
-                            console.error('Error creating iconText:', e);
-                            if (boxBg) k.destroy(boxBg);
-                            return;
-                        }
-                        
-                        // Tooltips disabled - will add achievement name as text below icon instead
+                        const iconText = k.add([
+                            k.text(achievement.icon, { size: 32 }),
+                            k.pos(boxX + boxSize / 2, boxY + boxSize / 2),
+                            k.anchor('center'),
+                            k.color(isUnlocked ? 255 : 80, isUnlocked ? 255 : 80, isUnlocked ? 255 : 80),
+                            k.fixed(),
+                            k.z(1001)
+                        ]);
+
+                        // Achievement name below
                         const nameText = k.add([
-                            k.text(achievement.name, { size: 12, width: boxSize + 20 }),
-                            k.pos(boxX + boxSize / 2, boxY + boxSize + 12),
+                            k.text(achievement.name, { size: 11, width: boxSize + 20 }),
+                            k.pos(boxX + boxSize / 2, boxY + boxSize + 10),
                             k.anchor('center'),
                             k.color(isUnlocked ? 200 : 100, isUnlocked ? 200 : 100, isUnlocked ? 200 : 100),
                             k.fixed(),
                             k.z(1001)
                         ]);
-                        
+
+                        // Progress indicator for locked achievements with thresholds
+                        if (!isUnlocked) {
+                            const progress = getAchievementProgress(achievement.id, stats);
+                            if (progress) {
+                                const progressText = k.add([
+                                    k.text(`${progress.percentage}%`, { size: 10 }),
+                                    k.pos(boxX + boxSize / 2, boxY + boxSize + 22),
+                                    k.anchor('center'),
+                                    k.color(...UI_COLORS.TEXT_DISABLED),
+                                    k.fixed(),
+                                    k.z(1001)
+                                ]);
+                                contentItems.push(progressText);
+                            }
+                        }
+
+                        // Click handler for modal
+                        boxBg.onClick(() => {
+                            playMenuNav();
+                            showAchievementModal(k, achievement);
+                        });
+
                         contentItems.push(boxBg, iconText, nameText);
                     });
-                    
-                    // Move to next category - update the appropriate column's Y position
-                    const rows = Math.ceil(categoryAchievements.length / boxesPerRow);
-                    const categoryHeight = categoryHeaderHeight + 5 + rows * (boxSize + boxSpacing) + categorySpacing;
-                    
-                    if (isLeftColumn) {
-                        leftColumnY += categoryHeight;
-                    } else {
-                        rightColumnY += categoryHeight;
+
+                    // Pagination controls
+                    if (totalPages > 1) {
+                        const paginationY = viewportBottom - 85;
+                        const paginationCenterX = k.width() / 2;
+
+                        // Left arrow
+                        const leftArrow = k.add([
+                            k.text('<', { size: 24 }),
+                            k.pos(paginationCenterX - 80, paginationY),
+                            k.anchor('center'),
+                            k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                            k.area(),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_TEXT)
+                        ]);
+
+                        if (currentPage > 0) {
+                            leftArrow.onClick(() => {
+                                playMenuNav();
+                                currentPage--;
+                                refreshContent();
+                            });
+                        }
+                        contentItems.push(leftArrow);
+
+                        // Page indicator pips
+                        const pipSpacing = 16;
+                        const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+
+                        for (let i = 0; i < totalPages; i++) {
+                            const isCurrentPage = i === currentPage;
+                            const pip = k.add([
+                                k.text(isCurrentPage ? '|' : '.', { size: 14 }),
+                                k.pos(pipsStartX + i * pipSpacing, paginationY),
+                                k.anchor('center'),
+                                k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
+                                k.area(),
+                                k.fixed(),
+                                k.z(UI_Z_LAYERS.UI_TEXT)
+                            ]);
+
+                            const pageIndex = i;
+                            pip.onClick(() => {
+                                if (pageIndex !== currentPage) {
+                                    playMenuNav();
+                                    currentPage = pageIndex;
+                                    refreshContent();
+                                }
+                            });
+
+                            contentItems.push(pip);
+                        }
+
+                        // Right arrow
+                        const rightArrow = k.add([
+                            k.text('>', { size: 24 }),
+                            k.pos(paginationCenterX + 80, paginationY),
+                            k.anchor('center'),
+                            k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                            k.area(),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_TEXT)
+                        ]);
+
+                        if (currentPage < totalPages - 1) {
+                            rightArrow.onClick(() => {
+                                playMenuNav();
+                                currentPage++;
+                                refreshContent();
+                            });
+                        }
+                        contentItems.push(rightArrow);
                     }
-                });
-                
-                // Rainbow gradient progress bar
-                const totalAchievements = Object.keys(ACHIEVEMENTS).length;
-                const unlockedCount = unlockedAchievements.length;
-                const progressPercent = unlockedCount / totalAchievements;
-                
-                const progressBarY = k.height() - backButtonArea - progressAreaHeight / 2;
-                const progressBarWidth = 600;
-                const progressBarHeight = 25;
-                const progressBarX = k.width() / 2;
-                
-                // Progress bar background
-                const progressBarBg = k.add([
-                    k.rect(progressBarWidth, progressBarHeight),
-                    k.pos(progressBarX, progressBarY),
-                    k.anchor('center'),
-                    k.color(30, 30, 40),
-                    k.outline(2, k.rgb(100, 100, 150)),
-                    k.fixed(),
-                    k.z(1000)
-                ]);
-                contentItems.push(progressBarBg);
-                
-                // Rainbow gradient fill (simulated with multiple colored segments)
-                const fillWidth = progressBarWidth * progressPercent;
-                if (fillWidth > 2 && progressPercent > 0 && isFinite(fillWidth)) {
-                    // Use fewer, larger segments for better performance and reliability
-                    const segmentCount = Math.min(15, Math.max(3, Math.floor(fillWidth / 15)));
-                    if (segmentCount > 0 && isFinite(segmentCount)) {
-                        const segmentWidth = fillWidth / segmentCount;
-                        
-                        if (segmentWidth > 0 && isFinite(segmentWidth)) {
-                            for (let i = 0; i < segmentCount; i++) {
-                                const segmentX = progressBarX - progressBarWidth / 2 + i * segmentWidth;
-                                // Cycle through full rainbow spectrum (0-360 degrees) across the filled portion
-                                const hue = (i / segmentCount) * 360;
-                                const rgb = hslToRgb(hue / 360, 1, 0.5);
-                                
-                                if (isFinite(segmentX) && segmentWidth > 0) {
-                                    const segment = k.add([
-                                        k.rect(segmentWidth, progressBarHeight - 4),
-                                        k.pos(segmentX + segmentWidth / 2, progressBarY),
-                                        k.anchor('center'),
-                                        k.color(rgb[0], rgb[1], rgb[2]),
-                                        k.fixed(),
-                                        k.z(1001)
-                                    ]);
-                                    if (segment) {
-                                        contentItems.push(segment);
+
+                    // Rainbow gradient progress bar (moved above back button)
+                    const totalAchievements = Object.keys(ACHIEVEMENTS).length;
+                    const unlockedCount = unlockedAchievements.length;
+                    const progressPercent = unlockedCount / totalAchievements;
+
+                    const progressBarY = viewportBottom - 45;
+                    const progressBarWidth = 500;
+                    const progressBarHeight = 20;
+                    const progressBarX = k.width() / 2;
+
+                    // Progress bar background
+                    const progressBarBg = k.add([
+                        k.rect(progressBarWidth, progressBarHeight),
+                        k.pos(progressBarX, progressBarY),
+                        k.anchor('center'),
+                        k.color(30, 30, 40),
+                        k.outline(2, k.rgb(100, 100, 150)),
+                        k.fixed(),
+                        k.z(1000)
+                    ]);
+                    contentItems.push(progressBarBg);
+
+                    // Rainbow gradient fill
+                    const fillWidth = progressBarWidth * progressPercent;
+                    if (fillWidth > 2 && progressPercent > 0 && isFinite(fillWidth)) {
+                        const segmentCount = Math.min(15, Math.max(3, Math.floor(fillWidth / 15)));
+                        if (segmentCount > 0 && isFinite(segmentCount)) {
+                            const segmentWidth = fillWidth / segmentCount;
+
+                            if (segmentWidth > 0 && isFinite(segmentWidth)) {
+                                for (let i = 0; i < segmentCount; i++) {
+                                    const segmentX = progressBarX - progressBarWidth / 2 + i * segmentWidth;
+                                    const hue = (i / segmentCount) * 360;
+                                    const rgb = hslToRgb(hue / 360, 1, 0.5);
+
+                                    if (isFinite(segmentX) && segmentWidth > 0) {
+                                        const segment = k.add([
+                                            k.rect(segmentWidth, progressBarHeight - 4),
+                                            k.pos(segmentX + segmentWidth / 2, progressBarY),
+                                            k.anchor('center'),
+                                            k.color(rgb[0], rgb[1], rgb[2]),
+                                            k.fixed(),
+                                            k.z(1001)
+                                        ]);
+                                        if (segment) {
+                                            contentItems.push(segment);
+                                        }
                                     }
                                 }
                             }
                         }
                     }
-                } else if (fillWidth > 0 && isFinite(fillWidth)) {
-                    // For very small progress, just use a single colored rectangle
-                    const rgb = hslToRgb(0, 1, 0.5); // Red color
-                    const segmentX = progressBarX - progressBarWidth / 2 + fillWidth / 2;
-                    if (isFinite(segmentX)) {
-                        const segment = k.add([
-                            k.rect(fillWidth, progressBarHeight - 4),
-                            k.pos(segmentX, progressBarY),
-                            k.anchor('center'),
-                            k.color(rgb[0], rgb[1], rgb[2]),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
-                        if (segment) {
-                            contentItems.push(segment);
-                        }
-                    }
-                }
-                
-                // Progress text
-                const progressText = k.add([
-                    k.text(`${unlockedCount}/${totalAchievements} (${Math.round(progressPercent * 100)}%)`, { size: 16 }),
-                    k.pos(progressBarX, progressBarY + progressBarHeight / 2 + 20),
-                    k.anchor('center'),
-                    k.color(200, 200, 255),
-                    k.fixed(),
-                    k.z(1000)
-                ]);
-                contentItems.push(progressText);
+
+                    // Progress text (above progress bar)
+                    const progressText = k.add([
+                        k.text(`${unlockedCount}/${totalAchievements} (${Math.round(progressPercent * 100)}%)`, { size: 14 }),
+                        k.pos(progressBarX, progressBarY - 18),
+                        k.anchor('center'),
+                        k.color(200, 200, 255),
+                        k.fixed(),
+                        k.z(1000)
+                    ]);
+                    contentItems.push(progressText);
                 } catch (e) {
                     console.error('Error rendering achievements:', e);
                     // Fallback: show error message
@@ -499,12 +589,10 @@ export function setupStatisticsScene(k) {
                 }
             }
         }
-        
+
         // Initial refresh
         refreshContent();
-        
-        // No scrolling needed for achievements tab anymore (all on one page)
-        
+
         // Back button (standardized)
         const backButton = k.add([
             k.rect(120, 35),
@@ -516,7 +604,7 @@ export function setupStatisticsScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
-        
+
         const backText = k.add([
             k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 40),
@@ -525,14 +613,14 @@ export function setupStatisticsScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         backButton.onClick(() => {
+            playMenuNav();
             k.go('menu');
         });
-        
+
         k.onKeyPress('escape', () => {
             k.go('menu');
         });
     });
 }
-

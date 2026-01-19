@@ -8,11 +8,16 @@
  * - Range limiting
  * - Lifetime tracking
  * - Collision detection and cleanup
+ * - Object pooling support for performance
  */
 
 // Configuration imports
 import { WEAPON_CONFIG } from '../config/constants.js';
 import { registerProjectile, isHost, isMultiplayerActive, unregisterProjectile } from '../systems/multiplayerGame.js';
+import { getProjectilePool } from '../systems/objectPool.js';
+
+// Track projectiles that use pooling for proper cleanup
+let pooledProjectileUpdateHandler = null;
 
 export function createProjectile(k, x, y, direction, speed, damage, piercing = 0, obstaclePiercing = 0, isCrit = false, maxRange = null) {
     // Calculate rotation angle from direction vector
@@ -156,5 +161,28 @@ export function createProjectile(k, x, y, direction, speed, damage, piercing = 0
     }
 
     return projectile;
+}
+
+/**
+ * Release a projectile back to the pool instead of destroying it
+ * Falls back to k.destroy if pooling is not enabled
+ * @param {Object} k - Kaplay instance
+ * @param {Object} projectile - The projectile to release
+ */
+export function releaseProjectile(k, projectile) {
+    if (!projectile || !projectile.exists()) return;
+
+    // Unregister from multiplayer tracking
+    if (isMultiplayerActive()) {
+        unregisterProjectile(projectile);
+    }
+
+    // Try to release to pool, otherwise destroy
+    const pool = getProjectilePool();
+    if (pool && projectile._pooled) {
+        pool.release(projectile);
+    } else {
+        k.destroy(projectile);
+    }
 }
 

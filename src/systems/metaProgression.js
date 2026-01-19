@@ -550,3 +550,54 @@ export function getRunHistory() {
     return save.runHistory || [];
 }
 
+/**
+ * Check if a shop item's achievement requirement is met
+ * @param {string} category - Category of the item ('characters', 'weapons', 'permanentUpgrades')
+ * @param {string} itemKey - Key of the item to check
+ * @returns {boolean} True if achievement requirement is met (or no requirement exists)
+ */
+export async function isShopItemAchievementUnlocked(category, itemKey) {
+    const { getUnlockInfo } = await import('../data/unlocks.js');
+    const unlockInfo = getUnlockInfo(category, itemKey);
+
+    if (!unlockInfo || !unlockInfo.requiredAchievement) {
+        return true; // No achievement requirement
+    }
+
+    return isAchievementUnlocked(unlockInfo.requiredAchievement);
+}
+
+/**
+ * Get the required achievement info for a shop item
+ * @param {string} category - Category of the item
+ * @param {string} itemKey - Key of the item
+ * @returns {Object|null} Achievement info or null if no requirement
+ */
+export async function getRequiredAchievementForItem(category, itemKey) {
+    const { getUnlockInfo } = await import('../data/unlocks.js');
+    const { getAchievementById } = await import('../data/achievements.js');
+
+    const unlockInfo = getUnlockInfo(category, itemKey);
+
+    if (!unlockInfo || !unlockInfo.requiredAchievement) {
+        return null;
+    }
+
+    const achievement = getAchievementById(unlockInfo.requiredAchievement);
+    return achievement;
+}
+
+/**
+ * Synchronous version - Check if a shop item's achievement requirement is met
+ * Use this when you already have the unlock info
+ * @param {Object} unlockInfo - Unlock info object (must have requiredAchievement field if required)
+ * @returns {boolean} True if achievement requirement is met (or no requirement exists)
+ */
+export function isItemAchievementUnlockedSync(unlockInfo) {
+    if (!unlockInfo || !unlockInfo.requiredAchievement) {
+        return true; // No achievement requirement
+    }
+
+    return isAchievementUnlocked(unlockInfo.requiredAchievement);
+}
+

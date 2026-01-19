@@ -316,11 +316,11 @@ export function setupSettingsScene(k) {
         // Background particle effects
         createMenuParticles(k, { patternCount: 10, particleCount: 15 });
 
-        // Title
-        createAnimatedTitle(k, 'Options', k.width() / 2, 60, 8);
-        
+        // Title (moved up to avoid collision with tabs)
+        createAnimatedTitle(k, 'OPTIONS', k.width() / 2, 35, 8);
+
         // Tab buttons
-        const tabY = 90;
+        const tabY = 80;
         const tabSpacing = 120;
         const tabWidth = 100;
         const tabHeight = 30;
@@ -371,7 +371,7 @@ export function setupSettingsScene(k) {
         });
         
         // Content area
-        const contentY = 140;
+        const contentY = 120;
         const itemSpacing = 50; // Spacing between settings items
         const bottomButtonArea = 150; // Space reserved for buttons at bottom (prevents overlap)
         // TODO: Add scrolling support if content exceeds available space

@@ -6,10 +6,13 @@
  * - Death explosions
  * - Hit impact effects
  * - Generic particle spawning
+ * - Object pooling for performance
  */
 
+import { getParticlePool } from './objectPool.js';
+
 /**
- * Create a single particle
+ * Create a single particle (with optional pooling)
  * @param {Object} k - Kaplay instance
  * @param {number} x - X position
  * @param {number} y - Y position
@@ -17,6 +20,13 @@
  * @returns {Object} - Particle game object
  */
 function createParticle(k, x, y, options = {}) {
+    // Try to use object pool for better performance
+    const pool = getParticlePool();
+    if (pool) {
+        return pool.acquire(x, y, options);
+    }
+
+    // Fall back to direct creation if pool not available
     const {
         char = '*',
         size = 12,
@@ -51,6 +61,20 @@ function createParticle(k, x, y, options = {}) {
 }
 
 /**
+ * Release a particle back to the pool or destroy it
+ * @param {Object} k - Kaplay instance
+ * @param {Object} particle - The particle to release
+ */
+function releaseParticle(k, particle) {
+    const pool = getParticlePool();
+    if (pool && particle._pooled) {
+        pool.release(particle);
+    } else {
+        k.destroy(particle);
+    }
+}
+
+/**
  * Update all particles (call this in onUpdate)
  * @param {Object} k - Kaplay instance
  */
@@ -59,13 +83,14 @@ export function updateParticles(k) {
 
     particles.forEach(particle => {
         if (!particle.exists()) return;
+        if (particle.hidden) return; // Skip pooled hidden particles
 
         // Update age
         particle.age += k.dt();
 
-        // Check if particle should be destroyed
+        // Check if particle should be released/destroyed
         if (particle.age >= particle.lifetime) {
-            k.destroy(particle);
+            releaseParticle(k, particle);
             return;
         }
 

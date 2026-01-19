@@ -16,7 +16,7 @@ import { createProjectile } from '../entities/projectile.js';
 
 // System imports
 import { decrementPowerupAmmo } from './powerupWeapons.js';
-import { broadcastDamageEvent, isMultiplayerActive, isHost, registerProjectile } from './multiplayerGame.js';
+import { broadcastDamageEvent, broadcastHealEvent, broadcastDodgeEvent, isMultiplayerActive, isHost, registerProjectile } from './multiplayerGame.js';
 
 // Configuration imports
 import {
@@ -224,6 +224,14 @@ export function setupCombatSystem(k, player) {
                 }
             }
 
+            // Speed Demon synergy: +fire rate per speed stack
+            if (player.speedDemonEnabled && player.speedDemonFireRatePerStack) {
+                const speedStacks = player.upgradeStacks?.speed || 0;
+                if (speedStacks > 0) {
+                    effectiveFireRate = effectiveFireRate * (1 + speedStacks * player.speedDemonFireRatePerStack);
+                }
+            }
+
             // Fire if enough time has passed
             if (time - lastFireTime >= 1 / effectiveFireRate) {
                 const projectileCount = player.projectileCount || 1;
@@ -275,7 +283,12 @@ export function setupCombatSystem(k, player) {
                         }
 
                         // Use weapon's character and color for projectiles
-                        const weaponRange = player.weaponRange || WEAPON_CONFIG.DEFAULT_WEAPON_RANGE;
+                        let weaponRange = player.weaponRange || WEAPON_CONFIG.DEFAULT_WEAPON_RANGE;
+
+                        // Deadeye synergy: crits have +50% range
+                        if (isCrit && player.deadeyeEnabled && player.deadeyeRangeBonus) {
+                            weaponRange = weaponRange * (1 + player.deadeyeRangeBonus);
+                        }
 
                         // Play weapon firing sound
                         playWeaponFire(player.weaponKey);
@@ -601,11 +614,26 @@ export function setupCombatSystem(k, player) {
         // Host or singleplayer: deal damage
         playEnemyHit();
 
+        // Calculate final damage with synergy bonuses
+        let finalDamage = projectile.damage;
+
+        // Executioner synergy: +100% damage to enemies below 25% HP
+        if (projectile.ownerSlotIndex !== undefined) {
+            const allPlayers = k.get('player');
+            const ownerPlayer = allPlayers.find(p => p.slotIndex === projectile.ownerSlotIndex);
+            if (ownerPlayer && ownerPlayer.executionerEnabled && ownerPlayer.executionerThreshold) {
+                const enemyHPPercent = enemy.hp() / (enemy.maxHealth || enemy.hp());
+                if (enemyHPPercent < ownerPlayer.executionerThreshold) {
+                    finalDamage = Math.floor(finalDamage * (1 + (ownerPlayer.executionerDamageBonus || 1.0)));
+                }
+            }
+        }
+
         // Use takeDamage if available (handles armor/shields), otherwise use hurt
         if (enemy.takeDamage) {
-            enemy.takeDamage(projectile.damage);
+            enemy.takeDamage(finalDamage);
         } else {
-            enemy.hurt(projectile.damage);
+            enemy.hurt(finalDamage);
         }
 
         // Vampiric Rounds synergy: heal player on crit damage
@@ -614,10 +642,38 @@ export function setupCombatSystem(k, player) {
             const allPlayers = k.get('player');
             const ownerPlayer = allPlayers.find(p => p.slotIndex === projectile.ownerSlotIndex);
             if (ownerPlayer && ownerPlayer.vampiricCrits && ownerPlayer.vampiricHealPercent) {
-                const healAmount = Math.floor(projectile.damage * ownerPlayer.vampiricHealPercent);
+                const healAmount = Math.floor(finalDamage * ownerPlayer.vampiricHealPercent);
                 if (healAmount > 0 && ownerPlayer.hp() < ownerPlayer.maxHealth) {
                     const newHP = Math.min(ownerPlayer.maxHealth, ownerPlayer.hp() + healAmount);
                     ownerPlayer.setHP(newHP);
+                }
+            }
+        }
+
+        // Lifesteal upgrade: heal player on damage dealt
+        if (projectile.ownerSlotIndex !== undefined) {
+            const allPlayers = k.get('player');
+            const ownerPlayer = allPlayers.find(p => p.slotIndex === projectile.ownerSlotIndex);
+            if (ownerPlayer && ownerPlayer.lifestealPercent && ownerPlayer.lifestealPercent > 0) {
+                // Calculate lifesteal (Vampire Lord synergy multiplies on crits)
+                let lifestealMultiplier = ownerPlayer.lifestealPercent;
+                if (projectile.isCrit && ownerPlayer.vampireLordEnabled && ownerPlayer.vampireLordMultiplier) {
+                    lifestealMultiplier *= ownerPlayer.vampireLordMultiplier;
+                }
+                const healAmount = Math.floor(finalDamage * lifestealMultiplier);
+                if (healAmount > 0 && ownerPlayer.hp() < ownerPlayer.maxHealth) {
+                    const newHP = Math.min(ownerPlayer.maxHealth, ownerPlayer.hp() + healAmount);
+                    ownerPlayer.setHP(newHP);
+
+                    // Broadcast heal event for multiplayer
+                    if (isMultiplayerActive() && isHost()) {
+                        broadcastHealEvent({
+                            slotIndex: ownerPlayer.slotIndex,
+                            healAmount: healAmount,
+                            newHP: newHP,
+                            source: 'lifesteal'
+                        });
+                    }
                 }
             }
         }
@@ -632,7 +688,7 @@ export function setupCombatSystem(k, player) {
             broadcastDamageEvent({
                 targetId: enemy.mpEntityId,
                 targetType: 'enemy',
-                damage: projectile.damage,
+                damage: finalDamage,
                 isCrit: projectile.isCrit || false,
                 x: enemy.pos.x,
                 y: enemy.pos.y
@@ -921,6 +977,14 @@ export function setupCombatSystem(k, player) {
         // Check for dodge chance (The Scout ability)
         if (player.dodgeChance && Math.random() < player.dodgeChance) {
             // Dodged! No damage taken
+            // Broadcast dodge event for multiplayer
+            if (isMultiplayerActive() && isHost()) {
+                broadcastDodgeEvent({
+                    slotIndex: player.slotIndex,
+                    x: player.pos.x,
+                    y: player.pos.y
+                });
+            }
             return;
         }
 
@@ -932,6 +996,11 @@ export function setupCombatSystem(k, player) {
         const baseDamage = enemy.damage || COMBAT_CONFIG.BASE_ENEMY_DAMAGE;
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
+
+        // Update survivalist combat time (for out-of-combat regen)
+        if (player.survivalistEnabled) {
+            player.survivalistLastCombatTime = k.time();
+        }
 
         // Set invulnerability frames (don't reset timer if already invulnerable)
         if (!player.invulnerable) {
@@ -959,6 +1028,21 @@ export function setupCombatSystem(k, player) {
             if (currentHP < maxHP) {
                 const newHP = Math.min(maxHP, currentHP + enemy.vampiricHealAmount);
                 enemy.setHP(newHP);
+            }
+        }
+
+        // Thorns: reflect damage back to attacker
+        if (player.thornsPercent && player.thornsPercent > 0 && enemy.exists()) {
+            const thornsDamage = Math.floor(baseDamage * player.thornsPercent);
+            if (thornsDamage > 0) {
+                // If thorns ignores armor (from Retribution synergy), deal raw damage
+                if (player.thornsIgnoreArmor) {
+                    enemy.hurt(thornsDamage);
+                } else {
+                    // Normal thorns applies enemy's defense
+                    const reducedThornsDamage = Math.max(1, thornsDamage - (enemy.defense || 0));
+                    enemy.hurt(reducedThornsDamage);
+                }
             }
         }
 
@@ -1001,6 +1085,14 @@ export function setupCombatSystem(k, player) {
         // Check for dodge chance (The Scout ability)
         if (player.dodgeChance && Math.random() < player.dodgeChance) {
             // Dodged! No damage taken
+            // Broadcast dodge event for multiplayer
+            if (isMultiplayerActive() && isHost()) {
+                broadcastDodgeEvent({
+                    slotIndex: player.slotIndex,
+                    x: player.pos.x,
+                    y: player.pos.y
+                });
+            }
             return;
         }
 
@@ -1019,6 +1111,11 @@ export function setupCombatSystem(k, player) {
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
 
+        // Update survivalist combat time (for out-of-combat regen)
+        if (player.survivalistEnabled) {
+            player.survivalistLastCombatTime = k.time();
+        }
+
         // Set invulnerability frames (don't reset timer if already invulnerable)
         if (!player.invulnerable) {
             player.invulnerable = true;
@@ -1027,7 +1124,30 @@ export function setupCombatSystem(k, player) {
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
-        
+
+        // Thorns: reflect damage back to miniboss
+        if (player.thornsPercent && player.thornsPercent > 0 && miniboss.exists()) {
+            const thornsDamage = Math.floor(baseDamage * player.thornsPercent);
+            if (thornsDamage > 0) {
+                // If thorns ignores armor (from Retribution synergy), deal raw damage
+                if (player.thornsIgnoreArmor) {
+                    if (miniboss.takeDamage) {
+                        miniboss.takeDamage(thornsDamage);
+                    } else {
+                        miniboss.hurt(thornsDamage);
+                    }
+                } else {
+                    // Normal thorns applies miniboss's defense
+                    const reducedThornsDamage = Math.max(1, thornsDamage - (miniboss.defense || 0));
+                    if (miniboss.takeDamage) {
+                        miniboss.takeDamage(reducedThornsDamage);
+                    } else {
+                        miniboss.hurt(reducedThornsDamage);
+                    }
+                }
+            }
+        }
+
         // Knockback miniboss away from player (player doesn't move)
         const knockbackDir = k.vec2(
             miniboss.pos.x - player.pos.x,
@@ -1039,11 +1159,11 @@ export function setupCombatSystem(k, player) {
             const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_MINIBOSS;
             applySafeKnockback(k, miniboss, normalized, knockbackAmount);
         }
-        
+
         // Visual feedback
         player.color = k.rgb(255, 100, 100);
     });
-    
+
     // Collision: Boss hits Player
     k.onCollide('boss', 'player', (boss, player) => {
         if (k.paused) return;
@@ -1067,6 +1187,14 @@ export function setupCombatSystem(k, player) {
         // Check for dodge chance (The Scout ability)
         if (player.dodgeChance && Math.random() < player.dodgeChance) {
             // Dodged! No damage taken
+            // Broadcast dodge event for multiplayer
+            if (isMultiplayerActive() && isHost()) {
+                broadcastDodgeEvent({
+                    slotIndex: player.slotIndex,
+                    x: player.pos.x,
+                    y: player.pos.y
+                });
+            }
             return;
         }
 
@@ -1085,6 +1213,11 @@ export function setupCombatSystem(k, player) {
         const finalDamage = calculateDamageAfterDefense(baseDamage, player.defense || 0, player.damageReduction || 0);
         player.hurt(finalDamage);
 
+        // Update survivalist combat time (for out-of-combat regen)
+        if (player.survivalistEnabled) {
+            player.survivalistLastCombatTime = k.time();
+        }
+
         // Set invulnerability frames (don't reset timer if already invulnerable)
         if (!player.invulnerable) {
             player.invulnerable = true;
@@ -1093,7 +1226,30 @@ export function setupCombatSystem(k, player) {
 
         // Spawn blood splatter particle effect for player
         spawnBloodSplatter(k, player.pos.x, player.pos.y, { color: [255, 100, 100] });
-        
+
+        // Thorns: reflect damage back to boss
+        if (player.thornsPercent && player.thornsPercent > 0 && boss.exists()) {
+            const thornsDamage = Math.floor(baseDamage * player.thornsPercent);
+            if (thornsDamage > 0) {
+                // If thorns ignores armor (from Retribution synergy), deal raw damage
+                if (player.thornsIgnoreArmor) {
+                    if (boss.takeDamage) {
+                        boss.takeDamage(thornsDamage);
+                    } else {
+                        boss.hurt(thornsDamage);
+                    }
+                } else {
+                    // Normal thorns applies boss's defense
+                    const reducedThornsDamage = Math.max(1, thornsDamage - (boss.defense || 0));
+                    if (boss.takeDamage) {
+                        boss.takeDamage(reducedThornsDamage);
+                    } else {
+                        boss.hurt(reducedThornsDamage);
+                    }
+                }
+            }
+        }
+
         // Knockback boss away from player (player doesn't move)
         const knockbackDir = k.vec2(
             boss.pos.x - player.pos.x,
@@ -1105,11 +1261,11 @@ export function setupCombatSystem(k, player) {
             const knockbackAmount = COMBAT_CONFIG.KNOCKBACK_BOSS;
             applySafeKnockback(k, boss, normalized, knockbackAmount);
         }
-        
+
         // Initial hit flash (will be overridden by immunity flash)
         player.color = k.rgb(255, 100, 100);
     });
-    
+
     // Collision: Enemy/Boss Projectile hits Player
     k.onCollide('projectile', 'player', (projectile, player) => {
         if (k.paused) return;

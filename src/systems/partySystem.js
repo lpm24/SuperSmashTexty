@@ -20,17 +20,24 @@ import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlay
 // Party state
 const party = {
     slots: [
-        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, isLocal: true, peerId: null }, // Slot 1: Local player
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }, // Slot 2: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }, // Slot 3: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null }  // Slot 4: Empty
+        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, isLocal: true, peerId: null, isReady: false }, // Slot 1: Local player
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }, // Slot 2: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }, // Slot 3: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }  // Slot 4: Empty
     ],
     isHost: true, // Local player is always the host for now
     maxSlots: 4,
     peerIdToSlot: new Map(), // Map peer IDs to slot indices
     networkInitialized: false,
     kaplayInstance: null, // Reference to kaplay instance for client game start
-    hostInviteCode: null // The host's invite code (null if we are the host, or the code we joined if we're a client)
+    hostInviteCode: null, // The host's invite code (null if we are the host, or the code we joined if we're a client)
+    // Disconnect handling
+    disconnectedPlayers: new Map(), // Map slotIndex -> { disconnectTime, playerData }
+    reconnectWindow: 15000, // 15 seconds to reconnect
+    // Ready-up and countdown
+    countdownActive: false,
+    countdownStartTime: 0,
+    countdownDuration: 3000 // 3 seconds countdown
 };
 
 /**
@@ -181,6 +188,18 @@ export function setupNetworkHandlers() {
             console.log(`[PartySystem] Player in slot ${slotIndex} changed character to:`, payload.selectedCharacter);
             party.slots[slotIndex].selectedCharacter = payload.selectedCharacter;
             broadcastPartyUpdate();
+        }
+    });
+
+    // Handle ready state changes from clients
+    onMessage('ready_change', (payload, fromPeerId) => {
+        const slotIndex = party.peerIdToSlot.get(fromPeerId);
+        if (slotIndex !== undefined) {
+            console.log(`[PartySystem] Player in slot ${slotIndex} ready state:`, payload.isReady);
+            party.slots[slotIndex].isReady = payload.isReady;
+            broadcastPartyUpdate();
+            // Check if all players are ready
+            checkAllReady();
         }
     });
 
@@ -442,23 +461,6 @@ function setupClientHandlers() {
         });
     });
 
-    // Handle party updates
-    onMessage('party_update', (payload) => {
-        console.log('[PartySystem] Received party update:', payload);
-
-        // Find which slot is local before updating
-        const localSlotIndex = party.slots.findIndex(slot => slot.isLocal);
-
-        // Update slots
-        party.slots = payload.slots;
-
-        // Re-mark local slot (preserve isLocal flag)
-        if (localSlotIndex !== -1) {
-            party.slots[localSlotIndex].isLocal = true;
-            console.log(`[PartySystem] Preserved local flag for slot ${localSlotIndex}`);
-        }
-    });
-
     // Handle join rejection
     onMessage('join_rejected', (payload) => {
         console.error('Join rejected:', payload.reason);
@@ -473,6 +475,35 @@ function setupClientHandlers() {
             party.kaplayInstance.go('game', { resetState: true });
         } else {
             console.error('Cannot join game: Kaplay instance not available');
+        }
+    });
+
+    // Handle countdown start from host
+    onMessage('countdown_start', (payload) => {
+        console.log('[PartySystem] Countdown started by host:', payload.duration);
+        party.countdownActive = true;
+        party.countdownStartTime = Date.now();
+        party.countdownDuration = payload.duration || 3000;
+    });
+
+    // Handle countdown cancel from host
+    onMessage('countdown_cancel', () => {
+        console.log('[PartySystem] Countdown cancelled by host');
+        party.countdownActive = false;
+        party.countdownStartTime = 0;
+    });
+
+    // Handle party update with ready states
+    onMessage('party_update', (payload) => {
+        // Find which slot is local before updating
+        const localSlotIndex = party.slots.findIndex(slot => slot.isLocal);
+
+        // Update slots (includes ready states)
+        party.slots = payload.slots;
+
+        // Re-mark local slot (preserve isLocal flag)
+        if (localSlotIndex !== -1) {
+            party.slots[localSlotIndex].isLocal = true;
         }
     });
 
@@ -511,7 +542,9 @@ function broadcastPartyUpdate() {
             inviteCode: slot.inviteCode,
             selectedCharacter: slot.selectedCharacter,
             permanentUpgradeLevels: slot.permanentUpgradeLevels,
-            isLocal: false // Always false for remote players
+            isLocal: false, // Always false for remote players
+            isReady: slot.isReady || false,
+            isDisconnected: slot.isDisconnected || false
         }))
     });
 }
@@ -528,22 +561,115 @@ export function broadcastGameStart() {
 
 /**
  * Handle player disconnect (host only)
+ * Starts a reconnection window instead of immediately removing
  * @param {string} peerId - Peer ID of disconnected player
  */
 function handlePlayerDisconnect(peerId) {
     const slotIndex = party.peerIdToSlot.get(peerId);
     if (slotIndex !== undefined) {
-        console.log('Player disconnected from slot', slotIndex);
+        console.log('[PartySystem] Player disconnected from slot', slotIndex, '- starting reconnection window');
 
-        // Clean up player entity from the game (destroys entity, clears pending level-ups, broadcasts to clients)
-        cleanupDisconnectedPlayer(slotIndex);
+        // Store player data for potential reconnection
+        const playerData = { ...party.slots[slotIndex] };
 
-        // Remove from party WITHOUT shifting - shifting during gameplay breaks slot indices
-        // Just clear the slot so remaining players keep their original slot indices
-        removePlayerFromParty(slotIndex);
+        // Mark player as disconnected (but don't remove yet)
+        party.disconnectedPlayers.set(slotIndex, {
+            disconnectTime: Date.now(),
+            playerData: playerData,
+            peerId: peerId
+        });
+
+        // Mark the slot as disconnected (but keep the player info)
+        party.slots[slotIndex].isDisconnected = true;
+
+        // Broadcast disconnect status to all clients
+        broadcast('player_disconnected', {
+            slotIndex: slotIndex,
+            reconnectWindow: party.reconnectWindow
+        });
+
         party.peerIdToSlot.delete(peerId);
-        broadcastPartyUpdate();
+
+        // Set timeout to fully remove player if they don't reconnect
+        setTimeout(() => {
+            finalizeDisconnect(slotIndex);
+        }, party.reconnectWindow);
     }
+}
+
+/**
+ * Finalize player disconnect after reconnection window expires
+ * @param {number} slotIndex - Slot index of the disconnected player
+ */
+function finalizeDisconnect(slotIndex) {
+    const disconnectData = party.disconnectedPlayers.get(slotIndex);
+    if (!disconnectData) return; // Player already reconnected or was removed
+
+    console.log('[PartySystem] Reconnection window expired for slot', slotIndex, '- removing player');
+
+    // Clean up player entity from the game
+    cleanupDisconnectedPlayer(slotIndex);
+
+    // Remove from party
+    removePlayerFromParty(slotIndex);
+    party.disconnectedPlayers.delete(slotIndex);
+
+    // Broadcast final removal
+    broadcast('player_removed', { slotIndex: slotIndex });
+    broadcastPartyUpdate();
+}
+
+/**
+ * Attempt to reconnect a player to their previous slot
+ * @param {string} peerId - New peer ID of reconnecting player
+ * @param {string} playerName - Player name for verification
+ * @returns {number|null} - Slot index if reconnected, null if not found
+ */
+export function attemptReconnect(peerId, playerName) {
+    // Check if there's a disconnected player with this name
+    for (const [slotIndex, data] of party.disconnectedPlayers) {
+        if (data.playerData.playerName === playerName) {
+            console.log('[PartySystem] Player', playerName, 'reconnected to slot', slotIndex);
+
+            // Restore player to their slot
+            party.slots[slotIndex] = { ...data.playerData };
+            party.slots[slotIndex].peerId = peerId;
+            party.slots[slotIndex].isDisconnected = false;
+            party.peerIdToSlot.set(peerId, slotIndex);
+
+            // Clear disconnect data
+            party.disconnectedPlayers.delete(slotIndex);
+
+            // Broadcast reconnection
+            broadcast('player_reconnected', { slotIndex: slotIndex });
+            broadcastPartyUpdate();
+
+            return slotIndex;
+        }
+    }
+    return null;
+}
+
+/**
+ * Check if a player slot is disconnected
+ * @param {number} slotIndex - Slot index to check
+ * @returns {boolean} - True if player is disconnected
+ */
+export function isPlayerDisconnected(slotIndex) {
+    return party.slots[slotIndex]?.isDisconnected || false;
+}
+
+/**
+ * Get time remaining for reconnection window
+ * @param {number} slotIndex - Slot index to check
+ * @returns {number} - Milliseconds remaining, 0 if not disconnected
+ */
+export function getReconnectTimeRemaining(slotIndex) {
+    const data = party.disconnectedPlayers.get(slotIndex);
+    if (!data) return 0;
+
+    const elapsed = Date.now() - data.disconnectTime;
+    return Math.max(0, party.reconnectWindow - elapsed);
 }
 
 /**
@@ -600,7 +726,8 @@ export function removePlayerFromParty(slotIndex) {
             inviteCode: null,
             selectedCharacter: null,
             isLocal: false,
-            peerId: null
+            peerId: null,
+            isReady: false
         };
         return true;
     }
@@ -635,7 +762,9 @@ export function getPartyDisplayInfo() {
         playerName: slot.playerName || 'Empty Slot',
         isLocal: slot.isLocal,
         inviteCode: slot.inviteCode,
-        selectedCharacter: slot.selectedCharacter || 'survivor'
+        selectedCharacter: slot.selectedCharacter || 'survivor',
+        isReady: slot.isReady || false,
+        isDisconnected: slot.isDisconnected || false
     }));
 }
 
@@ -668,4 +797,136 @@ export function broadcastCharacterChange(characterKey) {
             selectedCharacter: characterKey
         });
     }
+}
+
+// ==========================================
+// Ready-up System
+// ==========================================
+
+/**
+ * Toggle ready state for local player
+ * @returns {boolean} - New ready state
+ */
+export function toggleReady() {
+    const localSlot = getLocalPlayerSlot();
+    if (localSlot === null) return false;
+
+    party.slots[localSlot].isReady = !party.slots[localSlot].isReady;
+
+    // Broadcast ready state change
+    if (party.networkInitialized) {
+        if (party.isHost) {
+            broadcastPartyUpdate();
+            // Check if all players are ready
+            checkAllReady();
+        } else {
+            sendToHost('ready_change', {
+                isReady: party.slots[localSlot].isReady
+            });
+        }
+    }
+
+    return party.slots[localSlot].isReady;
+}
+
+/**
+ * Get local player slot index
+ * @returns {number|null} - Local player slot index
+ */
+export function getLocalPlayerSlot() {
+    return party.slots.findIndex(s => s.isLocal);
+}
+
+/**
+ * Check if local player is ready
+ * @returns {boolean} - True if ready
+ */
+export function isLocalPlayerReady() {
+    const localSlot = getLocalPlayerSlot();
+    return localSlot !== null && party.slots[localSlot].isReady;
+}
+
+/**
+ * Check if all players are ready (host only)
+ * @returns {boolean} - True if all ready
+ */
+export function areAllPlayersReady() {
+    const occupiedSlots = party.slots.filter(s => s.playerId !== null);
+    if (occupiedSlots.length < 2) return false; // Need at least 2 players
+
+    return occupiedSlots.every(s => s.isReady);
+}
+
+/**
+ * Check if all players are ready and start countdown (host only)
+ */
+function checkAllReady() {
+    if (!party.isHost) return;
+
+    if (areAllPlayersReady() && !party.countdownActive) {
+        startCountdown();
+    } else if (!areAllPlayersReady() && party.countdownActive) {
+        cancelCountdown();
+    }
+}
+
+/**
+ * Start the game countdown (host only)
+ */
+function startCountdown() {
+    if (!party.isHost) return;
+
+    party.countdownActive = true;
+    party.countdownStartTime = Date.now();
+
+    // Broadcast countdown start
+    broadcast('countdown_start', {
+        duration: party.countdownDuration
+    });
+
+    console.log('[PartySystem] Countdown started');
+}
+
+/**
+ * Cancel the game countdown (host only)
+ */
+function cancelCountdown() {
+    if (!party.isHost) return;
+
+    party.countdownActive = false;
+    party.countdownStartTime = 0;
+
+    // Broadcast countdown cancel
+    broadcast('countdown_cancel', {});
+
+    console.log('[PartySystem] Countdown cancelled');
+}
+
+/**
+ * Get countdown state
+ * @returns {Object} - { active, timeRemaining }
+ */
+export function getCountdownState() {
+    if (!party.countdownActive) {
+        return { active: false, timeRemaining: 0 };
+    }
+
+    const elapsed = Date.now() - party.countdownStartTime;
+    const remaining = Math.max(0, party.countdownDuration - elapsed);
+
+    return {
+        active: true,
+        timeRemaining: remaining
+    };
+}
+
+/**
+ * Reset all ready states (called after game ends)
+ */
+export function resetAllReadyStates() {
+    party.slots.forEach(slot => {
+        slot.isReady = false;
+    });
+    party.countdownActive = false;
+    party.countdownStartTime = 0;
 }

@@ -26,12 +26,28 @@ export class Minimap {
         this.mode = MINIMAP_MODE.MINIMIZED; // Start minimized
         this.elements = [];
 
-        // Position
-        this.buttonPos = { x: k.width() - 50, y: 70 };     // Minimized button position (moved down to avoid credit counter)
-        this.openPos = { x: k.width() - 120, y: 70 };      // Open minimap position
-        this.maximizedPos = { x: k.width() - 250, y: 70 }; // Maximized minimap position
-
         this.render();
+    }
+
+    /**
+     * Get current position for minimized button (calculated fresh each time)
+     */
+    getButtonPos() {
+        return { x: this.k.width() - 50, y: 70 };
+    }
+
+    /**
+     * Get current position for open minimap (calculated fresh each time)
+     */
+    getOpenPos() {
+        return { x: this.k.width() - 120, y: 70 };
+    }
+
+    /**
+     * Get current position for maximized minimap (calculated fresh each time)
+     */
+    getMaximizedPos() {
+        return { x: this.k.width() - 250, y: 70 };
     }
 
     /**
@@ -96,7 +112,7 @@ export class Minimap {
      * Render minimized state - just a small map button
      */
     renderMinimized() {
-        const { x, y } = this.buttonPos;
+        const { x, y } = this.getButtonPos();
         const buttonSize = 40;
 
         // Button background
@@ -144,7 +160,7 @@ export class Minimap {
      * Render open state - small minimap view
      */
     renderOpen() {
-        const { x, y } = this.openPos;
+        const { x, y } = this.getOpenPos();
         const cellSize = 12;
         const grid = this.floorMap.getGridForMinimap();
 
@@ -241,7 +257,7 @@ export class Minimap {
      * Render maximized state - large minimap with legend
      */
     renderMaximized() {
-        const { x, y } = this.maximizedPos;
+        const { x, y } = this.getMaximizedPos();
         const cellSize = 18;
         const grid = this.floorMap.getGridForMinimap();
 

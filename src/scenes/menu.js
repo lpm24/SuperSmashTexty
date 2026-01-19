@@ -1,8 +1,9 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady } from '../systems/partySystem.js';
 import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
+import { getDailyRunInfo, hasCompletedDailyToday, getTodayDailyCharacter } from '../systems/dailyRuns.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -323,7 +324,7 @@ export function setupMenuScene(k) {
                 if (slot.isLocal) {
                     const youText = k.add([
                         k.text('★', { size: UI_TEXT_SIZES.LABEL }),
-                        k.pos(partyPanelX + partyPanelWidth - 20, slotY + slotHeight / 2),
+                        k.pos(partyPanelX + partyPanelWidth - 35, slotY + slotHeight / 2),
                         k.anchor('right'),
                         k.color(...UI_COLORS.GOLD),
                         k.outline(1.5, k.rgb(255, 255, 255)),
@@ -332,6 +333,36 @@ export function setupMenuScene(k) {
                         'partySlotUI'
                     ]);
                     elementsForThisSlot.push(youText);
+                }
+
+                // Ready indicator (only for non-empty slots)
+                if (!slot.isEmpty) {
+                    const readyIcon = slot.isReady ? '✓' : '○';
+                    const readyColor = slot.isReady ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_DISABLED;
+                    const readyText = k.add([
+                        k.text(readyIcon, { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(partyPanelX + partyPanelWidth - 18, slotY + slotHeight / 2),
+                        k.anchor('center'),
+                        k.color(...readyColor),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT),
+                        'partySlotUI'
+                    ]);
+                    elementsForThisSlot.push(readyText);
+                }
+
+                // Disconnected indicator
+                if (slot.isDisconnected) {
+                    const dcText = k.add([
+                        k.text('⚠', { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(partyPanelX + partyPanelWidth - 35, slotY + slotHeight / 2),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.WARNING),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT),
+                        'partySlotUI'
+                    ]);
+                    elementsForThisSlot.push(dcText);
                 }
 
                 slotElements.push(elementsForThisSlot);
@@ -412,6 +443,117 @@ export function setupMenuScene(k) {
         joinButton.onClick(() => {
             playMenuSelect();
             k.go('joinParty');
+        });
+
+        // Ready button (only visible when in a party with 2+ players)
+        const readyButtonY = joinButtonY + 35;
+        let readyButtonElements = [];
+        let countdownDisplay = null;
+
+        function updateReadyButton() {
+            // Destroy old ready button elements
+            readyButtonElements.forEach(el => {
+                if (el.exists()) k.destroy(el);
+            });
+            readyButtonElements = [];
+            if (countdownDisplay && countdownDisplay.exists()) {
+                k.destroy(countdownDisplay);
+                countdownDisplay = null;
+            }
+
+            const partySize = getPartySize();
+            const countdown = getCountdownState();
+
+            // Only show ready button when in a party
+            if (partySize >= 2) {
+                const isReady = isLocalPlayerReady();
+
+                // Ready button background
+                const readyBg = k.add([
+                    k.rect(132, 28),
+                    k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY),
+                    k.anchor('center'),
+                    k.color(isReady ? 100 : 60, isReady ? 150 : 80, isReady ? 100 : 120),
+                    k.outline(2, k.rgb(isReady ? 100 : 80, isReady ? 200 : 120, isReady ? 100 : 180)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS),
+                    'readyButtonUI'
+                ]);
+                readyButtonElements.push(readyBg);
+
+                // Ready button text
+                const readyLabel = k.add([
+                    k.text(isReady ? '✓ READY' : 'READY UP', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY),
+                    k.anchor('center'),
+                    k.color(isReady ? 150 : 100, isReady ? 255 : 150, isReady ? 150 : 200),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT),
+                    'readyButtonUI'
+                ]);
+                readyButtonElements.push(readyLabel);
+
+                // Click handler
+                readyBg.onClick(() => {
+                    playMenuSelect();
+                    toggleReady();
+                    updateReadyButton();
+                    updatePartySlots();
+                });
+
+                readyBg.onHoverUpdate(() => {
+                    readyBg.color = k.rgb(isReady ? 80 : 80, isReady ? 120 : 100, isReady ? 80 : 140);
+                });
+
+                readyBg.onHoverEnd(() => {
+                    readyBg.color = k.rgb(isReady ? 100 : 60, isReady ? 150 : 80, isReady ? 100 : 120);
+                });
+
+                // Countdown display (when all ready)
+                if (countdown.active) {
+                    const secondsLeft = Math.ceil(countdown.timeRemaining / 1000);
+                    countdownDisplay = k.add([
+                        k.text(`Starting in ${secondsLeft}...`, { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY + 25),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.SUCCESS),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT),
+                        'countdownUI'
+                    ]);
+                }
+            }
+        }
+
+        // Initial ready button creation
+        updateReadyButton();
+
+        // Update ready button state and countdown periodically
+        let lastCountdownCheck = 0;
+        k.onUpdate(() => {
+            lastCountdownCheck += k.dt();
+            if (lastCountdownCheck < 0.1) return; // Check every 100ms
+            lastCountdownCheck = 0;
+
+            const countdown = getCountdownState();
+            const partySize = getPartySize();
+
+            // Update ready button display
+            if (partySize >= 2) {
+                updateReadyButton();
+            }
+
+            // Check if countdown finished - start game for all players
+            if (countdown.active && countdown.timeRemaining <= 0) {
+                const party = getParty();
+                if (party.isHost) {
+                    playMenuSelect();
+                    broadcastGameStart();
+                    k.go('game', { resetState: true });
+                }
+                // Clients will receive game_start message and auto-join
+            }
         });
 
         // Currency display (standardized)
@@ -695,6 +837,175 @@ export function setupMenuScene(k) {
             playMenuSelect();
             k.go('settings');
         });
+
+        // Daily Run button (to the left of main menu)
+        const dailyRunX = 140;
+        const dailyRunY = k.height() / 2 + 50;
+        const dailyInfo = getDailyRunInfo();
+        const dailyChar = CHARACTER_UNLOCKS[dailyInfo.character] || CHARACTER_UNLOCKS.survivor;
+
+        // Daily run panel background
+        k.add([
+            k.rect(200, 140),
+            k.pos(dailyRunX, dailyRunY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND)
+        ]);
+
+        // Daily run title
+        k.add([
+            k.text('DAILY RUN', { size: UI_TEXT_SIZES.BODY }),
+            k.pos(dailyRunX, dailyRunY - 50),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Daily character icon
+        k.add([
+            k.text(dailyChar.char, { size: 32 }),
+            k.pos(dailyRunX, dailyRunY - 15),
+            k.anchor('center'),
+            k.color(...dailyChar.color),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Character name
+        k.add([
+            k.text(dailyChar.name, { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(dailyRunX, dailyRunY + 15),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Completed badge or Play button
+        const initialPartySize = getPartySize();
+        const dailyDisabledInMultiplayer = initialPartySize > 1;
+
+        if (dailyInfo.completed) {
+            k.add([
+                k.text('COMPLETED', { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(dailyRunX, dailyRunY + 45),
+                k.anchor('center'),
+                k.color(...UI_COLORS.SUCCESS),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        } else if (dailyDisabledInMultiplayer) {
+            // Daily runs disabled in multiplayer
+            k.add([
+                k.text('SOLO ONLY', { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(dailyRunX, dailyRunY + 45),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_DISABLED),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        } else {
+            const dailyPlayButton = k.add([
+                k.rect(120, 35),
+                k.pos(dailyRunX, dailyRunY + 45),
+                k.anchor('center'),
+                k.color(...UI_COLORS.SECONDARY),
+                k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
+            ]);
+
+            k.add([
+                k.text('PLAY', { size: UI_TEXT_SIZES.BODY }),
+                k.pos(dailyRunX, dailyRunY + 45),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            dailyPlayButton.onClick(() => {
+                // Double-check party size in case it changed
+                if (getPartySize() > 1) {
+                    alert('Daily runs are solo only. Leave the party to play.');
+                    return;
+                }
+                playMenuSelect();
+                // Start daily run with locked character
+                k.go('game', {
+                    resetState: true,
+                    isDailyRun: true,
+                    dailyCharacter: dailyInfo.character,
+                    dailySeed: dailyInfo.seed
+                });
+            });
+
+            dailyPlayButton.onHoverUpdate(() => {
+                dailyPlayButton.color = k.rgb(...UI_COLORS.SECONDARY_HOVER);
+            });
+
+            dailyPlayButton.onHoverEnd(() => {
+                dailyPlayButton.color = k.rgb(...UI_COLORS.SECONDARY);
+            });
+        }
+
+        // Leaderboards button (to the right of main menu)
+        const leaderboardsX = k.width() - 140;
+        const leaderboardsY = k.height() / 2 + 50;
+
+        // Leaderboards panel background
+        k.add([
+            k.rect(200, 140),
+            k.pos(leaderboardsX, leaderboardsY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND),
+            'leaderboardsPanel'
+        ]);
+
+        // Leaderboards title
+        k.add([
+            k.text('LEADERBOARDS', { size: UI_TEXT_SIZES.BODY }),
+            k.pos(leaderboardsX, leaderboardsY - 30),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Trophy icon
+        k.add([
+            k.text('🏆', { size: 36 }),
+            k.pos(leaderboardsX, leaderboardsY + 10),
+            k.anchor('center'),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Click handler for leaderboards panel
+        const leaderboardsPanel = k.get('leaderboardsPanel')[0];
+        if (leaderboardsPanel) {
+            leaderboardsPanel.onClick(() => {
+                playMenuSelect();
+                k.go('leaderboards');
+            });
+
+            leaderboardsPanel.onHoverUpdate(() => {
+                leaderboardsPanel.color = k.rgb(...UI_COLORS.BG_LIGHT);
+            });
+
+            leaderboardsPanel.onHoverEnd(() => {
+                leaderboardsPanel.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+            });
+        }
 
         // Store all menu buttons for animation
         const menuButtons = [

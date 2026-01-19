@@ -1,11 +1,16 @@
 // Game over scene - TV Station themed with currency bucket animation
-import { getCurrency, getCurrencyName, getSaveData } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, getSaveData, getSelectedCharacter } from '../systems/metaProgression.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
 import { ENEMY_TYPES } from '../data/enemies.js';
 import { MINIBOSS_TYPES } from '../data/minibosses.js';
 import { BOSS_TYPES } from '../data/bosses.js';
+import { ACHIEVEMENTS, ACHIEVEMENT_COLORS } from '../data/achievements.js';
+import { getRunUnlockedAchievements } from '../systems/achievementChecker.js';
+import { showAchievementModal } from '../components/achievementModal.js';
+import { calculateScore, submitScore, formatScore } from '../systems/leaderboards.js';
+import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -80,6 +85,41 @@ export function setupGameOverScene(k) {
         const saveData = getSaveData();
         const currencyName = getCurrencyName();
         const partyStats = args?.partyStats || [];
+        const isDailyRun = args?.isDailyRun || false;
+        const dailyCharacter = args?.dailyCharacter || null;
+
+        // Calculate duration
+        const duration = runStats.startTime ? (Date.now() - runStats.startTime) / 1000 : 0;
+
+        // Calculate and submit score
+        const score = calculateScore({
+            floorsReached: runStats.floorsReached || 1,
+            enemiesKilled: runStats.enemiesKilled || 0,
+            bossesKilled: runStats.bossesKilled || 0,
+            duration: duration
+        });
+
+        const character = dailyCharacter || getSelectedCharacter() || 'survivor';
+
+        // Submit to leaderboards
+        const leaderboardResult = submitScore({
+            score: score,
+            floor: runStats.floorsReached || 1,
+            character: character,
+            time: duration,
+            isDaily: isDailyRun,
+            date: getTodayDateString()
+        });
+
+        // Mark daily as completed if it was a daily run
+        if (isDailyRun) {
+            markDailyCompleted({
+                score: score,
+                floor: runStats.floorsReached || 1,
+                character: character,
+                duration: duration
+            });
+        }
 
         // Calculate total credits from all players
         const totalTeamCredits = partyStats.length > 0
@@ -116,6 +156,37 @@ export function setupGameOverScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
+
+        // Score display
+        k.add([
+            k.text(`SCORE: ${formatScore(score)}`, { size: 24 }),
+            k.pos(k.width() / 2, 85),
+            k.anchor('center'),
+            k.color(...UI_COLORS.GOLD),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL)
+        ]);
+
+        // Show rank if achieved
+        let rankText = '';
+        if (isDailyRun && leaderboardResult.dailyRank) {
+            rankText = `Daily Rank: #${leaderboardResult.dailyRank}`;
+            if (leaderboardResult.dailyRank === 1) rankText += ' (NEW RECORD!)';
+        } else if (leaderboardResult.rank) {
+            rankText = `All-Time Rank: #${leaderboardResult.rank}`;
+            if (leaderboardResult.isNewBest) rankText += ' (PERSONAL BEST!)';
+        }
+
+        if (rankText) {
+            k.add([
+                k.text(rankText, { size: 14 }),
+                k.pos(k.width() / 2, 108),
+                k.anchor('center'),
+                k.color(...(leaderboardResult.isNewBest ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_SECONDARY)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+        }
 
         // Calculate awards
         const awardWinners = {};
@@ -339,6 +410,102 @@ export function setupGameOverScene(k) {
                     k.fixed(),
                     k.z(UI_Z_LAYERS.MODAL)
                 ]);
+            }
+        }
+
+        // ==========================================
+        // ACHIEVEMENTS UNLOCKED - Below kill breakdown
+        // ==========================================
+        const unlockedAchievementIds = getRunUnlockedAchievements();
+        if (unlockedAchievementIds.length > 0) {
+            rightY += 30;
+
+            // Section title
+            k.add([
+                k.text('ACHIEVEMENTS UNLOCKED', { size: 16 }),
+                k.pos(rightX, rightY),
+                k.anchor('center'),
+                k.color(255, 220, 100),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+            rightY += 24;
+
+            // Show up to 3 achievements inline
+            const maxAchievementsToShow = 3;
+            const achievementsToShow = unlockedAchievementIds.slice(0, maxAchievementsToShow);
+            const boxSize = 50;
+            const boxSpacing = 8;
+            const totalWidth = achievementsToShow.length * (boxSize + boxSpacing) - boxSpacing;
+            let achStartX = rightX - totalWidth / 2;
+
+            achievementsToShow.forEach((achId, index) => {
+                const achievement = ACHIEVEMENTS[achId];
+                if (!achievement) return;
+
+                const achX = achStartX + index * (boxSize + boxSpacing);
+                const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
+
+                // Achievement box background with gold border
+                const achBox = k.add([
+                    k.rect(boxSize, boxSize),
+                    k.pos(achX + boxSize / 2, rightY + boxSize / 2),
+                    k.anchor('center'),
+                    k.color(40, 35, 50),
+                    k.outline(2, k.rgb(255, 200, 100)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+
+                // Achievement icon
+                k.add([
+                    k.text(achievement.icon, { size: 24 }),
+                    k.pos(achX + boxSize / 2, rightY + boxSize / 2 - 5),
+                    k.anchor('center'),
+                    k.color(...difficultyColor),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL + 1)
+                ]);
+
+                // Achievement name (below icon, truncated)
+                const shortName = achievement.name.length > 8 ? achievement.name.substring(0, 7) + '..' : achievement.name;
+                k.add([
+                    k.text(shortName, { size: 10 }),
+                    k.pos(achX + boxSize / 2, rightY + boxSize + 8),
+                    k.anchor('center'),
+                    k.color(200, 200, 200),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL + 1)
+                ]);
+
+                // Click to view achievement details
+                achBox.onClick(() => {
+                    playMenuNav();
+                    showAchievementModal(k, achievement);
+                });
+            });
+
+            rightY += boxSize + 20;
+
+            // Show "+N more" if there are more achievements
+            if (unlockedAchievementIds.length > maxAchievementsToShow) {
+                const moreCount = unlockedAchievementIds.length - maxAchievementsToShow;
+                const moreText = k.add([
+                    k.text(`+${moreCount} more`, { size: 12 }),
+                    k.pos(rightX, rightY),
+                    k.anchor('center'),
+                    k.color(200, 180, 100),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.MODAL)
+                ]);
+
+                // Make clickable to go to statistics/achievements page
+                moreText.onClick(() => {
+                    playMenuNav();
+                    k.go('statistics');
+                });
             }
         }
 

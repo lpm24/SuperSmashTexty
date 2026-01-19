@@ -25,6 +25,7 @@ import { createProjectile } from '../entities/projectile.js';
 
 // System imports
 import { SpatialGrid } from '../systems/spatialGrid.js';
+import { initObjectPools, clearAllPools } from '../systems/objectPool.js';
 import { setupCombatSystem } from '../systems/combat.js';
 import { setupProgressionSystem } from '../systems/progression.js';
 import { getRandomEnemyType } from '../systems/enemySpawn.js';
@@ -78,7 +79,12 @@ let gameState = {
     floorMap: null, // NEW: Floor map grid system
     minimap: null, // NEW: Minimap UI instance
     rerollsRemaining: 0, // Per-run rerolls from Mulligan upgrade
-    playersRevivedThisRun: new Set() // Track which players have been revived (one revival per player per run)
+    playersRevivedThisRun: new Set(), // Track which players have been revived (one revival per player per run)
+    // Daily run state
+    isDailyRun: false,
+    dailyCharacter: null,
+    dailySeed: null,
+    dailyRNG: null // Seeded RNG for daily run
 };
 
 // Run statistics (reset on new game)
@@ -165,6 +171,19 @@ export function setupGameScene(k) {
             gameState.floorMap = null; // Clear old floor map
             gameState.playersRevivedThisRun = new Set(); // Reset revival tracking
             resetRoomTemplateHistory(); // Reset room template variation
+
+            // Handle daily run state
+            gameState.isDailyRun = args?.isDailyRun || false;
+            gameState.dailyCharacter = args?.dailyCharacter || null;
+            gameState.dailySeed = args?.dailySeed || null;
+            gameState.dailyRNG = gameState.isDailyRun && gameState.dailySeed
+                ? new SeededRandom(gameState.dailySeed)
+                : null;
+
+            if (gameState.isDailyRun) {
+                console.log('[DailyRun] Starting daily run with character:', gameState.dailyCharacter, 'seed:', gameState.dailySeed);
+            }
+
             // Reset run statistics
             runStats = {
                 floorsReached: 1,
@@ -389,7 +408,9 @@ export function setupGameScene(k) {
             }
         } else {
             // New game - create fresh player
-            player = createPlayer(k, playerSpawnX, playerSpawnY);
+            // For daily runs, use the locked daily character
+            const characterOverride = gameState.isDailyRun ? gameState.dailyCharacter : null;
+            player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
 
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);
@@ -588,7 +609,9 @@ export function setupGameScene(k) {
                                 k.go('gameOver', {
                                     runStats: { ...runStats },
                                     currencyEarned: currencyEarned,
-                                    partyStats: partyStats
+                                    partyStats: partyStats,
+                                    isDailyRun: gameState.isDailyRun,
+                                    dailyCharacter: gameState.dailyCharacter
                                 });
                             }
                         });
@@ -851,7 +874,9 @@ export function setupGameScene(k) {
                     k.go('gameOver', {
                         runStats: { ...(data.runStats || runStats) },
                         currencyEarned: currencyEarned,
-                        partyStats: data.partyStats || []
+                        partyStats: data.partyStats || [],
+                        isDailyRun: gameState.isDailyRun,
+                        dailyCharacter: gameState.dailyCharacter
                     });
                 });
 
@@ -1941,6 +1966,16 @@ export function setupGameScene(k) {
         k.gameData.saveTooltipState = saveTooltipState;
         k.gameData.restoreTooltipState = restoreTooltipState;
         k.gameData.minimap = gameState.minimap;
+
+        // Initialize object pools for performance optimization
+        initObjectPools(k);
+
+        // Export spatial grids for global access (used by combat.js for optimized queries)
+        k.gameData.spatialGrids = spatialGrids;
+
+        // Cache alive players for optimized enemy targeting (updated each frame)
+        k.gameData.alivePlayers = [];
+
         // Track split enemies for accurate counter
         k.gameData.additionalEnemiesFromSplits = 0;
         k.gameData.incrementSplitEnemies = (count) => {
@@ -1954,6 +1989,9 @@ export function setupGameScene(k) {
         // Note: Rebuilding is O(n), but enables O(1) queries instead of O(n) per query
         // With multiple queries per frame (collision, explosions, pickups), this is a net win
         eventHandlers.updates.push(k.onUpdate(() => {
+            // Cache alive players for optimized enemy targeting
+            k.gameData.alivePlayers = k.get('player').filter(p => !p.isDead && p.exists());
+
             // Rebuild enemy grid (includes enemies, bosses, minibosses)
             spatialGrids.enemies.clear();
             k.get('enemy').forEach(e => spatialGrids.enemies.insert(e));
@@ -1973,6 +2011,58 @@ export function setupGameScene(k) {
         // Update screen shake effect
         eventHandlers.updates.push(k.onUpdate(() => {
             updateScreenShake(k.dt());
+        }));
+
+        // Update synergy effects (berserker, survivalist)
+        eventHandlers.updates.push(k.onUpdate(() => {
+            if (k.paused || !player.exists() || player.isDead) return;
+
+            const dt = k.dt();
+
+            // Berserker synergy: +50% damage/speed below 30% HP
+            if (player.berserkerEnabled) {
+                const hpPercent = player.hp() / player.maxHealth;
+                const isBelowThreshold = hpPercent < (player.berserkerThreshold || 0.3);
+
+                if (isBelowThreshold && !player.berserkerActive) {
+                    // Activate berserker mode
+                    player.berserkerActive = true;
+                    player.berserkerOriginalSpeed = player.speed;
+                    player.berserkerOriginalDamage = player.projectileDamage;
+                    player.speed = Math.floor(player.speed * (1 + (player.berserkerSpeedBonus || 0.5)));
+                    player.projectileDamage = Math.floor(player.projectileDamage * (1 + (player.berserkerDamageBonus || 0.5)));
+                } else if (!isBelowThreshold && player.berserkerActive) {
+                    // Deactivate berserker mode
+                    player.berserkerActive = false;
+                    if (player.berserkerOriginalSpeed) player.speed = player.berserkerOriginalSpeed;
+                    if (player.berserkerOriginalDamage) player.projectileDamage = player.berserkerOriginalDamage;
+                }
+            }
+
+            // Survivalist synergy: regen 1% HP/sec when out of combat
+            if (player.survivalistEnabled) {
+                // Update last combat time when player takes damage or deals damage
+                // (This is set in combat.js when player takes damage)
+
+                const timeSinceCombat = k.time() - (player.survivalistLastCombatTime || 0);
+                const cooldown = player.survivalistCombatCooldown || 3.0;
+
+                if (timeSinceCombat >= cooldown && player.hp() < player.maxHealth) {
+                    // Out of combat long enough - regenerate
+                    const regenPercent = player.survivalistRegenPercent || 0.01;
+                    const regenAmount = player.maxHealth * regenPercent * dt;
+
+                    // Accumulate fractional regen
+                    player.survivalistRegenAccum = (player.survivalistRegenAccum || 0) + regenAmount;
+
+                    if (player.survivalistRegenAccum >= 1) {
+                        const healAmount = Math.floor(player.survivalistRegenAccum);
+                        player.survivalistRegenAccum -= healAmount;
+                        const newHP = Math.min(player.maxHealth, player.hp() + healAmount);
+                        player.setHP(newHP);
+                    }
+                }
+            }
         }));
 
         // Hover detection for tooltips
@@ -4301,7 +4391,9 @@ export function setupGameScene(k) {
             k.go('gameOver', {
                 runStats: { ...runStats },
                 currencyEarned: currencyEarned,
-                partyStats: partyStats
+                partyStats: partyStats,
+                isDailyRun: gameState.isDailyRun,
+                dailyCharacter: gameState.dailyCharacter
             });
         });
         
@@ -4660,6 +4752,15 @@ export function setupGameScene(k) {
                 // Reset the flag to allow re-registration
                 gameSceneMessageHandlersRegistered = false;
             }
+
+            // Destroy minimap on scene leave to prevent lingering elements
+            if (gameState.minimap) {
+                gameState.minimap.destroy();
+                gameState.minimap = null;
+            }
+
+            // Clear object pools on scene leave
+            clearAllPools();
         });
     });
 }

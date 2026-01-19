@@ -155,6 +155,105 @@ export const SYNERGIES = {
             player.bulletTimeEnabled = true;
             player.bulletTimeBonus = 0.2; // +20% fire rate while moving
         }
+    },
+
+    // ========================================
+    // NEW SYNERGIES
+    // ========================================
+
+    // Berserker: Power boost at low health
+    berserker: {
+        name: 'Berserker',
+        description: 'Damage x3 + Speed x2: +50% damage/speed below 30% HP',
+        requiredCounts: { damage: 3, speed: 2 },
+        apply: (player) => {
+            player.berserkerEnabled = true;
+            player.berserkerThreshold = 0.3; // Below 30% HP
+            player.berserkerDamageBonus = 0.5; // +50% damage
+            player.berserkerSpeedBonus = 0.5; // +50% speed
+        }
+    },
+
+    // Deadeye: Extended crit range
+    deadeye: {
+        name: 'Deadeye',
+        description: 'Crit x2 + Range x2: Crits have +50% range',
+        requiredCounts: { critChance: 2, range: 2 },
+        apply: (player) => {
+            player.deadeyeEnabled = true;
+            player.deadeyeRangeBonus = 0.5; // +50% range on crits
+        }
+    },
+
+    // Survivalist: Out of combat regen
+    survivor: {
+        name: 'Survivalist',
+        description: 'Health x2 + Defense x2: Regen 1% HP/sec out of combat',
+        requiredCounts: { health: 2, defense: 2 },
+        apply: (player) => {
+            player.survivalistEnabled = true;
+            player.survivalistRegenPercent = 0.01; // 1% HP per second
+            player.survivalistCombatCooldown = 3.0; // 3 seconds out of combat
+            player.survivalistLastCombatTime = 0;
+        }
+    },
+
+    // Retribution: Thorns ignore armor
+    thornMaster: {
+        name: 'Retribution',
+        description: 'Thorns x3 + Defense x2: Thorns ignore enemy armor',
+        requiredCounts: { thorns: 3, defense: 2 },
+        apply: (player) => {
+            player.thornsIgnoreArmor = true;
+            // Also boost thorns damage by 50%
+            player.thornsPercent = (player.thornsPercent || 0) * 1.5;
+        }
+    },
+
+    // Vampire Lord: Enhanced lifesteal on crits
+    vampireLord: {
+        name: 'Vampire Lord',
+        description: 'Lifesteal x3 + Crit Dmg x2: Crits heal 3x lifesteal',
+        requiredCounts: { lifesteal: 3, critDamage: 2 },
+        apply: (player) => {
+            player.vampireLordEnabled = true;
+            player.vampireLordMultiplier = 3; // 3x lifesteal on crits
+        }
+    },
+
+    // Executioner: Execute low health enemies
+    executioner: {
+        name: 'Executioner',
+        description: 'Damage x2 + Piercing x2: +100% damage to enemies <25% HP',
+        requiredCounts: { damage: 2, piercing: 2 },
+        apply: (player) => {
+            player.executionerEnabled = true;
+            player.executionerThreshold = 0.25; // Below 25% HP
+            player.executionerDamageBonus = 1.0; // +100% damage
+        }
+    },
+
+    // Speed Demon: Fire rate scales with speed
+    speedDemon: {
+        name: 'Speed Demon',
+        description: 'Speed x3 + Fire Rate x2: +1% fire rate per speed stack',
+        requiredCounts: { speed: 3, fireRate: 2 },
+        apply: (player) => {
+            player.speedDemonEnabled = true;
+            player.speedDemonFireRatePerStack = 0.01; // +1% fire rate per speed stack
+        }
+    },
+
+    // Fortress: Complete immunity during invulnerability
+    fortress: {
+        name: 'Fortress',
+        description: 'Health x3 + Invuln x2: Immunity blocks all damage sources',
+        requiredCounts: { health: 3, invulnTime: 2 },
+        apply: (player) => {
+            player.fortressEnabled = true;
+            // Also extend invulnerability duration by 50%
+            player.invulnerableDuration = (player.invulnerableDuration || 1.0) * 1.5;
+        }
     }
 };
 

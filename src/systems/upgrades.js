@@ -27,7 +27,18 @@ export const UPGRADE_STACK_LIMITS = {
     chainJumps: 5, // 5 stacks = +5 jumps total
     chainRange: 10, // 10 stacks = ~931% total (25% per stack, multiplicative)
     chainDamage: 10, // 10 stacks = -100% damage reduction (minimum 5% per jump)
-    defense: 10 // 10 stacks = +20 damage reduction total (2 per stack)
+    defense: 10, // 10 stacks = +20 damage reduction total (2 per stack)
+    // New upgrades
+    lifesteal: 5, // 5 stacks = 10% lifesteal total (2% per stack)
+    dodgeChance: 5, // 5 stacks = 25% dodge chance total (5% per stack)
+    thorns: 5, // 5 stacks = 75% reflected damage total (15% per stack)
+    aoeSize: 10, // 10 stacks = +150% AoE size total (15% per stack)
+    knockback: 5, // 5 stacks = +100% knockback total (20% per stack)
+    magnetRange: 10, // 10 stacks = +250% pickup radius total (25% per stack)
+    invulnTime: 5, // 5 stacks = +0.75s invuln total (0.15s per stack)
+    moveDamage: 5, // 5 stacks = +10% damage per speed stack (2% per stack)
+    lowHealthDmg: 5, // 5 stacks = +25% damage per 10% missing HP (5% per stack)
+    killSpeed: 5 // 5 stacks = +15% speed on kill for 3s (3% per stack)
 };
 
 // Basic upgrade definitions
@@ -423,6 +434,149 @@ export const UPGRADES = {
             const stacks = player.upgradeStacks?.defense || 0;
             const baseDefense = player.characterData?.ability === 'tankStats' ? 0.15 : 0;
             player.defense = baseDefense + (stacks * 2);
+        }
+    },
+
+    // ========================================
+    // NEW UPGRADES
+    // ========================================
+
+    lifesteal: {
+        name: 'Life Drain',
+        icon: '♡',
+        description: 'Heal 2% of damage dealt',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `Heal ${(stacks || 1) * 2}% of damage dealt${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.lifesteal})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.lifesteal || 0;
+            player.lifestealPercent = stacks * 0.02; // 2% per stack
+        }
+    },
+    dodgeChance: {
+        name: 'Evasion',
+        icon: '⚡',
+        description: '+5% dodge chance',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${(stacks || 1) * 5}% dodge chance${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.dodgeChance})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.dodgeChance || 0;
+            // Add to existing dodge chance (Scout has base 10%)
+            const baseDodge = player.characterData?.ability === 'dodgeChance' ? 0.1 : 0;
+            player.dodgeChance = baseDodge + (stacks * 0.05); // 5% per stack
+        }
+    },
+    thorns: {
+        name: 'Thorns',
+        icon: '⌂',
+        description: 'Reflect 15% damage to attackers',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `Reflect ${(stacks || 1) * 15}% damage${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.thorns})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.thorns || 0;
+            player.thornsPercent = stacks * 0.15; // 15% per stack
+        }
+    },
+    aoeSize: {
+        name: 'Blast Radius',
+        icon: '◎',
+        description: '+15% explosion/area size',
+        category: 'weapon',
+        upgradeCategory: 'explosionRadius',
+        maxStacks: 10,
+        getDescription: (stacks) => `+${(stacks || 1) * 15}% AoE size${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.aoeSize})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.aoeSize || 0;
+            player.aoeSizeMultiplier = 1 + (stacks * 0.15); // 15% per stack
+            // Also update explosion radius if player has explosive weapon
+            if (player.explosionRadius) {
+                const baseRadius = player.weaponDef?.explosionRadius || 50;
+                player.explosionRadius = Math.floor(baseRadius * player.aoeSizeMultiplier);
+            }
+        }
+    },
+    knockback: {
+        name: 'Impact Force',
+        icon: '⇒',
+        description: '+20% knockback',
+        category: 'weapon',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${(stacks || 1) * 20}% knockback${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.knockback})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.knockback || 0;
+            player.knockbackMultiplier = 1 + (stacks * 0.2); // 20% per stack
+        }
+    },
+    magnetRange: {
+        name: 'Treasure Hunter',
+        icon: '◐',
+        description: '+25% pickup radius',
+        category: 'passive',
+        maxStacks: 10,
+        getDescription: (stacks) => `+${(stacks || 1) * 25}% pickup radius${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.magnetRange})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.magnetRange || 0;
+            const baseRadius = 30;
+            // Additive with pickupRadius upgrade
+            const pickupStacks = player.upgradeStacks?.pickupRadius || 0;
+            const pickupMultiplier = Math.pow(1.5, pickupStacks);
+            player.pickupRadius = Math.floor(baseRadius * pickupMultiplier * (1 + stacks * 0.25));
+        }
+    },
+    invulnTime: {
+        name: 'Iron Skin',
+        icon: '◇',
+        description: '+0.15s invulnerability frames',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${((stacks || 1) * 0.15).toFixed(2)}s invuln${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.invulnTime})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.invulnTime || 0;
+            const baseDuration = 1.0; // Base invulnerability duration
+            player.invulnerableDuration = baseDuration + (stacks * 0.15); // 0.15s per stack
+        }
+    },
+    moveDamage: {
+        name: 'Momentum',
+        icon: '➜',
+        description: '+2% damage per speed stack',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${(stacks || 1) * 2}% damage per speed stack${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.moveDamage})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.moveDamage || 0;
+            player.moveDamageBonus = stacks * 0.02; // 2% per stack
+            // Damage bonus is applied dynamically based on speed stacks in combat
+        }
+    },
+    lowHealthDmg: {
+        name: 'Desperation',
+        icon: '☠',
+        description: '+5% damage per 10% missing HP',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${(stacks || 1) * 5}% damage per 10% missing HP${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.lowHealthDmg})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.lowHealthDmg || 0;
+            player.lowHealthDmgBonus = stacks * 0.05; // 5% per stack per 10% missing HP
+            // Damage bonus is applied dynamically based on HP percentage in combat
+        }
+    },
+    killSpeed: {
+        name: 'Bloodlust',
+        icon: '⚔',
+        description: '+3% speed for 3s on kill',
+        category: 'passive',
+        maxStacks: 5,
+        getDescription: (stacks) => `+${(stacks || 1) * 3}% speed for 3s on kill${stacks > 0 ? ` (${stacks}/${UPGRADE_STACK_LIMITS.killSpeed})` : ''}`,
+        apply: (player) => {
+            const stacks = player.upgradeStacks?.killSpeed || 0;
+            player.killSpeedBonus = stacks * 0.03; // 3% per stack
+            player.killSpeedDuration = 3.0; // 3 seconds
+            player.killSpeedStacks = 0; // Active kill stacks (managed in combat)
+            player.killSpeedTimer = 0; // Timer for speed buff decay
         }
     }
 };
