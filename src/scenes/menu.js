@@ -609,7 +609,7 @@ export function setupMenuScene(k) {
         // ==========================================
 
         // ASCII Art Title with Animation
-        const titleY = 100;
+        const titleY = 160;
         const asciiTitle = [
             '███████╗██╗   ██╗██████╗ ███████╗██████╗ ',
             '██╔════╝██║   ██║██╔══██╗██╔════╝██╔══██╗',
@@ -674,8 +674,8 @@ export function setupMenuScene(k) {
         });
 
         // Main buttons - centered column
-        const buttonStartY = 180;
-        const buttonSpacing = 55;
+        const buttonStartY = 310;
+        const buttonSpacing = 50;
         const buttonWidth = 280;
 
         const playButton = createMenuButton(
