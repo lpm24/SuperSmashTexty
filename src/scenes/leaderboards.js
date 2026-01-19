@@ -36,6 +36,10 @@ export function setupLeaderboardsScene(k) {
         const initialTab = args.tab || TABS.DAILY;
         let currentTab = initialTab;
 
+        // Pagination for personal bests (5 characters per page)
+        const CHARACTERS_PER_PAGE = 5;
+        let personalPage = 0;
+
         // Background
         k.add([
             k.rect(k.width(), k.height()),
@@ -97,6 +101,7 @@ export function setupLeaderboardsScene(k) {
                 if (currentTab !== tabType) {
                     playMenuNav();
                     currentTab = tabType;
+                    personalPage = 0; // Reset pagination when switching tabs
                     refreshTabs();
                     renderContent();
                 }
@@ -238,6 +243,14 @@ export function setupLeaderboardsScene(k) {
         function renderPersonalContent() {
             const personalBests = getPersonalBests();
             const characters = Object.keys(CHARACTER_UNLOCKS);
+            const totalPages = Math.ceil(characters.length / CHARACTERS_PER_PAGE);
+
+            // Clamp page to valid range
+            if (personalPage >= totalPages) personalPage = Math.max(0, totalPages - 1);
+
+            // Get characters for current page
+            const startIndex = personalPage * CHARACTERS_PER_PAGE;
+            const pageCharacters = characters.slice(startIndex, startIndex + CHARACTERS_PER_PAGE);
 
             // Header
             const headerY = contentY + 10;
@@ -267,11 +280,11 @@ export function setupLeaderboardsScene(k) {
             ]);
             contentElements.push(divider);
 
-            // Character rows
-            characters.forEach((charKey, index) => {
+            // Character rows (paginated)
+            pageCharacters.forEach((charKey, pageIndex) => {
                 const charData = CHARACTER_UNLOCKS[charKey];
                 const bests = personalBests[charKey];
-                const rowY = headerY + 45 + (index * 40);
+                const rowY = headerY + 45 + (pageIndex * 40);
 
                 // Character icon and name
                 const charIcon = k.add([
@@ -330,6 +343,80 @@ export function setupLeaderboardsScene(k) {
                     contentElements.push(noData);
                 }
             });
+
+            // Pagination controls (consistent with other pages)
+            if (totalPages > 1) {
+                const paginationY = headerY + 45 + (CHARACTERS_PER_PAGE * 40) + 20;
+                const paginationCenterX = k.width() / 2;
+
+                // Left arrow
+                const leftArrow = k.add([
+                    k.text('<', { size: 24 }),
+                    k.pos(paginationCenterX - 60, paginationY),
+                    k.anchor('center'),
+                    k.color(personalPage > 0 ? 255 : 80, personalPage > 0 ? 255 : 80, personalPage > 0 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                if (personalPage > 0) {
+                    leftArrow.onClick(() => {
+                        playMenuNav();
+                        personalPage--;
+                        renderContent();
+                    });
+                }
+                contentElements.push(leftArrow);
+
+                // Page indicator pips
+                const pipSpacing = 16;
+                const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+
+                for (let i = 0; i < totalPages; i++) {
+                    const isCurrentPage = i === personalPage;
+                    const pip = k.add([
+                        k.text(isCurrentPage ? '●' : '○', { size: 14 }),
+                        k.pos(pipsStartX + i * pipSpacing, paginationY),
+                        k.anchor('center'),
+                        k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
+                        k.area(),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT)
+                    ]);
+
+                    const pageIndex = i;
+                    pip.onClick(() => {
+                        if (pageIndex !== personalPage) {
+                            playMenuNav();
+                            personalPage = pageIndex;
+                            renderContent();
+                        }
+                    });
+
+                    contentElements.push(pip);
+                }
+
+                // Right arrow
+                const rightArrow = k.add([
+                    k.text('>', { size: 24 }),
+                    k.pos(paginationCenterX + 60, paginationY),
+                    k.anchor('center'),
+                    k.color(personalPage < totalPages - 1 ? 255 : 80, personalPage < totalPages - 1 ? 255 : 80, personalPage < totalPages - 1 ? 255 : 80),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                if (personalPage < totalPages - 1) {
+                    rightArrow.onClick(() => {
+                        playMenuNav();
+                        personalPage++;
+                        renderContent();
+                    });
+                }
+                contentElements.push(rightArrow);
+            }
         }
 
         // Render leaderboard header row
