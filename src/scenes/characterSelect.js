@@ -58,7 +58,8 @@ export function setupCharacterSelectScene(k) {
         let scrollOffset = 0;
         
         const characterCards = [];
-        let selectedCharacterKey = selectedChar || characterKeys[0];
+        const confirmedCharacterKey = selectedChar || characterKeys[0]; // The saved selection
+        let viewedCharacterKey = confirmedCharacterKey; // What's being viewed/previewed
         let detailItems = [];
         let isRefreshing = false; // Prevent infinite loops
         
@@ -93,7 +94,7 @@ export function setupCharacterSelectScene(k) {
             characterKeys.forEach((key, index) => {
                 const char = CHARACTER_UNLOCKS[key];
                 const isUnlockedChar = isUnlocked('characters', key) || char.unlockedByDefault;
-                const isSelected = selectedCharacterKey === key;
+                const isViewed = viewedCharacterKey === key;
                 
                 const row = Math.floor(index / cardsPerRow);
                 const col = index % cardsPerRow;
@@ -107,8 +108,8 @@ export function setupCharacterSelectScene(k) {
                         k.rect(cardWidth, cardHeight),
                         k.pos(cardX, cardY),
                         k.anchor('topleft'),
-                        k.color(...(isSelected ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK)),
-                        k.outline(2, isSelected ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
+                        k.color(...(isViewed ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK)),
+                        k.outline(2, isViewed ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
                         k.area(),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_ELEMENTS)
@@ -147,35 +148,31 @@ export function setupCharacterSelectScene(k) {
                         characterCards.push(lockText);
                     }
                     
-                    // Click handler
-                    if (isUnlockedChar) {
-                        cardBg.onClick(() => {
-                            if (selectedCharacterKey !== key) {
-                                playMenuSelect();
-                                selectedCharacterKey = key;
-                                setSelectedCharacter(key);
-                                broadcastCharacterChange(key); // Sync with party members
-                                refreshDisplay();
-                            }
-                        });
-                        cardBg.cursor = 'pointer';
-                    }
+                    // Click handler - all cards are clickable for viewing
+                    cardBg.onClick(() => {
+                        if (viewedCharacterKey !== key) {
+                            playMenuSelect();
+                            viewedCharacterKey = key;
+                            refreshDisplay();
+                        }
+                    });
+                    cardBg.cursor = 'pointer';
                     
                     characterCards.push(cardBg, charVisual, nameText);
                 }
             });
             
             // Render character details (right side)
-            const selectedChar = CHARACTER_UNLOCKS[selectedCharacterKey];
-            const isUnlockedChar = isUnlocked('characters', selectedCharacterKey) || selectedChar.unlockedByDefault;
+            const viewedChar = CHARACTER_UNLOCKS[viewedCharacterKey];
+            const isViewedUnlocked = isUnlocked('characters', viewedCharacterKey) || viewedChar.unlockedByDefault;
             let detailY = startY;
             
             // Character visual (large)
             const detailVisual = k.add([
-                k.text(selectedChar.char, { size: 72 }),
+                k.text(viewedChar.char, { size: 72 }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY + 40),
                 k.anchor('center'),
-                k.color(...(isUnlockedChar ? selectedChar.color : UI_COLORS.BG_DISABLED)),
+                k.color(...(isViewedUnlocked ? viewedChar.color : UI_COLORS.BG_DISABLED)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
@@ -184,7 +181,7 @@ export function setupCharacterSelectScene(k) {
 
             // Character name
             const detailName = k.add([
-                k.text(selectedChar.name, { size: UI_TEXT_SIZES.HEADER }),
+                k.text(viewedChar.name, { size: UI_TEXT_SIZES.HEADER }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -196,7 +193,7 @@ export function setupCharacterSelectScene(k) {
 
             // Description
             const detailDesc = k.add([
-                k.text(selectedChar.description, { size: UI_TEXT_SIZES.SMALL, width: rightPanelWidth - 40 }),
+                k.text(viewedChar.description, { size: UI_TEXT_SIZES.SMALL, width: rightPanelWidth - 40 }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -205,7 +202,7 @@ export function setupCharacterSelectScene(k) {
             ]);
             detailItems.push(detailDesc);
             detailY += 60;
-            
+
             // Stats
             const statsLabel = k.add([
                 k.text('Stats:', { size: UI_TEXT_SIZES.LABEL }),
@@ -219,7 +216,7 @@ export function setupCharacterSelectScene(k) {
             detailY += 30;
 
             const statsText = k.add([
-                k.text(`${UI_TERMS.HEALTH}: ${selectedChar.stats.health}`, { size: UI_TEXT_SIZES.BODY }),
+                k.text(`${UI_TERMS.HEALTH}: ${viewedChar.stats.health}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -230,7 +227,7 @@ export function setupCharacterSelectScene(k) {
             detailY += 25;
 
             const speedText = k.add([
-                k.text(`${UI_TERMS.SPEED}: ${selectedChar.stats.speed}`, { size: UI_TEXT_SIZES.BODY }),
+                k.text(`${UI_TERMS.SPEED}: ${viewedChar.stats.speed}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -241,7 +238,7 @@ export function setupCharacterSelectScene(k) {
             detailY += 25;
 
             const damageText = k.add([
-                k.text(`${UI_TERMS.DAMAGE}: ${selectedChar.stats.damage}`, { size: UI_TEXT_SIZES.BODY }),
+                k.text(`${UI_TERMS.DAMAGE}: ${viewedChar.stats.damage}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(rightPanelX + 40, detailY),
                 k.anchor('left'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -250,11 +247,11 @@ export function setupCharacterSelectScene(k) {
             ]);
             detailItems.push(damageText);
             detailY += 40;
-            
-            // Selected indicator
-            if (selectedCharacterKey === selectedChar) {
+
+            // Currently selected indicator (show if viewing the confirmed selection)
+            if (viewedCharacterKey === confirmedCharacterKey) {
                 const selectedIndicator = k.add([
-                    k.text('✓ SELECTED', { size: UI_TEXT_SIZES.LABEL }),
+                    k.text('✓ CURRENT SELECTION', { size: UI_TEXT_SIZES.LABEL }),
                     k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                     k.anchor('center'),
                     k.color(...UI_COLORS.SUCCESS),
@@ -265,9 +262,9 @@ export function setupCharacterSelectScene(k) {
             }
 
             // Locked info
-            if (!isUnlockedChar && selectedChar.unlockRequirement) {
+            if (!isViewedUnlocked && viewedChar.unlockRequirement) {
                 const unlockText = k.add([
-                    k.text(`Unlock: Complete ${UI_TERMS.FLOOR} ${selectedChar.unlockRequirement.value}`, { size: UI_TEXT_SIZES.SMALL }),
+                    k.text(`Unlock: Complete ${UI_TERMS.FLOOR} ${viewedChar.unlockRequirement.value}`, { size: UI_TEXT_SIZES.SMALL }),
                     k.pos(rightPanelX + rightPanelWidth / 2, detailY + 30),
                     k.anchor('center'),
                     k.color(...UI_COLORS.GOLD),
@@ -328,10 +325,10 @@ export function setupCharacterSelectScene(k) {
             }
         });
         
-        // Back button (centered like other menus)
-        const backButton = k.add([
+        // Cancel button (left side)
+        const cancelButton = k.add([
             k.rect(120, 35),
-            k.pos(k.width() / 2, k.height() - 40),
+            k.pos(k.width() / 2 - 70, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -340,23 +337,83 @@ export function setupCharacterSelectScene(k) {
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
 
-        const backText = k.add([
-            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 40),
+        k.add([
+            k.text(formatButtonText('Cancel'), { size: UI_TEXT_SIZES.BODY }),
+            k.pos(k.width() / 2 - 70, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
-        backButton.onClick(() => {
+
+        cancelButton.onClick(() => {
             playMenuNav();
             k.go('menu');
         });
 
+        // Confirm button (right side) - track for enabling/disabling
+        let confirmButton = null;
+        let confirmText = null;
+        let confirmButtonItems = [];
+
+        function updateConfirmButton() {
+            // Clean up old button
+            confirmButtonItems.forEach(item => {
+                if (item && item.exists && item.exists()) {
+                    k.destroy(item);
+                }
+            });
+            confirmButtonItems = [];
+
+            const viewedChar = CHARACTER_UNLOCKS[viewedCharacterKey];
+            const isViewedUnlocked = isUnlocked('characters', viewedCharacterKey) || viewedChar.unlockedByDefault;
+
+            confirmButton = k.add([
+                k.rect(120, 35),
+                k.pos(k.width() / 2 + 70, k.height() - 40),
+                k.anchor('center'),
+                k.color(...(isViewedUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.BG_DISABLED)),
+                k.outline(2, k.rgb(...(isViewedUnlocked ? UI_COLORS.BORDER : UI_COLORS.BG_DARK))),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
+            ]);
+            confirmButtonItems.push(confirmButton);
+
+            confirmText = k.add([
+                k.text(formatButtonText('Confirm'), { size: UI_TEXT_SIZES.BODY }),
+                k.pos(k.width() / 2 + 70, k.height() - 40),
+                k.anchor('center'),
+                k.color(...(isViewedUnlocked ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+            confirmButtonItems.push(confirmText);
+
+            if (isViewedUnlocked) {
+                confirmButton.onClick(() => {
+                    playMenuSelect();
+                    setSelectedCharacter(viewedCharacterKey);
+                    broadcastCharacterChange(viewedCharacterKey);
+                    k.go('menu');
+                });
+                confirmButton.cursor = 'pointer';
+            }
+        }
+
+        // Initial confirm button render
+        updateConfirmButton();
+
+        // Wrap refreshDisplay to also update confirm button
+        const originalRefreshDisplay = refreshDisplay;
+        refreshDisplay = function() {
+            originalRefreshDisplay();
+            updateConfirmButton();
+        };
+
         // Instructions
         k.add([
-            k.text('Click a character to select | Press SPACE to start', { size: UI_TEXT_SIZES.BODY }),
+            k.text('Click a character to preview | Confirm to select', { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 80),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_TERTIARY),
@@ -370,9 +427,15 @@ export function setupCharacterSelectScene(k) {
             k.go('menu');
         });
 
-        k.onKeyPress('space', () => {
-            playMenuSelect();
-            k.go('game', { resetState: true });
+        k.onKeyPress('enter', () => {
+            const viewedChar = CHARACTER_UNLOCKS[viewedCharacterKey];
+            const isViewedUnlocked = isUnlocked('characters', viewedCharacterKey) || viewedChar.unlockedByDefault;
+            if (isViewedUnlocked) {
+                playMenuSelect();
+                setSelectedCharacter(viewedCharacterKey);
+                broadcastCharacterChange(viewedCharacterKey);
+                k.go('menu');
+            }
         });
     });
 }

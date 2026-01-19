@@ -17,6 +17,9 @@ const k = kaplay({
     scale: GAME_CONFIG.CANVAS_SCALE,
     debug: GAME_CONFIG.DEBUG_MODE,
     root: document.querySelector('#game-container'),
+    stretch: true,  // Stretch canvas to fill container
+    letterbox: true, // Maintain aspect ratio with letterboxing
+    crisp: true, // Disable anti-aliasing for crisp pixel art
 });
 
 // Setup scenes
