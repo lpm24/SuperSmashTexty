@@ -359,22 +359,34 @@ export function setupMenuScene(k) {
                 ]);
                 elementsForThisSlot.push(slotBg);
 
-                const slotNum = k.add([
-                    k.text(`${slot.slotNumber}`, { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(partyPanelX + 16, slotY + slotHeight / 2),
-                    k.anchor('left'),
+                // Show portrait emoji for players, slot number for empty slots
+                let slotIcon = `${slot.slotNumber}`;
+                if (!slot.isEmpty) {
+                    if (slot.isLocal) {
+                        // Local player - use their selected portrait
+                        const portrait = getPortraitById(getSelectedPortrait()) || PORTRAITS.default;
+                        slotIcon = portrait.icon;
+                    } else {
+                        // Remote player - use default emoji (portrait sync not implemented)
+                        slotIcon = '😊';
+                    }
+                }
+                const slotIconEl = k.add([
+                    k.text(slotIcon, { size: slot.isEmpty ? UI_TEXT_SIZES.SMALL : UI_TEXT_SIZES.SMALL + 2 }),
+                    k.pos(partyPanelX + 18, slotY + slotHeight / 2),
+                    k.anchor('center'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
                 ]);
-                elementsForThisSlot.push(slotNum);
+                elementsForThisSlot.push(slotIconEl);
 
                 if (!slot.isEmpty) {
                     const charData = CHARACTER_UNLOCKS[slot.selectedCharacter] || CHARACTER_UNLOCKS['survivor'];
                     const charIcon = k.add([
                         k.text(charData.char, { size: UI_TEXT_SIZES.SMALL }),
-                        k.pos(partyPanelX + 32, slotY + slotHeight / 2),
+                        k.pos(partyPanelX + 38, slotY + slotHeight / 2),
                         k.anchor('left'),
                         k.color(...charData.color),
                         k.fixed(),
@@ -385,8 +397,8 @@ export function setupMenuScene(k) {
                 }
 
                 const nameText = k.add([
-                    k.text(slot.playerName.substring(0, 10), { size: UI_TEXT_SIZES.SMALL - 2 }),
-                    k.pos(partyPanelX + (slot.isEmpty ? 40 : 50), slotY + slotHeight / 2),
+                    k.text(slot.playerName.substring(0, 9), { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(partyPanelX + (slot.isEmpty ? 32 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
                     k.fixed(),

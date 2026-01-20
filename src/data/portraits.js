@@ -26,7 +26,7 @@ export const PORTRAITS = {
     default: {
         id: 'default',
         name: 'Rookie',
-        icon: '@',
+        icon: '😊',
         color: [200, 200, 200],
         category: PORTRAIT_CATEGORIES.LEVEL,
         unlockCondition: { type: 'default' },
@@ -37,7 +37,7 @@ export const PORTRAITS = {
     veteran: {
         id: 'veteran',
         name: 'Veteran',
-        icon: '★',
+        icon: '😎',
         color: [100, 200, 255],
         category: PORTRAIT_CATEGORIES.LEVEL,
         unlockCondition: { type: 'level', value: 10 },
@@ -46,7 +46,7 @@ export const PORTRAITS = {
     elite: {
         id: 'elite',
         name: 'Elite',
-        icon: '◆',
+        icon: '🌟',
         color: [255, 200, 100],
         category: PORTRAIT_CATEGORIES.LEVEL,
         unlockCondition: { type: 'level', value: 25 },
@@ -55,7 +55,7 @@ export const PORTRAITS = {
     legend: {
         id: 'legend',
         name: 'Legend',
-        icon: '♦',
+        icon: '👑',
         color: [255, 100, 255],
         category: PORTRAIT_CATEGORIES.LEVEL,
         unlockCondition: { type: 'level', value: 50 },
@@ -66,7 +66,7 @@ export const PORTRAITS = {
     survivor: {
         id: 'survivor',
         name: 'Survivor',
-        icon: 'S',
+        icon: '💪',
         color: [100, 200, 100],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'survivor' },
@@ -75,7 +75,7 @@ export const PORTRAITS = {
     berserker: {
         id: 'berserker',
         name: 'Berserker',
-        icon: 'B',
+        icon: '😡',
         color: [255, 100, 100],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'berserker' },
@@ -84,7 +84,7 @@ export const PORTRAITS = {
     ranger: {
         id: 'ranger',
         name: 'Ranger',
-        icon: 'R',
+        icon: '🎯',
         color: [100, 255, 150],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'ranger' },
@@ -93,7 +93,7 @@ export const PORTRAITS = {
     mage: {
         id: 'mage',
         name: 'Mage',
-        icon: 'M',
+        icon: '🧙',
         color: [200, 100, 255],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'mage' },
@@ -102,7 +102,7 @@ export const PORTRAITS = {
     tank: {
         id: 'tank',
         name: 'Tank',
-        icon: 'T',
+        icon: '🛡️',
         color: [150, 150, 200],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'tank' },
@@ -111,7 +111,7 @@ export const PORTRAITS = {
     assassin: {
         id: 'assassin',
         name: 'Assassin',
-        icon: 'A',
+        icon: '🗡️',
         color: [150, 100, 150],
         category: PORTRAIT_CATEGORIES.CHARACTER,
         unlockCondition: { type: 'character', value: 'assassin' },
@@ -122,7 +122,7 @@ export const PORTRAITS = {
     boss_slayer: {
         id: 'boss_slayer',
         name: 'Boss Slayer',
-        icon: '♛',
+        icon: '👹',
         color: [255, 180, 50],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'stat', stat: 'totalBossesKilled', value: 100 },
@@ -140,7 +140,7 @@ export const PORTRAITS = {
     perfectionist: {
         id: 'perfectionist',
         name: 'Perfectionist',
-        icon: '●',
+        icon: '✨',
         color: [255, 255, 255],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'achievement', value: 'flawless_run' },
@@ -149,7 +149,7 @@ export const PORTRAITS = {
     grinder: {
         id: 'grinder',
         name: 'Grinder',
-        icon: '⚙',
+        icon: '⚙️',
         color: [200, 150, 100],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'stat', stat: 'totalRuns', value: 100 },
@@ -158,7 +158,7 @@ export const PORTRAITS = {
     collector: {
         id: 'collector',
         name: 'Collector',
-        icon: '$',
+        icon: '💰',
         color: [255, 215, 0],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'stat', stat: 'totalCurrencyEarned', value: 10000 },
@@ -167,7 +167,7 @@ export const PORTRAITS = {
     exterminator: {
         id: 'exterminator',
         name: 'Exterminator',
-        icon: '☠',
+        icon: '💀',
         color: [200, 50, 50],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'stat', stat: 'totalEnemiesKilled', value: 10000 },
