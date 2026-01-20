@@ -15,9 +15,17 @@
  * - Anti-cheat measures
  */
 
-// Dreamlo API configuration
-const DREAMLO_PUBLIC_KEY = '696eba6f8f40bb1184b6c60f';
-const DREAMLO_PRIVATE_KEY = 'YRU5IdY0w0uJvRF8cb9S1A21WwOAek3kyr3RcOYHbdYA';
+// Dreamlo API configuration - Two leaderboards
+const LEADERBOARDS = {
+    allTime: {
+        publicKey: '696eba6f8f40bb1184b6c60f',
+        privateKey: 'YRU5IdY0w0uJvRF8cb9S1A21WwOAek3kyr3RcOYHbdYA'
+    },
+    daily: {
+        publicKey: '696ff2ee8f40bb1184b8cc92',
+        privateKey: 'SgdqIaI_fkWUlRVwoWLQlA1yEXBc-33UKZYWPWJcOX6Q'
+    }
+};
 
 // IMPORTANT: Dreamlo free tier only supports HTTP, not HTTPS.
 // Since the game is deployed on HTTPS (GitHub Pages), we need a CORS proxy.
@@ -37,10 +45,12 @@ function buildProxiedUrl(path) {
     return `${CORS_PROXY}${encodeURIComponent(DREAMLO_RAW_URL + path)}`;
 }
 
-// Cache configuration
+// Cache configuration - separate cache for each board type
 const CACHE_DURATION_MS = 60000; // 1 minute cache
-let leaderboardCache = null;
-let cacheTimestamp = 0;
+const leaderboardCaches = {
+    allTime: { data: null, timestamp: 0 },
+    daily: { data: null, timestamp: 0 }
+};
 
 // Request timeout
 const REQUEST_TIMEOUT_MS = 5000;
@@ -100,13 +110,20 @@ async function fetchWithTimeout(url, timeout = REQUEST_TIMEOUT_MS) {
  * @param {string} entry.character - Character used
  * @param {number} entry.time - Duration in seconds
  * @param {string} entry.date - Date string (YYYY-MM-DD)
+ * @param {string} boardType - Which board to submit to ('allTime' or 'daily')
  * @returns {Promise<boolean>} - Whether submission succeeded
  */
-export async function submitOnlineScore(entry) {
+export async function submitOnlineScore(entry, boardType = 'allTime') {
     try {
         // Validate score
         if (!isValidScore(entry.score)) {
             console.warn('[OnlineLeaderboards] Invalid score, skipping submission:', entry.score);
+            return false;
+        }
+
+        const board = LEADERBOARDS[boardType];
+        if (!board) {
+            console.warn('[OnlineLeaderboards] Unknown board type:', boardType);
             return false;
         }
 
@@ -118,18 +135,18 @@ export async function submitOnlineScore(entry) {
         const text = `${entry.floor || 1}|${entry.character || 'unknown'}|${entry.date || ''}`;
 
         // Dreamlo add URL format: /lb/{privateKey}/add/{name}/{score}/{seconds}/{text}
-        const path = `/${DREAMLO_PRIVATE_KEY}/add/${encodeURIComponent(name)}/${score}/${seconds}/${encodeURIComponent(text)}`;
+        const path = `/${board.privateKey}/add/${encodeURIComponent(name)}/${score}/${seconds}/${encodeURIComponent(text)}`;
         const url = buildProxiedUrl(path);
 
-        console.log('[OnlineLeaderboards] Submitting score:', { name, score, floor: entry.floor });
+        console.log(`[OnlineLeaderboards] Submitting score to ${boardType}:`, { name, score, floor: entry.floor });
 
         const response = await fetchWithTimeout(url);
 
         if (response.ok) {
-            console.log('[OnlineLeaderboards] Score submitted successfully');
-            // Invalidate cache on successful submission
-            leaderboardCache = null;
-            cacheTimestamp = 0;
+            console.log(`[OnlineLeaderboards] Score submitted to ${boardType} successfully`);
+            // Invalidate cache for this board on successful submission
+            leaderboardCaches[boardType].data = null;
+            leaderboardCaches[boardType].timestamp = 0;
             return true;
         } else {
             console.warn('[OnlineLeaderboards] Submission failed with status:', response.status);
@@ -143,6 +160,15 @@ export async function submitOnlineScore(entry) {
         }
         return false;
     }
+}
+
+/**
+ * Submit score to daily leaderboard (convenience wrapper)
+ * @param {Object} entry - Score entry (same format as submitOnlineScore)
+ * @returns {Promise<boolean>} - Whether submission succeeded
+ */
+export async function submitDailyScore(entry) {
+    return submitOnlineScore(entry, 'daily');
 }
 
 /**
@@ -167,25 +193,34 @@ function parseEntry(entry) {
 /**
  * Get online leaderboard
  * @param {number} limit - Max entries to return
+ * @param {string} boardType - Which board to fetch ('allTime' or 'daily')
  * @returns {Promise<Object>} - { entries: [], totalCount: number, error: string|null }
  */
-export async function getOnlineLeaderboard(limit = 10) {
+export async function getOnlineLeaderboard(limit = 10, boardType = 'allTime') {
     try {
+        const board = LEADERBOARDS[boardType];
+        if (!board) {
+            console.warn('[OnlineLeaderboards] Unknown board type:', boardType);
+            return { entries: [], totalCount: 0, error: 'Unknown board type' };
+        }
+
+        const cache = leaderboardCaches[boardType];
+
         // Check cache first
         const now = Date.now();
-        if (leaderboardCache && (now - cacheTimestamp) < CACHE_DURATION_MS) {
-            console.log('[OnlineLeaderboards] Using cached leaderboard');
+        if (cache.data && (now - cache.timestamp) < CACHE_DURATION_MS) {
+            console.log(`[OnlineLeaderboards] Using cached ${boardType} leaderboard`);
             return {
-                entries: leaderboardCache.slice(0, limit),
-                totalCount: leaderboardCache.length,
+                entries: cache.data.slice(0, limit),
+                totalCount: cache.data.length,
                 error: null
             };
         }
 
         // Dreamlo JSON URL: /lb/{publicKey}/json
-        const url = buildProxiedUrl(`/${DREAMLO_PUBLIC_KEY}/json`);
+        const url = buildProxiedUrl(`/${board.publicKey}/json`);
 
-        console.log('[OnlineLeaderboards] Fetching global leaderboard...');
+        console.log(`[OnlineLeaderboards] Fetching ${boardType} leaderboard...`);
 
         const response = await fetchWithTimeout(url);
 
@@ -210,10 +245,10 @@ export async function getOnlineLeaderboard(limit = 10) {
         }
 
         // Update cache
-        leaderboardCache = entries;
-        cacheTimestamp = now;
+        cache.data = entries;
+        cache.timestamp = now;
 
-        console.log('[OnlineLeaderboards] Fetched', entries.length, 'entries');
+        console.log(`[OnlineLeaderboards] Fetched ${entries.length} entries from ${boardType}`);
 
         return {
             entries: entries.slice(0, limit),
@@ -228,6 +263,30 @@ export async function getOnlineLeaderboard(limit = 10) {
         console.warn('[OnlineLeaderboards] Fetch error:', error.message);
         return { entries: [], totalCount: 0, error: 'Could not connect to server' };
     }
+}
+
+/**
+ * Get daily online leaderboard filtered by today's date
+ * @param {number} limit - Max entries to return
+ * @param {string} todayDate - Today's date string (YYYY-MM-DD) for filtering
+ * @returns {Promise<Object>} - { entries: [], totalCount: number, error: string|null }
+ */
+export async function getDailyOnlineLeaderboard(limit = 10, todayDate) {
+    // Fetch all entries from daily board
+    const result = await getOnlineLeaderboard(1000, 'daily');
+
+    if (result.error) {
+        return result;
+    }
+
+    // Filter entries to only show today's date
+    const todayEntries = result.entries.filter(entry => entry.date === todayDate);
+
+    return {
+        entries: todayEntries.slice(0, limit),
+        totalCount: todayEntries.length,
+        error: null
+    };
 }
 
 /**
@@ -276,10 +335,19 @@ export async function getGlobalRank(playerName, playerScore) {
 
 /**
  * Clear the leaderboard cache (useful after submission)
+ * @param {string} boardType - Optional board type to clear ('allTime' or 'daily'), clears all if not specified
  */
-export function clearCache() {
-    leaderboardCache = null;
-    cacheTimestamp = 0;
+export function clearCache(boardType = null) {
+    if (boardType && leaderboardCaches[boardType]) {
+        leaderboardCaches[boardType].data = null;
+        leaderboardCaches[boardType].timestamp = 0;
+    } else {
+        // Clear all caches
+        Object.keys(leaderboardCaches).forEach(key => {
+            leaderboardCaches[key].data = null;
+            leaderboardCaches[key].timestamp = 0;
+        });
+    }
 }
 
 /**
