@@ -1,7 +1,7 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency, getPlayerLevel, getXPProgress, getTotalXP, getXPForNextLevel, getSelectedPortrait } from '../systems/metaProgression.js';
 import { PORTRAITS, getPortraitById } from '../data/portraits.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady, broadcastPartyEmote, onPartyEmote, offPartyEmote, getActiveEmote } from '../systems/partySystem.js';
 import { initAudio, resumeAudioContext, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled } from '../systems/sounds.js';
 import { getSettings } from '../systems/settings.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -392,7 +392,7 @@ export function setupMenuScene(k) {
                 }
 
                 const nameText = k.add([
-                    k.text(slot.playerName.substring(0, 9), { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.text(slot.playerName.substring(0, 15), { size: UI_TEXT_SIZES.SMALL - 2 }),
                     k.pos(partyPanelX + (slot.isEmpty ? 32 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
@@ -401,19 +401,6 @@ export function setupMenuScene(k) {
                     'partySlotUI'
                 ]);
                 elementsForThisSlot.push(nameText);
-
-                if (slot.isLocal) {
-                    const youText = k.add([
-                        k.text('★', { size: UI_TEXT_SIZES.SMALL }),
-                        k.pos(partyPanelX + partyPanelWidth - 28, slotY + slotHeight / 2),
-                        k.anchor('right'),
-                        k.color(...UI_COLORS.GOLD),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_TEXT),
-                        'partySlotUI'
-                    ]);
-                    elementsForThisSlot.push(youText);
-                }
 
                 if (!slot.isEmpty) {
                     const readyIcon = slot.isReady ? '✓' : '○';
@@ -428,6 +415,23 @@ export function setupMenuScene(k) {
                         'partySlotUI'
                     ]);
                     elementsForThisSlot.push(readyText);
+
+                    // Show active emote if any
+                    const activeEmote = getActiveEmote(index);
+                    if (activeEmote) {
+                        const emoteChar = activeEmote === 'exclamation' ? '!' : '♥';
+                        const emoteColor = activeEmote === 'exclamation' ? [255, 255, 0] : [255, 100, 150];
+                        const emoteText = k.add([
+                            k.text(emoteChar, { size: UI_TEXT_SIZES.SMALL + 2 }),
+                            k.pos(partyPanelX + partyPanelWidth - 28, slotY + slotHeight / 2),
+                            k.anchor('center'),
+                            k.color(...emoteColor),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_TEXT + 1),
+                            'partySlotUI'
+                        ]);
+                        elementsForThisSlot.push(emoteText);
+                    }
                 }
 
                 if (slot.isDisconnected) {
@@ -693,7 +697,8 @@ export function setupMenuScene(k) {
                     resetState: true,
                     isDailyRun: true,
                     dailyCharacter: dailyInfo.character,
-                    dailySeed: dailyInfo.seed
+                    dailySeed: dailyInfo.seed,
+                    dailyDate: dailyInfo.date
                 });
             });
 
@@ -971,12 +976,41 @@ export function setupMenuScene(k) {
         const oHandler = k.onKeyPress('o', () => { playMenuNav(); k.go('settings'); });
         const tHandler = k.onKeyPress('t', () => { playMenuNav(); k.go('statistics'); });
 
+        // Emote key handlers (Q and E)
+        let lastEmoteTime = 0;
+        const EMOTE_COOLDOWN = 0.5; // seconds (longer cooldown for menu)
+
+        const qHandler = k.onKeyPress('q', () => {
+            const now = k.time();
+            if (now - lastEmoteTime < EMOTE_COOLDOWN) return;
+            lastEmoteTime = now;
+            broadcastPartyEmote('exclamation');
+            updatePartySlots();
+        });
+
+        const eHandler = k.onKeyPress('e', () => {
+            const now = k.time();
+            if (now - lastEmoteTime < EMOTE_COOLDOWN) return;
+            lastEmoteTime = now;
+            broadcastPartyEmote('heart');
+            updatePartySlots();
+        });
+
+        // Listen for emotes from other players and update display
+        const emoteCallback = (slotIndex, emoteType) => {
+            updatePartySlots();
+        };
+        onPartyEmote(emoteCallback);
+
         k.onSceneLeave(() => {
             spaceHandler.cancel();
             cHandler.cancel();
             sHandler.cancel();
             oHandler.cancel();
             tHandler.cancel();
+            qHandler.cancel();
+            eHandler.cancel();
+            offPartyEmote(emoteCallback);
         });
 
         // ==========================================

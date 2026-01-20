@@ -37,7 +37,10 @@ const party = {
     // Ready-up and countdown
     countdownActive: false,
     countdownStartTime: 0,
-    countdownDuration: 3000 // 3 seconds countdown
+    countdownDuration: 3000, // 3 seconds countdown
+    // Party emotes
+    activeEmotes: new Map(), // Map slotIndex -> { emoteType, startTime }
+    emoteCallbacks: [] // Callbacks to notify when emotes are received
 };
 
 /**
@@ -204,6 +207,19 @@ export function setupNetworkHandlers() {
             broadcastPartyUpdate();
             // Check if all players are ready
             checkAllReady();
+        }
+    });
+
+    // Handle party emotes from clients - rebroadcast to all
+    onMessage('party_emote', (payload, fromPeerId) => {
+        const slotIndex = party.peerIdToSlot.get(fromPeerId);
+        if (slotIndex !== undefined) {
+            // Set the slot index from the verified peer
+            payload.slotIndex = slotIndex;
+            // Store emote and notify callbacks
+            handlePartyEmote(payload);
+            // Rebroadcast to all clients
+            broadcast('party_emote', payload);
         }
     });
 
@@ -512,6 +528,11 @@ function setupClientHandlers() {
         if (localSlotIndex !== -1) {
             party.slots[localSlotIndex].isLocal = true;
         }
+    });
+
+    // Handle party emotes from host
+    onMessage('party_emote', (payload) => {
+        handlePartyEmote(payload);
     });
 
     // Handle host disconnect
@@ -939,4 +960,101 @@ export function resetAllReadyStates() {
     });
     party.countdownActive = false;
     party.countdownStartTime = 0;
+}
+
+// ==========================================
+// Party Emotes System
+// ==========================================
+
+/**
+ * Handle incoming party emote (store and notify callbacks)
+ * @param {Object} payload - { slotIndex, emoteType }
+ */
+function handlePartyEmote(payload) {
+    const { slotIndex, emoteType } = payload;
+
+    // Store the emote with timestamp
+    party.activeEmotes.set(slotIndex, {
+        emoteType,
+        startTime: Date.now()
+    });
+
+    // Notify all registered callbacks
+    party.emoteCallbacks.forEach(callback => {
+        try {
+            callback(slotIndex, emoteType);
+        } catch (err) {
+            console.error('[PartySystem] Emote callback error:', err);
+        }
+    });
+}
+
+/**
+ * Broadcast an emote from the local player
+ * @param {string} emoteType - 'exclamation' or 'heart'
+ */
+export function broadcastPartyEmote(emoteType) {
+    const localSlot = getLocalPlayerSlot();
+    if (localSlot === null) return;
+
+    const payload = { slotIndex: localSlot, emoteType };
+
+    // Handle locally first
+    handlePartyEmote(payload);
+
+    // Send to network if available
+    if (party.networkInitialized) {
+        if (party.isHost) {
+            // Host broadcasts directly to all clients
+            broadcast('party_emote', payload);
+        } else {
+            // Client sends to host (who will rebroadcast)
+            sendToHost('party_emote', payload);
+        }
+    }
+}
+
+/**
+ * Register a callback to be notified when emotes are received
+ * @param {Function} callback - (slotIndex, emoteType) => void
+ */
+export function onPartyEmote(callback) {
+    party.emoteCallbacks.push(callback);
+}
+
+/**
+ * Unregister an emote callback
+ * @param {Function} callback - The callback to remove
+ */
+export function offPartyEmote(callback) {
+    const index = party.emoteCallbacks.indexOf(callback);
+    if (index !== -1) {
+        party.emoteCallbacks.splice(index, 1);
+    }
+}
+
+/**
+ * Get active emote for a slot (if still valid)
+ * @param {number} slotIndex - Slot to check
+ * @param {number} maxAge - Max age in ms (default 2000ms)
+ * @returns {string|null} - Emote type or null if no active emote
+ */
+export function getActiveEmote(slotIndex, maxAge = 2000) {
+    const emote = party.activeEmotes.get(slotIndex);
+    if (!emote) return null;
+
+    const age = Date.now() - emote.startTime;
+    if (age > maxAge) {
+        party.activeEmotes.delete(slotIndex);
+        return null;
+    }
+
+    return emote.emoteType;
+}
+
+/**
+ * Clear all active emotes
+ */
+export function clearActiveEmotes() {
+    party.activeEmotes.clear();
 }
