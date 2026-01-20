@@ -638,77 +638,110 @@ export function setupShopScene(k) {
                 const paginationY = k.height() - 115;
                 const paginationCenterX = k.width() / 2;
 
-                // Left arrow
-                const leftArrow = k.add([
-                    k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 80, paginationY),
-                    k.anchor('center'),
-                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
-                    k.area(),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
-
-                if (currentPage > 0) {
-                    leftArrow.onClick(() => {
-                        playMenuNav();
-                        currentPage--;
-                        refreshShop();
-                    });
-                    leftArrow.cursor = 'pointer';
-                }
-                paginationItems.push(leftArrow);
-
-                // Page indicator pips
+                // Page indicator pips (created first, lower z-index)
                 const pipSpacing = 20;
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
                 for (let i = 0; i < totalPages; i++) {
                     const isCurrentPage = i === currentPage;
-                    const pip = k.add([
+                    const pipX = pipsStartX + i * pipSpacing;
+
+                    // Pip hitbox (explicit bounded area)
+                    const pipBg = k.add([
+                        k.rect(16, 16),
+                        k.pos(pipX, paginationY),
+                        k.anchor('center'),
+                        k.color(0, 0, 0),
+                        k.opacity(0),
+                        k.area({ width: 16, height: 16 }),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                    ]);
+
+                    const pipText = k.add([
                         k.text(isCurrentPage ? '●' : '○', { size: 14 }),
-                        k.pos(pipsStartX + i * pipSpacing, paginationY),
+                        k.pos(pipX, paginationY),
                         k.anchor('center'),
                         k.color(isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120, isCurrentPage ? 255 : 120),
-                        k.area(),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
 
                     // Allow clicking pips to jump to page
                     const pageIndex = i;
-                    pip.onClick(() => {
+                    pipBg.onClick(() => {
                         if (pageIndex !== currentPage) {
                             playMenuNav();
                             currentPage = pageIndex;
                             refreshShop();
                         }
                     });
-                    pip.cursor = 'pointer';
+                    pipBg.cursor = 'pointer';
 
-                    paginationItems.push(pip);
+                    paginationItems.push(pipBg, pipText);
                 }
 
-                // Right arrow
-                const rightArrow = k.add([
+                // Left arrow (created after pips, higher z-index for click priority)
+                const leftArrowBg = k.add([
+                    k.rect(30, 30),
+                    k.pos(paginationCenterX - 80, paginationY),
+                    k.anchor('center'),
+                    k.color(0, 0, 0),
+                    k.opacity(0),
+                    k.area({ width: 30, height: 30 }),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+                ]);
+
+                const leftArrowText = k.add([
+                    k.text('<', { size: 24 }),
+                    k.pos(paginationCenterX - 80, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                ]);
+
+                if (currentPage > 0) {
+                    leftArrowBg.onClick(() => {
+                        playMenuNav();
+                        currentPage--;
+                        refreshShop();
+                    });
+                    leftArrowBg.cursor = 'pointer';
+                }
+                paginationItems.push(leftArrowBg, leftArrowText);
+
+                // Right arrow (created after pips, higher z-index for click priority)
+                const rightArrowBg = k.add([
+                    k.rect(30, 30),
+                    k.pos(paginationCenterX + 80, paginationY),
+                    k.anchor('center'),
+                    k.color(0, 0, 0),
+                    k.opacity(0),
+                    k.area({ width: 30, height: 30 }),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+                ]);
+
+                const rightArrowText = k.add([
                     k.text('>', { size: 24 }),
                     k.pos(paginationCenterX + 80, paginationY),
                     k.anchor('center'),
                     k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
-                    k.area(),
                     k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
+                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
                 ]);
 
                 if (currentPage < totalPages - 1) {
-                    rightArrow.onClick(() => {
+                    rightArrowBg.onClick(() => {
                         playMenuNav();
                         currentPage++;
                         refreshShop();
                     });
-                    rightArrow.cursor = 'pointer';
+                    rightArrowBg.cursor = 'pointer';
                 }
-                paginationItems.push(rightArrow);
+                paginationItems.push(rightArrowBg, rightArrowText);
             }
         }
         
