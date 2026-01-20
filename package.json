@@ -1,8 +1,11 @@
 {
   "name": "supersmashtexty",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "ASCII-style browser action roguelike inspired by Smash TV and Vampire Survivors",
   "type": "module",
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "vite --port 3010",
     "build": "vite build",
