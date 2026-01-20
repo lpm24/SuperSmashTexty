@@ -50,7 +50,7 @@ export function setupStatisticsScene(k) {
         const stats = getSaveStats();
         const unlockedAchievements = getUnlockedAchievements();
         const currencyName = getCurrencyName();
-        let currentTab = 'stats'; // stats, achievements, or history
+        let currentTab = 'achievements'; // achievements, stats, or history
         let achievementCategory = 'all'; // all, or specific category
         let currentPage = 0;
         const ACHIEVEMENTS_PER_PAGE = 15; // 5x3 grid
@@ -81,8 +81,8 @@ export function setupStatisticsScene(k) {
         const tabHeight = 30;
 
         const tabs = [
-            { key: 'stats', label: 'Statistics' },
             { key: 'achievements', label: 'Achievements' },
+            { key: 'stats', label: 'Statistics' },
             { key: 'history', label: 'History' }
         ];
 
