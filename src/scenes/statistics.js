@@ -621,7 +621,7 @@ export function setupStatisticsScene(k) {
                             });
                         };
 
-                        // Left arrow button (with explicit area)
+                        // Left arrow button (with explicit area, higher z-index for click priority)
                         const leftArrowBg = k.add([
                             k.rect(30, 30),
                             k.pos(paginationCenterX - 80, paginationY),
@@ -630,7 +630,7 @@ export function setupStatisticsScene(k) {
                             k.opacity(0),
                             k.area({ width: 30, height: 30 }),
                             k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                            k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
                         ]);
                         const leftArrowText = k.add([
                             k.text('<', { size: 24 }),
@@ -638,7 +638,7 @@ export function setupStatisticsScene(k) {
                             k.anchor('center'),
                             k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                             k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_TEXT)
+                            k.z(UI_Z_LAYERS.UI_TEXT + 1)
                         ]);
 
                         if (currentPage > 0) {
@@ -682,7 +682,7 @@ export function setupStatisticsScene(k) {
                             contentItems.push(pipBg, pipText);
                         }
 
-                        // Right arrow button (with explicit area)
+                        // Right arrow button (with explicit area, higher z-index for click priority)
                         const rightArrowBg = k.add([
                             k.rect(30, 30),
                             k.pos(paginationCenterX + 80, paginationY),
@@ -691,7 +691,7 @@ export function setupStatisticsScene(k) {
                             k.opacity(0),
                             k.area({ width: 30, height: 30 }),
                             k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                            k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
                         ]);
                         const rightArrowText = k.add([
                             k.text('>', { size: 24 }),
@@ -699,7 +699,7 @@ export function setupStatisticsScene(k) {
                             k.anchor('center'),
                             k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                             k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_TEXT)
+                            k.z(UI_Z_LAYERS.UI_TEXT + 1)
                         ]);
 
                         if (currentPage < totalPages - 1) {

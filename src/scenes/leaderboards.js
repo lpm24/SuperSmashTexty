@@ -505,76 +505,109 @@ export function setupLeaderboardsScene(k) {
         function renderPaginationControls(y, totalPages) {
             const paginationCenterX = k.width() / 2;
 
-            // Left arrow
-            const leftArrow = k.add([
-                k.text('<', { size: 24 }),
-                k.pos(paginationCenterX - 80, y),
-                k.anchor('center'),
-                k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
-                k.area(),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-
-            if (currentPage > 0) {
-                leftArrow.onClick(() => {
-                    playMenuNav();
-                    currentPage--;
-                    renderContent();
-                });
-                leftArrow.cursor = 'pointer';
-            }
-            contentElements.push(leftArrow);
-
-            // Page indicator pips
+            // Page indicator pips (created first, lower z-index)
             const pipSpacing = 20;
             const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
             for (let i = 0; i < totalPages; i++) {
                 const isCurrentPagePip = i === currentPage;
-                const pip = k.add([
+                const pipX = pipsStartX + i * pipSpacing;
+
+                // Pip hitbox (explicit bounded area)
+                const pipBg = k.add([
+                    k.rect(16, 16),
+                    k.pos(pipX, y),
+                    k.anchor('center'),
+                    k.color(0, 0, 0),
+                    k.opacity(0),
+                    k.area({ width: 16, height: 16 }),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const pipText = k.add([
                     k.text(isCurrentPagePip ? '●' : '○', { size: 14 }),
-                    k.pos(pipsStartX + i * pipSpacing, y),
+                    k.pos(pipX, y),
                     k.anchor('center'),
                     k.color(isCurrentPagePip ? 255 : 120, isCurrentPagePip ? 255 : 120, isCurrentPagePip ? 255 : 120),
-                    k.area(),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
 
                 const pageIndex = i;
-                pip.onClick(() => {
+                pipBg.onClick(() => {
                     if (pageIndex !== currentPage) {
                         playMenuNav();
                         currentPage = pageIndex;
                         renderContent();
                     }
                 });
-                pip.cursor = 'pointer';
+                pipBg.cursor = 'pointer';
 
-                contentElements.push(pip);
+                contentElements.push(pipBg, pipText);
             }
 
-            // Right arrow
-            const rightArrow = k.add([
+            // Left arrow (created after pips, higher z-index for click priority)
+            const leftArrowBg = k.add([
+                k.rect(30, 30),
+                k.pos(paginationCenterX - 80, y),
+                k.anchor('center'),
+                k.color(0, 0, 0),
+                k.opacity(0),
+                k.area({ width: 30, height: 30 }),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+            ]);
+
+            const leftArrowText = k.add([
+                k.text('<', { size: 24 }),
+                k.pos(paginationCenterX - 80, y),
+                k.anchor('center'),
+                k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT + 1)
+            ]);
+
+            if (currentPage > 0) {
+                leftArrowBg.onClick(() => {
+                    playMenuNav();
+                    currentPage--;
+                    renderContent();
+                });
+                leftArrowBg.cursor = 'pointer';
+            }
+            contentElements.push(leftArrowBg, leftArrowText);
+
+            // Right arrow (created after pips, higher z-index for click priority)
+            const rightArrowBg = k.add([
+                k.rect(30, 30),
+                k.pos(paginationCenterX + 80, y),
+                k.anchor('center'),
+                k.color(0, 0, 0),
+                k.opacity(0),
+                k.area({ width: 30, height: 30 }),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+            ]);
+
+            const rightArrowText = k.add([
                 k.text('>', { size: 24 }),
                 k.pos(paginationCenterX + 80, y),
                 k.anchor('center'),
                 k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
-                k.area(),
                 k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
+                k.z(UI_Z_LAYERS.UI_TEXT + 1)
             ]);
 
             if (currentPage < totalPages - 1) {
-                rightArrow.onClick(() => {
+                rightArrowBg.onClick(() => {
                     playMenuNav();
                     currentPage++;
                     renderContent();
                 });
-                rightArrow.cursor = 'pointer';
+                rightArrowBg.cursor = 'pointer';
             }
-            contentElements.push(rightArrow);
+            contentElements.push(rightArrowBg, rightArrowText);
         }
 
         // Render leaderboard header row
