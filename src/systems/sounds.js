@@ -9,8 +9,25 @@ let audioContext = null;
 // Master volume control
 let masterVolume = 0.3;
 
+// Music volume control (separate from SFX)
+let musicVolume = 1.0;
+
 // Sound enabled flag
 let soundEnabled = true;
+
+// Music playback state
+let currentMusic = null;
+let currentMusicTrack = null;
+let musicEnabled = true;
+
+// Music file paths (relative to public folder)
+const MUSIC_TRACKS = {
+    menu: './audio/menu-theme.mp3',
+    combat: './audio/combat-theme.mp3'
+};
+
+// Preloaded audio buffers
+const musicCache = {};
 
 /**
  * Initialize audio context (must be called after user interaction)
@@ -772,4 +789,115 @@ export function playWeaponFire(weaponType) {
 // Auto-initialize on first sound play attempt
 export function ensureAudioContext() {
   return getAudioContext();
+}
+
+// ==================== MUSIC PLAYBACK ====================
+
+/**
+ * Set music volume (0.0 to 1.0)
+ * @param {number} volume - Volume level
+ */
+export function setMusicVolume(volume) {
+    musicVolume = Math.max(0, Math.min(1, volume));
+    if (currentMusic) {
+        currentMusic.volume = musicVolume * masterVolume;
+    }
+}
+
+/**
+ * Enable or disable music
+ * @param {boolean} enabled
+ */
+export function setMusicEnabled(enabled) {
+    musicEnabled = enabled;
+    if (!enabled && currentMusic) {
+        stopMusic();
+    }
+}
+
+/**
+ * Stop currently playing music
+ */
+export function stopMusic() {
+    if (currentMusic) {
+        currentMusic.pause();
+        currentMusic.currentTime = 0;
+        currentMusic = null;
+        currentMusicTrack = null;
+    }
+}
+
+/**
+ * Play a music track
+ * @param {string} trackName - 'menu' or 'combat'
+ * @param {boolean} loop - Whether to loop the track
+ */
+function playMusicTrack(trackName, loop = true) {
+    if (!musicEnabled) return;
+
+    // Don't restart if same track is already playing
+    if (currentMusicTrack === trackName && currentMusic && !currentMusic.paused) {
+        return;
+    }
+
+    // Stop current music
+    stopMusic();
+
+    const trackPath = MUSIC_TRACKS[trackName];
+    if (!trackPath) {
+        console.warn(`[Music] Unknown track: ${trackName}`);
+        return;
+    }
+
+    try {
+        // Use cached audio element or create new one
+        if (!musicCache[trackName]) {
+            musicCache[trackName] = new Audio(trackPath);
+        }
+
+        currentMusic = musicCache[trackName];
+        currentMusic.loop = loop;
+        currentMusic.volume = musicVolume * masterVolume;
+        currentMusicTrack = trackName;
+
+        // Play with error handling
+        const playPromise = currentMusic.play();
+        if (playPromise !== undefined) {
+            playPromise.catch(error => {
+                console.warn(`[Music] Playback failed for ${trackName}:`, error.message);
+            });
+        }
+    } catch (error) {
+        console.warn(`[Music] Failed to play ${trackName}:`, error.message);
+    }
+}
+
+/**
+ * Play menu theme music
+ */
+export function playMenuMusic() {
+    playMusicTrack('menu');
+}
+
+/**
+ * Play combat/gameplay theme music
+ */
+export function playCombatMusic() {
+    playMusicTrack('combat');
+}
+
+/**
+ * Check if music is currently playing
+ * @returns {boolean}
+ */
+export function isMusicPlaying() {
+    return currentMusic && !currentMusic.paused;
+}
+
+/**
+ * Get current music track name
+ * @returns {string|null}
+ */
+export function getCurrentMusicTrack() {
+    return currentMusicTrack;
 }

@@ -1,6 +1,6 @@
 // Game over scene - TV Station themed with currency bucket animation
 import { getCurrency, getCurrencyName, getSaveData, getSelectedCharacter, getPlayerName } from '../systems/metaProgression.js';
-import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
+import { playMenuSelect, playMenuNav, stopMusic } from '../systems/sounds.js';
 import { isMultiplayerActive, isHost } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, broadcast } from '../systems/networkSystem.js';
 import { ENEMY_TYPES } from '../data/enemies.js';
@@ -77,6 +77,9 @@ const AWARDS = [
 
 export function setupGameOverScene(k) {
     k.scene('gameOver', (args) => {
+        // Stop combat music
+        stopMusic();
+
         const runStats = args?.runStats || {
             floorsReached: 1,
             roomsCleared: 0,

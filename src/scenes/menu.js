@@ -1,7 +1,8 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
 import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady } from '../systems/partySystem.js';
-import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
+import { initAudio, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume } from '../systems/sounds.js';
+import { getSettings } from '../systems/settings.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { getDailyRunInfo, hasCompletedDailyToday, getTodayDailyCharacter } from '../systems/dailyRuns.js';
 import {
@@ -123,6 +124,14 @@ function hslToRgb(h, s, l) {
 export function setupMenuScene(k) {
     k.scene('menu', () => {
         initAudio();
+
+        // Apply saved audio settings
+        const settings = getSettings();
+        setMasterVolume(settings.audio.masterVolume);
+        setMusicVolume(settings.audio.musicVolume);
+
+        // Start menu music
+        playMenuMusic();
 
         const currency = getCurrency();
         const currencyName = getCurrencyName();

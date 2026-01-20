@@ -40,7 +40,7 @@ import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
 import { checkAchievements, initAchievementChecker } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
-import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
+import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio, playCombatMusic } from '../systems/sounds.js';
 import { initVisualEffects, updateScreenShake, resetVisualEffects, EffectPresets, isInHitFreeze } from '../systems/visualEffects.js';
 import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
@@ -230,6 +230,9 @@ function applyRunBoosters(k, player, gameState) {
 
 export function setupGameScene(k) {
     k.scene('game', (args) => {
+        // Start combat music
+        playCombatMusic();
+
         // ==========================================
         // NEW ARCHITECTURE INITIALIZATION
         // ==========================================

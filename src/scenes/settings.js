@@ -2,6 +2,7 @@
 import { getSettings, updateSetting, resetSettings, saveSettings } from '../systems/settings.js';
 import { getPlayerName, setPlayerName, getInviteCode } from '../systems/metaProgression.js';
 import { generateRandomName } from '../systems/nameGenerator.js';
+import { setMusicVolume, setMasterVolume } from '../systems/sounds.js';
 import {
     UI_SIZES,
     UI_TEXT_SIZES,
@@ -543,18 +544,20 @@ export function setupSettingsScene(k) {
                 // Master Volume
                 currentY = addVolumeSlider(k, 'Master Volume', settings.audio.masterVolume, currentY, (value) => {
                     updateSetting('audio', 'masterVolume', value);
+                    setMasterVolume(value);
                 });
-                
+
                 // SFX Volume
                 currentY = addVolumeSlider(k, 'SFX Volume', settings.audio.sfxVolume, currentY, (value) => {
                     updateSetting('audio', 'sfxVolume', value);
                 });
-                
+
                 // Music Volume
                 currentY = addVolumeSlider(k, 'Music Volume', settings.audio.musicVolume, currentY, (value) => {
                     updateSetting('audio', 'musicVolume', value);
+                    setMusicVolume(value);
                 });
-                
+
             } else if (currentTab === 'controls') {
                 // Display current key bindings
                 const controls = settings.controls;
