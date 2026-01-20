@@ -508,6 +508,11 @@ export function setupGameScene(k) {
             // Synergy bonuses are multiplicative and get overwritten by recalculateAllUpgrades
             if (player.activeSynergies && player.activeSynergies.size > 0) {
                 reapplySynergies(player);
+                // CRITICAL: Restore HP after synergy reapplication
+                // Some synergies (Tank, Glass Cannon) modify HP when applied, but we want
+                // to preserve the player's saved HP, not re-apply the HP modification
+                const savedHP = gameState.playerStats.currentHP || player.maxHealth;
+                player.setHP(Math.min(savedHP, player.maxHealth));
             }
 
             // CRITICAL: Reinitialize orbital weapons if player has them
@@ -704,6 +709,9 @@ export function setupGameScene(k) {
                             // Reapply synergies after upgrade recalculation
                             if (remotePlayer.activeSynergies && remotePlayer.activeSynergies.size > 0) {
                                 reapplySynergies(remotePlayer);
+                                // Restore HP after synergy reapplication
+                                const savedHP = savedStats.currentHP || remotePlayer.maxHealth;
+                                remotePlayer.setHP(Math.min(savedHP, remotePlayer.maxHealth));
                             }
 
                             // Reinitialize orbital weapons if player has them
