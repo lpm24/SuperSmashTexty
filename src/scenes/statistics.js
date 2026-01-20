@@ -54,6 +54,7 @@ export function setupStatisticsScene(k) {
         let achievementCategory = 'all'; // all, or specific category
         let currentPage = 0;
         const ACHIEVEMENTS_PER_PAGE = 15; // 5x3 grid
+        const RUNS_PER_PAGE = 8; // History tab rows per page
         let isNavigating = false; // Debounce flag for pagination and category tabs
         let selectedAchievement = null; // Currently selected achievement for detail panel
 
@@ -854,10 +855,10 @@ export function setupStatisticsScene(k) {
                     contentItems.push(errorText);
                 }
             } else if (currentTab === 'history') {
-                // Display run history
+                // Display run history with pagination
                 const runHistory = getRunHistory();
                 const historyY = contentY + 10;
-                const rowHeight = 40;
+                const rowHeight = 35;
 
                 if (runHistory.length === 0) {
                     // No history yet
@@ -871,6 +872,13 @@ export function setupStatisticsScene(k) {
                     ]);
                     contentItems.push(noHistoryText);
                 } else {
+                    // Calculate pagination
+                    const totalPages = Math.ceil(runHistory.length / RUNS_PER_PAGE);
+                    if (currentPage >= totalPages) currentPage = Math.max(0, totalPages - 1);
+                    const startIndex = currentPage * RUNS_PER_PAGE;
+                    const endIndex = Math.min(startIndex + RUNS_PER_PAGE, runHistory.length);
+                    const displayRuns = runHistory.slice(startIndex, endIndex);
+
                     // Header row
                     const headers = ['#', 'Floor', 'Rooms', 'Kills', 'Level', 'Credits', 'Time'];
                     const headerPositions = [60, 120, 200, 280, 360, 450, 550];
@@ -887,10 +895,10 @@ export function setupStatisticsScene(k) {
                         contentItems.push(headerText);
                     });
 
-                    // Run history rows (limit to 10 most recent)
-                    const displayRuns = runHistory.slice(0, 10);
+                    // Run history rows
                     displayRuns.forEach((run, index) => {
                         const y = historyY + (index + 1) * rowHeight;
+                        const globalIndex = startIndex + index + 1;
 
                         // Format duration
                         const mins = Math.floor(run.duration / 60);
@@ -898,7 +906,7 @@ export function setupStatisticsScene(k) {
                         const timeStr = `${mins}:${secs.toString().padStart(2, '0')}`;
 
                         const rowData = [
-                            `${index + 1}`,
+                            `${globalIndex}`,
                             `${run.floorsReached}`,
                             `${run.roomsCleared}`,
                             `${run.enemiesKilled}`,
@@ -920,10 +928,131 @@ export function setupStatisticsScene(k) {
                         });
                     });
 
+                    // Pagination controls (if more than one page)
+                    if (totalPages > 1) {
+                        const paginationY = viewportBottom - 55;
+                        const centerX = k.width() / 2;
+
+                        // Page pips
+                        const pipSpacing = 20;
+                        const pipsStartX = centerX - ((totalPages - 1) * pipSpacing) / 2;
+
+                        for (let i = 0; i < totalPages; i++) {
+                            const isCurrentPip = i === currentPage;
+                            const pipX = pipsStartX + i * pipSpacing;
+
+                            const pipBg = k.add([
+                                k.rect(16, 16),
+                                k.pos(pipX, paginationY),
+                                k.anchor('center'),
+                                k.color(0, 0, 0),
+                                k.opacity(0),
+                                k.area({ width: 16, height: 16 }),
+                                k.fixed(),
+                                k.z(1000)
+                            ]);
+
+                            const pipText = k.add([
+                                k.text(isCurrentPip ? '●' : '○', { size: 14 }),
+                                k.pos(pipX, paginationY),
+                                k.anchor('center'),
+                                k.color(isCurrentPip ? 255 : 120, isCurrentPip ? 255 : 120, isCurrentPip ? 255 : 120),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+
+                            const pageIndex = i;
+                            pipBg.onClick(() => {
+                                if (isNavigating || pageIndex === currentPage) return;
+                                isNavigating = true;
+                                playMenuNav();
+                                currentPage = pageIndex;
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
+                            });
+                            pipBg.cursor = 'pointer';
+
+                            contentItems.push(pipBg, pipText);
+                        }
+
+                        // Left/Right arrows
+                        const arrowOffset = Math.max(30, (totalPages * pipSpacing) / 2 + 25);
+
+                        // Left arrow
+                        const leftArrowBg = k.add([
+                            k.rect(30, 30),
+                            k.pos(centerX - arrowOffset, paginationY),
+                            k.anchor('center'),
+                            k.color(0, 0, 0),
+                            k.opacity(0),
+                            k.area({ width: 30, height: 30 }),
+                            k.fixed(),
+                            k.z(1002)
+                        ]);
+
+                        const leftArrowText = k.add([
+                            k.text('<', { size: 24 }),
+                            k.pos(centerX - arrowOffset, paginationY),
+                            k.anchor('center'),
+                            k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                            k.fixed(),
+                            k.z(1003)
+                        ]);
+
+                        if (currentPage > 0) {
+                            leftArrowBg.onClick(() => {
+                                if (isNavigating) return;
+                                isNavigating = true;
+                                playMenuNav();
+                                currentPage--;
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
+                            });
+                            leftArrowBg.cursor = 'pointer';
+                        }
+                        contentItems.push(leftArrowBg, leftArrowText);
+
+                        // Right arrow
+                        const rightArrowBg = k.add([
+                            k.rect(30, 30),
+                            k.pos(centerX + arrowOffset, paginationY),
+                            k.anchor('center'),
+                            k.color(0, 0, 0),
+                            k.opacity(0),
+                            k.area({ width: 30, height: 30 }),
+                            k.fixed(),
+                            k.z(1002)
+                        ]);
+
+                        const rightArrowText = k.add([
+                            k.text('>', { size: 24 }),
+                            k.pos(centerX + arrowOffset, paginationY),
+                            k.anchor('center'),
+                            k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                            k.fixed(),
+                            k.z(1003)
+                        ]);
+
+                        if (currentPage < totalPages - 1) {
+                            rightArrowBg.onClick(() => {
+                                if (isNavigating) return;
+                                isNavigating = true;
+                                playMenuNav();
+                                currentPage++;
+                                refreshContent();
+                                k.wait(0.1, () => { isNavigating = false; });
+                            });
+                            rightArrowBg.cursor = 'pointer';
+                        }
+                        contentItems.push(rightArrowBg, rightArrowText);
+                    }
+
                     // Show total runs count
+                    const showingStart = startIndex + 1;
+                    const showingEnd = endIndex;
                     const totalText = k.add([
-                        k.text(`Showing ${displayRuns.length} of ${runHistory.length} recent runs`, { size: 12 }),
-                        k.pos(k.width() / 2, viewportBottom - 30),
+                        k.text(`Showing ${showingStart}-${showingEnd} of ${runHistory.length} runs`, { size: 12 }),
+                        k.pos(k.width() / 2, viewportBottom - 20),
                         k.anchor('center'),
                         k.color(100, 100, 150),
                         k.fixed(),
