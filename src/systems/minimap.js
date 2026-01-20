@@ -70,7 +70,10 @@ export class Minimap {
         this.elements = [];
         this.isHovered = false;
 
-        this.render();
+        // Only render if floorMap is valid
+        if (this.floorMap && typeof this.floorMap.getGridForMinimap === 'function') {
+            this.render();
+        }
     }
 
     /**
@@ -226,6 +229,12 @@ export class Minimap {
         const cellSize = LAYOUT.CELL_SIZE_SMALL;
         const grid = this.floorMap.getGridForMinimap();
 
+        // Safety check for empty grid
+        if (!grid || grid.length === 0 || !grid[0]) {
+            this.renderMinimized();
+            return;
+        }
+
         // Background panel
         this.createPanel(width, height, x, y);
 
@@ -283,6 +292,12 @@ export class Minimap {
         const y = this.getTopY();
         const cellSize = LAYOUT.CELL_SIZE_LARGE;
         const grid = this.floorMap.getGridForMinimap();
+
+        // Safety check for empty grid
+        if (!grid || grid.length === 0 || !grid[0]) {
+            this.renderMinimized();
+            return;
+        }
 
         // Calculate dimensions based on grid
         const gridWidth = grid[0].length * cellSize;
