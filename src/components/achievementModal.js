@@ -5,7 +5,7 @@
 
 import { UI_Z_LAYERS, UI_COLORS, UI_TEXT_SIZES } from '../config/uiConfig.js';
 import { ACHIEVEMENT_COLORS, getAchievementProgress, getAchievementReward } from '../data/achievements.js';
-import { CHARACTER_UNLOCKS, WEAPON_UNLOCKS } from '../data/unlocks.js';
+import { CHARACTER_UNLOCKS, WEAPON_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
 import { getSaveStats, isAchievementUnlocked, getCurrencyName } from '../systems/metaProgression.js';
 import { playMenuNav } from '../systems/sounds.js';
 
@@ -234,14 +234,40 @@ export function showAchievementModal(k, achievement, onClose = null) {
             currentY += 20;
         });
 
-        // Show shop unlocks (weapons)
+        // Show shop unlocks (weapons and cosmetics)
         if (hasShopUnlocks) {
             achievement.unlocks.forEach((unlockKey) => {
-                // Get actual weapon name from WEAPON_UNLOCKS
+                // Check if it's a weapon or cosmetic
                 const weapon = WEAPON_UNLOCKS[unlockKey];
-                const displayName = weapon ? weapon.name : unlockKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                const cosmetic = COSMETIC_UNLOCKS[unlockKey];
+
+                let icon, displayName, category;
+                if (weapon) {
+                    icon = '~';
+                    displayName = weapon.name;
+                    category = 'Weapon';
+                } else if (cosmetic) {
+                    // Determine cosmetic icon based on category
+                    if (cosmetic.category === 'trail') {
+                        icon = '~';
+                    } else if (cosmetic.category === 'death') {
+                        icon = '*';
+                    } else if (cosmetic.category === 'glow') {
+                        icon = 'o';
+                    } else {
+                        icon = '+';
+                    }
+                    displayName = cosmetic.name;
+                    category = 'Cosmetic';
+                } else {
+                    // Fallback for unknown unlock types
+                    icon = '?';
+                    displayName = unlockKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
+                    category = 'Unlock';
+                }
+
                 const unlockText = k.add([
-                    k.text(`🔫 ${displayName} (Weapon)`, { size: UI_TEXT_SIZES.SMALL }),
+                    k.text(`${icon} ${displayName} (${category})`, { size: UI_TEXT_SIZES.SMALL }),
                     k.pos(centerX, currentY),
                     k.anchor('center'),
                     k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_TERTIARY)),

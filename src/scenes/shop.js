@@ -299,7 +299,15 @@ export function setupShopScene(k) {
                 if (currentCategory === 'cosmetics') {
                     const cosmeticIcon = unlock.category === 'trail' ? '~' : unlock.category === 'death' ? '✕' : '○';
                     // Get a safe color array (handles 'rainbow' string and missing colors)
-                    const baseColor = Array.isArray(unlock.color) ? unlock.color : [150, 150, 200];
+                    let baseColor;
+                    if (unlock.color === 'rainbow') {
+                        // Rainbow gets a distinctive multicolor-ish display (magenta/cyan)
+                        baseColor = [255, 100, 200];
+                    } else if (Array.isArray(unlock.color)) {
+                        baseColor = unlock.color;
+                    } else {
+                        baseColor = [150, 150, 200];
+                    }
                     // Dim the color when achievement-locked
                     const cosmeticColor = isAchievementLocked ? [60, 60, 70] : baseColor;
                     const borderColor = isAchievementLocked ? [50, 50, 60] : baseColor;
@@ -370,7 +378,10 @@ export function setupShopScene(k) {
                 let achievementProgress = null;
                 if (isAchievementLocked && requiredAchievement) {
                     const stats = getSaveStats();
-                    achievementProgress = getAchievementProgress(requiredAchievement.id, stats);
+                    // Safely get achievement progress with null check
+                    if (stats) {
+                        achievementProgress = getAchievementProgress(requiredAchievement.id, stats);
+                    }
                     if (achievementProgress) {
                         descriptionText = `${requiredAchievement.name} (${achievementProgress.current}/${achievementProgress.target})`;
                     } else {

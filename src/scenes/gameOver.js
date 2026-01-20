@@ -784,10 +784,11 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Bar fill
+        // Bar fill (ensure minimum width of 2 to avoid rendering issues)
+        const xpFillWidth = Math.max(2, barWidth * xpProgress);
         k.add([
-            k.rect(barWidth * xpProgress, barHeight - 2),
-            k.pos(barX - barWidth / 2 + (barWidth * xpProgress) / 2 + 1, barY),
+            k.rect(xpFillWidth, barHeight - 2),
+            k.pos(barX - barWidth / 2 + xpFillWidth / 2 + 1, barY),
             k.anchor('center'),
             k.color(100, 180, 255),
             k.fixed(),

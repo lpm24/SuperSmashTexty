@@ -232,10 +232,11 @@ export function setupMenuScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Player name
-        const playerName = getPlayerName();
+        // Player name (with fallback for null/undefined)
+        const playerName = getPlayerName() || 'Player';
+        const displayName = playerName.length > 12 ? playerName.substring(0, 12) + '..' : playerName;
         k.add([
-            k.text(playerName.length > 12 ? playerName.substring(0, 12) + '..' : playerName, { size: UI_TEXT_SIZES.SMALL }),
+            k.text(displayName, { size: UI_TEXT_SIZES.SMALL }),
             k.pos(portraitX + portraitSize / 2 + 10, profileCardY + 18),
             k.anchor('left'),
             k.color(...UI_COLORS.GOLD),
@@ -272,9 +273,10 @@ export function setupMenuScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
         ]);
 
-        // Bar fill
+        // Bar fill (ensure minimum width of 2 to avoid rendering issues)
+        const xpFillWidth = Math.max(2, xpBarWidth * xpProgress);
         k.add([
-            k.rect(xpBarWidth * xpProgress, xpBarHeight - 2),
+            k.rect(xpFillWidth, xpBarHeight - 2),
             k.pos(xpBarX + 1, xpBarY),
             k.anchor('left'),
             k.color(100, 180, 255),

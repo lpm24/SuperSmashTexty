@@ -458,17 +458,27 @@ export function setupSettingsScene(k) {
                 exportButton.onClick(() => {
                     try {
                         const saveData = localStorage.getItem('superSmashTexty_save') || '{}';
-                        navigator.clipboard.writeText(saveData).then(() => {
+                        // Check if clipboard API is available
+                        if (navigator.clipboard && navigator.clipboard.writeText) {
+                            navigator.clipboard.writeText(saveData).then(() => {
+                                if (exportStatusText && exportStatusText.exists()) {
+                                    exportStatusText.text = 'Copied to clipboard!';
+                                    exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                                }
+                            }).catch(() => {
+                                if (exportStatusText && exportStatusText.exists()) {
+                                    exportStatusText.text = 'Failed to copy';
+                                    exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                                }
+                            });
+                        } else {
+                            // Fallback: show the data in console
+                            console.log('Save data:', saveData);
                             if (exportStatusText && exportStatusText.exists()) {
-                                exportStatusText.text = 'Copied to clipboard!';
-                                exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                                exportStatusText.text = 'Check browser console (F12)';
+                                exportStatusText.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
                             }
-                        }).catch(() => {
-                            if (exportStatusText && exportStatusText.exists()) {
-                                exportStatusText.text = 'Failed to copy';
-                                exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
-                            }
-                        });
+                        }
                     } catch (e) {
                         console.error('Export failed:', e);
                     }
@@ -510,6 +520,14 @@ export function setupSettingsScene(k) {
                 ]);
 
                 importButton.onClick(() => {
+                    // Check if clipboard API is available
+                    if (!navigator.clipboard || !navigator.clipboard.readText) {
+                        if (exportStatusText && exportStatusText.exists()) {
+                            exportStatusText.text = 'Clipboard not available';
+                            exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                        }
+                        return;
+                    }
                     navigator.clipboard.readText().then((text) => {
                         try {
                             const data = JSON.parse(text);
