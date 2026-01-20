@@ -194,165 +194,293 @@ export function setupShopScene(k) {
             const startIndex = currentPage * ITEMS_PER_PAGE;
             const pageItems = displayUnlocks.slice(startIndex, startIndex + ITEMS_PER_PAGE);
 
-            // Display unlocks
-            const itemSpacing = 100;
-            const startY = contentY + 10;
+            // Display unlocks - Redesigned card layout
+            const cardWidth = 340;
+            const cardHeight = 105;
+            const itemSpacing = cardHeight + 8;
+            const startY = contentY + 5;
             const itemsPerColumn = 3;
+
+            // Benefit icon mapping - shows what type of bonus this gives
+            const getBenefitIcon = (desc) => {
+                if (!desc) return null;
+                const d = desc.toLowerCase();
+                if (d.includes('hp') || d.includes('health')) return { icon: '♥', color: [255, 100, 100] };
+                if (d.includes('damage') || d.includes('dmg')) return { icon: '⚔', color: [255, 200, 100] };
+                if (d.includes('speed')) return { icon: '»', color: [100, 200, 255] };
+                if (d.includes('crit')) return { icon: '★', color: [255, 255, 100] };
+                if (d.includes('xp') || d.includes('pickup')) return { icon: '◆', color: [100, 255, 200] };
+                if (d.includes('defense') || d.includes('reduction')) return { icon: '◈', color: [150, 150, 255] };
+                if (d.includes('credit') || d.includes('silver')) return { icon: '$', color: [200, 150, 50] };
+                if (d.includes('level')) return { icon: '↑', color: [200, 100, 255] };
+                if (d.includes('invuln') || d.includes('immunity')) return { icon: '◎', color: [100, 255, 255] };
+                if (d.includes('trail') || d.includes('glow') || d.includes('effect')) return { icon: '✧', color: [200, 150, 255] };
+                return null;
+            };
 
             pageItems.forEach((key, index) => {
                 const unlock = unlocks[key];
                 const column = Math.floor(index / itemsPerColumn);
                 const row = index % itemsPerColumn;
-                const itemX = 50 + column * 350;
+                const itemX = 45 + column * (cardWidth + 15);
                 const itemY = startY + row * itemSpacing;
 
                 // Check achievement requirement
                 const isAchievementLocked = !isItemAchievementUnlockedSync(unlock);
                 const requiredAchievement = unlock.requiredAchievement ? getAchievementById(unlock.requiredAchievement) : null;
 
-                // Item card background
-                // For characters, use green border if unlocked
+                // Determine item status for styling
                 const isUnlockedChar = currentCategory === 'characters' && isUnlocked('characters', key);
-                let borderColor;
+                const isUnlockedWeapon = currentCategory === 'weapons' && isUnlocked('weapons', key);
+                const isMaxedUpgrade = currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) >= (unlock.maxLevel || 1);
+                const isOwnedCosmetic = currentCategory === 'cosmetics' && (isUnlocked('cosmetics', key) || unlock.unlockedByDefault);
+                const isEquippedCosmetic = currentCategory === 'cosmetics' && getEquippedCosmetic(unlock.category) === key;
+
+                // Card border color based on status
+                let borderColor, bgColor;
                 if (isAchievementLocked) {
-                    borderColor = k.rgb(60, 50, 50); // Dim red-gray for achievement-locked
-                } else if (isUnlockedChar) {
-                    borderColor = k.rgb(100, 255, 100);
+                    borderColor = k.rgb(60, 50, 50);
+                    bgColor = [30, 25, 25];
+                } else if (isEquippedCosmetic) {
+                    borderColor = k.rgb(100, 200, 255);
+                    bgColor = [35, 45, 55];
+                } else if (isMaxedUpgrade || isUnlockedChar || isUnlockedWeapon || isOwnedCosmetic) {
+                    borderColor = k.rgb(80, 150, 80);
+                    bgColor = [35, 45, 35];
                 } else {
-                    borderColor = k.rgb(80, 80, 100);
+                    borderColor = k.rgb(80, 80, 120);
+                    bgColor = [35, 35, 45];
                 }
 
+                // Card background
                 const cardBg = k.add([
-                    k.rect(320, 90),
+                    k.rect(cardWidth, cardHeight),
                     k.pos(itemX, itemY),
                     k.anchor('topleft'),
-                    k.color(isAchievementLocked ? 30 : 40, isAchievementLocked ? 25 : 40, isAchievementLocked ? 25 : 50),
+                    k.color(...bgColor),
                     k.outline(2, borderColor),
                     k.area(),
                     k.fixed(),
                     k.z(1000)
                 ]);
 
-                // Character icon (if this is a character) - centered vertically
-                if (currentCategory === 'characters' && unlock.char) {
-                    const iconText = k.add([
-                        k.text(unlock.char, { size: 32 }),
-                        k.pos(itemX + 25, itemY + 45), // Center vertically: itemY + 90/2 = itemY + 45
-                        k.anchor('center'),
-                        k.color(...(isAchievementLocked ? [50, 50, 50] : (isUnlockedChar && unlock.color ? unlock.color : [100, 100, 100]))),
+                // === TOP ROW: Icon + Name + Benefit indicator ===
+                let contentStartX = itemX + 10;
+
+                // Character/Weapon icon (if applicable)
+                if ((currentCategory === 'characters' || currentCategory === 'weapons') && unlock.char) {
+                    const iconBg = k.add([
+                        k.rect(40, 40),
+                        k.pos(itemX + 8, itemY + 8),
+                        k.anchor('topleft'),
+                        k.color(25, 25, 35),
+                        k.outline(1, k.rgb(60, 60, 80)),
                         k.fixed(),
                         k.z(1001)
                     ]);
-                    unlockItems.push(iconText);
+                    const iconText = k.add([
+                        k.text(unlock.char, { size: 28 }),
+                        k.pos(itemX + 28, itemY + 28),
+                        k.anchor('center'),
+                        k.color(...(isAchievementLocked ? [60, 60, 60] : (unlock.color || [200, 200, 200]))),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+                    unlockItems.push(iconBg, iconText);
+                    contentStartX = itemX + 55;
+                }
+
+                // Cosmetic icon
+                if (currentCategory === 'cosmetics') {
+                    const cosmeticIcon = unlock.category === 'trail' ? '~' : unlock.category === 'death' ? '✕' : '○';
+                    const iconBg = k.add([
+                        k.rect(36, 36),
+                        k.pos(itemX + 8, itemY + 8),
+                        k.anchor('topleft'),
+                        k.color(25, 25, 35),
+                        k.outline(1, k.rgb(...(unlock.color || [100, 100, 150]))),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    const iconText = k.add([
+                        k.text(cosmeticIcon, { size: 22 }),
+                        k.pos(itemX + 26, itemY + 26),
+                        k.anchor('center'),
+                        k.color(...(unlock.color || [150, 150, 200])),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+                    unlockItems.push(iconBg, iconText);
+                    contentStartX = itemX + 50;
+                }
+
+                // Item name
+                const nameText = k.add([
+                    k.text(unlock.name, { size: 16 }),
+                    k.pos(contentStartX, itemY + 10),
+                    k.anchor('topleft'),
+                    k.color(isAchievementLocked ? 100 : 255, isAchievementLocked ? 100 : 255, isAchievementLocked ? 100 : 255),
+                    k.fixed(),
+                    k.z(1001)
+                ]);
+
+                // Benefit icon (top right, shows what type of bonus)
+                const benefit = getBenefitIcon(unlock.description);
+                if (benefit && !isAchievementLocked) {
+                    const benefitIcon = k.add([
+                        k.text(benefit.icon, { size: 18 }),
+                        k.pos(itemX + cardWidth - 12, itemY + 12),
+                        k.anchor('topright'),
+                        k.color(...benefit.color),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    unlockItems.push(benefitIcon);
                 }
 
                 // Lock icon for achievement-locked items
-                // Using parentheses instead of square brackets to avoid KAPLAY styled text tag parsing
                 if (isAchievementLocked) {
                     const lockIcon = k.add([
-                        k.text('(X)', { size: 16 }),
-                        k.pos(itemX + 300, itemY + 10),
+                        k.text('(X)', { size: 14 }),
+                        k.pos(itemX + cardWidth - 10, itemY + 10),
                         k.anchor('topright'),
-                        k.color(150, 100, 100),
+                        k.color(150, 80, 80),
                         k.fixed(),
                         k.z(1002)
                     ]);
                     unlockItems.push(lockIcon);
                 }
 
-                // Item name (offset right if character icon is present)
-                const nameX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
-                const nameText = k.add([
-                    k.text(unlock.name, { size: 18 }),
-                    k.pos(nameX, itemY + 10),
-                    k.anchor('topleft'),
-                    k.color(isAchievementLocked ? 120 : 255, isAchievementLocked ? 120 : 255, isAchievementLocked ? 120 : 255),
-                    k.fixed(),
-                    k.z(1001)
-                ]);
+                // === MIDDLE ROW: Description (constrained to 2 lines max) ===
+                const descWidth = cardWidth - contentStartX + itemX - 90; // Leave room for button
+                const descY = itemY + 30;
+                const descriptionText = isAchievementLocked
+                    ? `Requires: ${requiredAchievement?.name || 'Achievement'}`
+                    : unlock.description;
 
-                // Item description (with width constraint to prevent overflow, offset if character icon present)
-                const descX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
-                const descWidth = (currentCategory === 'characters' && unlock.char) ? 180 : 200; // Reduced width to prevent button overlap
                 const descText = k.add([
-                    k.text(isAchievementLocked ? `Requires: ${requiredAchievement?.name || 'Unknown Achievement'}` : unlock.description, { size: 14, width: descWidth }),
-                    k.pos(descX, itemY + 35),
+                    k.text(descriptionText, { size: 12, width: descWidth }),
+                    k.pos(contentStartX, descY),
                     k.anchor('topleft'),
-                    k.color(isAchievementLocked ? 150 : 200, isAchievementLocked ? 100 : 200, isAchievementLocked ? 100 : 200),
+                    k.color(isAchievementLocked ? 120 : 180, isAchievementLocked ? 90 : 180, isAchievementLocked ? 90 : 180),
                     k.fixed(),
                     k.z(1001)
                 ]);
                 
+                // === BOTTOM ROW: Status/Progress + Action Button ===
+                const bottomY = itemY + cardHeight - 28;
+                const buttonX = itemX + cardWidth - 85;
+                const buttonWidth = 75;
+                const buttonHeight = 24;
+
                 // Calculate escalating price for permanent upgrades
                 function getUpgradePrice(level) {
-                    // Level 1 = $50, Level 2 = $65, Level 3 = $90, Level 4 = $115, Level 5 = $160
                     const prices = [50, 65, 90, 115, 160];
-                    if (level < prices.length) {
-                        return prices[level];
-                    }
-                    // For levels beyond 5, increase by 50 each level
+                    if (level < prices.length) return prices[level];
                     return 160 + (level - 4) * 50;
                 }
-                
-                // Check if unlocked / level
+
+                // Determine status and purchase state
                 let statusText = '';
                 let canPurchase = false;
                 let purchaseCost = unlock.cost;
+                let showProgressBar = false;
+                let progressLevel = 0;
+                let progressMax = 1;
 
                 if (currentCategory === 'permanentUpgrades') {
                     const level = getPermanentUpgradeLevel(key);
                     const maxLevel = unlock.maxLevel || 1;
+                    progressLevel = level;
+                    progressMax = maxLevel;
+                    showProgressBar = true;
+
                     if (level >= maxLevel) {
-                        statusText = `MAX (${level}/${maxLevel})`;
+                        statusText = 'MAXED';
                     } else {
-                        statusText = `Level ${level}/${maxLevel}`;
-                        // Use escalating price based on current level
                         purchaseCost = getUpgradePrice(level);
                         canPurchase = currency >= purchaseCost;
                     }
                 } else if (currentCategory === 'boosters') {
-                    // Boosters are consumables - always purchasable
-                    statusText = 'Consumable';
+                    const boosterCount = getActiveBoostersCount(key);
+                    statusText = boosterCount > 0 ? `Ready (${boosterCount})` : 'Consumable';
                     canPurchase = currency >= purchaseCost;
                 } else if (currentCategory === 'cosmetics') {
-                    // Cosmetics can be owned, equipped, or not owned
-                    const cosmeticType = unlock.category; // trail, death, or glow
-                    const equippedKey = getEquippedCosmetic(cosmeticType);
-                    const isOwned = isUnlocked('cosmetics', key) || unlock.unlockedByDefault;
-                    const isEquipped = equippedKey === key;
-
-                    if (isEquipped) {
+                    const cosmeticType = unlock.category;
+                    if (isEquippedCosmetic) {
                         statusText = 'EQUIPPED';
-                    } else if (isOwned) {
+                    } else if (isOwnedCosmetic) {
                         statusText = 'OWNED';
                     } else {
-                        statusText = cosmeticType ? cosmeticType.charAt(0).toUpperCase() + cosmeticType.slice(1) : '';
                         canPurchase = currency >= purchaseCost;
                     }
                 } else if (currentCategory === 'characters') {
-                    // For characters, don't show "UNLOCKED" text - border color indicates unlock status
-                    if (!isUnlocked('characters', key)) {
+                    if (!isUnlockedChar) {
                         canPurchase = currency >= purchaseCost;
                     }
-                } else {
-                    if (isUnlocked(currentCategory, key)) {
-                        statusText = 'UNLOCKED';
-                    } else {
+                } else if (currentCategory === 'weapons') {
+                    if (!isUnlockedWeapon) {
                         canPurchase = currency >= purchaseCost;
                     }
                 }
-                
-                // Status text (only show if not a character, or if it's a permanent upgrade)
-                let statusLabel = null;
-                if (statusText && currentCategory !== 'characters') {
-                    const statusX = (currentCategory === 'characters' && unlock.char) ? itemX + 70 : itemX + 10;
-                    statusLabel = k.add([
-                        k.text(statusText, { size: 14 }),
-                        k.pos(statusX, itemY + 60),
+
+                // Progress bar for permanent upgrades
+                if (showProgressBar) {
+                    const barWidth = 100;
+                    const barHeight = 8;
+                    const barX = contentStartX;
+                    const barY = bottomY + 8;
+
+                    // Background bar
+                    const barBg = k.add([
+                        k.rect(barWidth, barHeight),
+                        k.pos(barX, barY),
                         k.anchor('topleft'),
-                        k.color(isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200, 
-                                isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 255 : 200, 
-                                isUnlocked(currentCategory, key) || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) > 0) ? 100 : 200),
+                        k.color(30, 30, 40),
+                        k.outline(1, k.rgb(60, 60, 80)),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+
+                    // Filled portion
+                    const fillWidth = Math.max(0, (progressLevel / progressMax) * (barWidth - 2));
+                    if (fillWidth > 0) {
+                        const barFill = k.add([
+                            k.rect(fillWidth, barHeight - 2),
+                            k.pos(barX + 1, barY + 1),
+                            k.anchor('topleft'),
+                            k.color(progressLevel >= progressMax ? 100 : 80, progressLevel >= progressMax ? 200 : 150, progressLevel >= progressMax ? 100 : 80),
+                            k.fixed(),
+                            k.z(1002)
+                        ]);
+                        unlockItems.push(barFill);
+                    }
+
+                    // Level text
+                    const levelText = k.add([
+                        k.text(`${progressLevel}/${progressMax}`, { size: 10 }),
+                        k.pos(barX + barWidth + 8, barY + 4),
+                        k.anchor('left'),
+                        k.color(progressLevel >= progressMax ? 100 : 150, progressLevel >= progressMax ? 255 : 200, progressLevel >= progressMax ? 100 : 150),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+
+                    unlockItems.push(barBg, levelText);
+                }
+
+                // Status text (for non-progress items)
+                let statusLabel = null;
+                if (statusText && !showProgressBar) {
+                    statusLabel = k.add([
+                        k.text(statusText, { size: 11 }),
+                        k.pos(contentStartX, bottomY + 7),
+                        k.anchor('topleft'),
+                        k.color(
+                            statusText === 'EQUIPPED' ? 100 : statusText === 'MAXED' || statusText === 'OWNED' ? 100 : 180,
+                            statusText === 'EQUIPPED' ? 200 : statusText === 'MAXED' || statusText === 'OWNED' ? 200 : 180,
+                            statusText === 'EQUIPPED' ? 255 : statusText === 'MAXED' || statusText === 'OWNED' ? 100 : 180
+                        ),
                         k.fixed(),
                         k.z(1001)
                     ]);
@@ -362,21 +490,21 @@ export function setupShopScene(k) {
                 if (isAchievementLocked) {
                     // Show "View" button for achievement-locked items
                     const viewButtonBg = k.add([
-                        k.rect(80, 30),
-                        k.pos(itemX + 230, itemY + 55),
+                        k.rect(buttonWidth, buttonHeight),
+                        k.pos(buttonX, bottomY),
                         k.anchor('topleft'),
-                        k.color(60, 50, 80),
-                        k.outline(2, k.rgb(100, 80, 150)),
+                        k.color(50, 40, 60),
+                        k.outline(1, k.rgb(100, 80, 130)),
                         k.area(),
                         k.fixed(),
                         k.z(1001)
                     ]);
 
                     const viewButtonText = k.add([
-                        k.text('VIEW', { size: 14 }),
-                        k.pos(itemX + 270, itemY + 70),
+                        k.text('VIEW', { size: 11 }),
+                        k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
                         k.anchor('center'),
-                        k.color(180, 150, 255),
+                        k.color(160, 130, 200),
                         k.fixed(),
                         k.z(1002)
                     ]);
@@ -389,44 +517,38 @@ export function setupShopScene(k) {
                     });
 
                     unlockItems.push(viewButtonBg, viewButtonText);
-                } else if (canPurchase || (currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) < (unlock.maxLevel || 1))) {
+                } else if (canPurchase || (currentCategory === 'permanentUpgrades' && progressLevel < progressMax)) {
                     const buttonBg = k.add([
-                        k.rect(80, 30),
-                        k.pos(itemX + 230, itemY + 55),
+                        k.rect(buttonWidth, buttonHeight),
+                        k.pos(buttonX, bottomY),
                         k.anchor('topleft'),
-                        k.color(canPurchase ? 50 : 30, canPurchase ? 150 : 30, canPurchase ? 50 : 30),
-                        k.outline(2, k.rgb(canPurchase ? 100 : 50, canPurchase ? 200 : 50, canPurchase ? 100 : 50)),
+                        k.color(canPurchase ? 40 : 30, canPurchase ? 120 : 40, canPurchase ? 40 : 30),
+                        k.outline(1, k.rgb(canPurchase ? 80 : 50, canPurchase ? 180 : 60, canPurchase ? 80 : 50)),
                         k.area(),
                         k.fixed(),
                         k.z(1001)
                     ]);
 
                     const buttonText = k.add([
-                        k.text(`$${purchaseCost}`, { size: 14 }),
-                        k.pos(itemX + 270, itemY + 70),
+                        k.text(`$${purchaseCost}`, { size: 12 }),
+                        k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
                         k.anchor('center'),
-                        k.color(canPurchase ? 255 : 150, canPurchase ? 255 : 150, canPurchase ? 255 : 150),
+                        k.color(canPurchase ? 255 : 120, canPurchase ? 255 : 120, canPurchase ? 255 : 120),
                         k.fixed(),
                         k.z(1002)
                     ]);
                     
                     // Add right-click handler for permanent upgrades (refund single level)
                     if (currentCategory === 'permanentUpgrades') {
-                        const currentLevel = getPermanentUpgradeLevel(key);
-                        if (currentLevel > 0) {
+                        if (progressLevel > 0) {
                             // Use global mouse release event to detect right-click
                             let rightClickHandler = null;
                             rightClickHandler = k.onMouseRelease('right', () => {
                                 // Check if mouse is over the button
                                 const mousePos = k.mousePos();
-                                // Button position and size
-                                const buttonX = itemX + 230;
-                                const buttonY = itemY + 55;
-                                const buttonWidth = 80;
-                                const buttonHeight = 30;
-                                
+
                                 if (mousePos.x >= buttonX && mousePos.x <= buttonX + buttonWidth &&
-                                    mousePos.y >= buttonY && mousePos.y <= buttonY + buttonHeight) {
+                                    mousePos.y >= bottomY && mousePos.y <= bottomY + buttonHeight) {
                                     // Right-click on button: refund single level
                                     if (isPurchasing) return;
                                     isPurchasing = true;
@@ -588,42 +710,35 @@ export function setupShopScene(k) {
                     }
                     
                     unlockItems.push(buttonBg, buttonText);
-                } else if (currentCategory === 'cosmetics') {
-                    // Check if this cosmetic is owned but not equipped - show EQUIP button
-                    const cosmeticType = unlock.category;
-                    const equippedKey = getEquippedCosmetic(cosmeticType);
-                    const isOwned = isUnlocked('cosmetics', key) || unlock.unlockedByDefault;
-                    const isEquipped = equippedKey === key;
+                } else if (currentCategory === 'cosmetics' && isOwnedCosmetic && !isEquippedCosmetic) {
+                    // Show EQUIP button for owned but not equipped cosmetics
+                    const equipButtonBg = k.add([
+                        k.rect(buttonWidth, buttonHeight),
+                        k.pos(buttonX, bottomY),
+                        k.anchor('topleft'),
+                        k.color(40, 80, 120),
+                        k.outline(1, k.rgb(80, 140, 200)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
 
-                    if (isOwned && !isEquipped) {
-                        const equipButtonBg = k.add([
-                            k.rect(80, 30),
-                            k.pos(itemX + 230, itemY + 55),
-                            k.anchor('topleft'),
-                            k.color(50, 100, 150),
-                            k.outline(2, k.rgb(100, 150, 200)),
-                            k.area(),
-                            k.fixed(),
-                            k.z(1001)
-                        ]);
+                    const equipButtonText = k.add([
+                        k.text('EQUIP', { size: 11 }),
+                        k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
+                        k.anchor('center'),
+                        k.color(200, 230, 255),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
 
-                        const equipButtonText = k.add([
-                            k.text('EQUIP', { size: 14 }),
-                            k.pos(itemX + 270, itemY + 70),
-                            k.anchor('center'),
-                            k.color(255, 255, 255),
-                            k.fixed(),
-                            k.z(1002)
-                        ]);
+                    equipButtonBg.onClick(() => {
+                        playMenuNav();
+                        setEquippedCosmetic(unlock.category, key);
+                        refreshShop();
+                    });
 
-                        equipButtonBg.onClick(() => {
-                            playMenuNav();
-                            setEquippedCosmetic(cosmeticType, key);
-                            refreshShop();
-                        });
-
-                        unlockItems.push(equipButtonBg, equipButtonText);
-                    }
+                    unlockItems.push(equipButtonBg, equipButtonText);
                 }
 
                 // Push all items (only push statusLabel if it exists)
