@@ -352,11 +352,31 @@ export function getActiveSynergies(player) {
     if (!player.activeSynergies) {
         return [];
     }
-    
+
     return Array.from(player.activeSynergies).map(key => ({
         key,
         ...SYNERGIES[key]
     }));
+}
+
+/**
+ * Reapply all active synergies silently (for room transitions)
+ * This should be called AFTER recalculateAllUpgrades() to restore synergy bonuses
+ * that were overwritten by the upgrade recalculation.
+ * @param {Object} player - The player entity
+ */
+export function reapplySynergies(player) {
+    if (!player.activeSynergies || player.activeSynergies.size === 0) {
+        return;
+    }
+
+    // Reapply each active synergy
+    for (const synergyKey of player.activeSynergies) {
+        const synergy = SYNERGIES[synergyKey];
+        if (synergy && synergy.apply) {
+            synergy.apply(player);
+        }
+    }
 }
 
 

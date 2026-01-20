@@ -33,7 +33,7 @@ import { tryMakeElite } from '../systems/eliteSystem.js';
 import { showMovementHint, showLevelUpHint } from '../systems/tutorial.js';
 import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey } from '../systems/roomGeneration.js';
-import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
+import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
@@ -504,6 +504,23 @@ export function setupGameScene(k) {
                 recalculateAllUpgrades(player);
             }
 
+            // CRITICAL: Reapply synergies after upgrade recalculation
+            // Synergy bonuses are multiplicative and get overwritten by recalculateAllUpgrades
+            if (player.activeSynergies && player.activeSynergies.size > 0) {
+                reapplySynergies(player);
+            }
+
+            // CRITICAL: Reinitialize orbital weapons if player has them
+            // Orbital orbs are entities that get destroyed on room transition
+            if (player.powerupWeapon === 'orbital' || player.weaponKey === 'orbital') {
+                player.orbitalOrbs = [];
+                player.orbitalAngles = [];
+                player.orbitalNeedsReinit = true;
+            }
+
+            // Reset slow debuff state (enemies don't persist across rooms)
+            player.slowed = false;
+
             // CRITICAL: Reset control flags after room transition
             // If player is alive, ensure they can move and shoot
             if (!player.isDead) {
@@ -683,6 +700,21 @@ export function setupGameScene(k) {
                             if (remotePlayer.upgradeStacks && Object.keys(remotePlayer.upgradeStacks).length > 0) {
                                 recalculateAllUpgrades(remotePlayer);
                             }
+
+                            // Reapply synergies after upgrade recalculation
+                            if (remotePlayer.activeSynergies && remotePlayer.activeSynergies.size > 0) {
+                                reapplySynergies(remotePlayer);
+                            }
+
+                            // Reinitialize orbital weapons if player has them
+                            if (remotePlayer.powerupWeapon === 'orbital' || remotePlayer.weaponKey === 'orbital') {
+                                remotePlayer.orbitalOrbs = [];
+                                remotePlayer.orbitalAngles = [];
+                                remotePlayer.orbitalNeedsReinit = true;
+                            }
+
+                            // Reset slow debuff state
+                            remotePlayer.slowed = false;
 
                             // CRITICAL: Reset control flags after room transition
                             // If player is alive, ensure they can move and shoot
@@ -4341,16 +4373,21 @@ export function setupGameScene(k) {
                     xpToNext: p.xpToNext,
                     maxHealth: p.maxHealth,
                     currentHP: p.hp(),
-                    speed: p.speed,
+                    speed: p.slowed ? p.originalSpeed : p.speed, // Save unslowed speed
+                    originalSpeed: p.originalSpeed || p.speed,
+                    slowed: false, // Always reset slow state on room transition
                     fireRate: p.fireRate,
                     projectileSpeed: p.projectileSpeed,
                     projectileDamage: p.projectileDamage,
                     pickupRadius: p.pickupRadius,
                     xpMultiplier: p.xpMultiplier || 1,
+                    // Character key (needed for daily runs and character-specific logic)
+                    characterKey: p.characterKey,
                     // Character abilities
                     dodgeChance: p.dodgeChance || 0,
                     damageReduction: p.damageReduction || 0,
                     fireDotMultiplier: p.fireDotMultiplier || 1,
+                    invulnerableDuration: p.invulnerableDuration || 1.0,
                     // Advanced weapon stats
                     projectileCount: p.projectileCount || 1,
                     piercing: p.piercing || 0,
@@ -4382,6 +4419,18 @@ export function setupGameScene(k) {
                     powerupDuration: p.powerupDuration !== undefined ? p.powerupDuration : null,
                     originalWeapon: p.originalWeapon || null,
                     weaponKey: p.weaponKey,
+                    weaponCategory: p.weaponCategory,
+                    // Weapon-specific properties (for orbital, explosive, chain weapons)
+                    orbitRadius: p.orbitRadius,
+                    rotationSpeed: p.rotationSpeed,
+                    explosionRadius: p.explosionRadius,
+                    explosionDamage: p.explosionDamage,
+                    chainRange: p.chainRange,
+                    maxJumps: p.maxJumps,
+                    chainDamageReduction: p.chainDamageReduction,
+                    // Synergy-specific properties
+                    thornsPercent: p.thornsPercent || 0,
+                    thornsIgnoreArmor: p.thornsIgnoreArmor || false,
                     // Per-player run stats for game over screen
                     runStats: p.runStats || {
                         kills: 0,
