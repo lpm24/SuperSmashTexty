@@ -188,10 +188,10 @@ export function setupMenuScene(k) {
         ]);
 
         // ==========================================
-        // PROFILE CARD (Top-left)
+        // PROFILE CARD (Top-left, aligned with Daily Run on right)
         // ==========================================
         const profileCardX = LAYOUT.LEFT_COLUMN_X;
-        const profileCardY = LAYOUT.TOP_MARGIN;
+        const profileCardY = LAYOUT.TOP_MARGIN + 50; // Align with daily run panel
         const profileCardWidth = LAYOUT.LEFT_COLUMN_WIDTH;
         const profileCardHeight = 75; // Compact height - just portrait, name, level, XP bar
 
