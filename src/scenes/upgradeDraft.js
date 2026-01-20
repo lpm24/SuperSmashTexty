@@ -267,7 +267,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
 
         // Update reroll button text
         if (rerollText && rerollText.exists()) {
-            rerollText.text = `[R] Reroll (${rerollsRemaining})`;
+            rerollText.text = `(R) Reroll (${rerollsRemaining})`;
             if (rerollsRemaining === 0) {
                 rerollText.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
             }

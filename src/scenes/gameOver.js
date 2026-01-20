@@ -10,7 +10,7 @@ import { ACHIEVEMENTS, ACHIEVEMENT_COLORS } from '../data/achievements.js';
 import { getRunUnlockedAchievements } from '../systems/achievementChecker.js';
 import { showAchievementModal } from '../components/achievementModal.js';
 import { calculateScore, submitScore, formatScore } from '../systems/leaderboards.js';
-import { getGlobalRank } from '../systems/onlineLeaderboards.js';
+import { getGlobalRank, submitOnlineScore, submitDailyScore } from '../systems/onlineLeaderboards.js';
 import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
 import {
     UI_SIZES,
@@ -70,6 +70,8 @@ export function setupGameOverScene(k) {
         const partyStats = args?.partyStats || [];
         const isDailyRun = args?.isDailyRun || false;
         const dailyCharacter = args?.dailyCharacter || null;
+        // Use the date from when the daily run started, not when it ended (handles midnight boundary)
+        const runDate = args?.dailyDate || getTodayDateString();
 
         // Calculate duration
         const duration = runStats.startTime ? (Date.now() - runStats.startTime) / 1000 : 0;
@@ -84,15 +86,39 @@ export function setupGameOverScene(k) {
 
         const character = dailyCharacter || getSelectedCharacter() || 'survivor';
 
-        // Submit to leaderboards
+        // Submit to local leaderboards
         const leaderboardResult = submitScore({
             score: score,
             floor: runStats.floorsReached || 1,
             character: character,
             time: duration,
             isDaily: isDailyRun,
-            date: getTodayDateString()
+            date: runDate
         });
+
+        // Submit to global online leaderboards (only host in multiplayer, or single player)
+        const playerName = getPlayerName() || 'Anonymous';
+        const inMultiplayer = isMultiplayerActive();
+        const shouldSubmitOnline = !inMultiplayer || isHost();
+
+        if (shouldSubmitOnline) {
+            const onlineScoreEntry = {
+                name: playerName,
+                score: score,
+                floor: runStats.floorsReached || 1,
+                character: character,
+                time: duration,
+                date: runDate
+            };
+
+            // Always submit to global all-time board
+            submitOnlineScore(onlineScoreEntry, 'allTime');
+
+            // Also submit to daily board if this is a daily run
+            if (isDailyRun) {
+                submitDailyScore(onlineScoreEntry);
+            }
+        }
 
         // Mark daily as completed if it was a daily run
         if (isDailyRun) {
@@ -204,7 +230,6 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        const playerName = getPlayerName() || 'Anonymous';
         getGlobalRank(playerName, score).then(result => {
             if (!globalRankLabel.exists()) return;
             if (result.error) {
@@ -806,7 +831,6 @@ export function setupGameOverScene(k) {
         ]);
 
         // Buttons
-        const inMultiplayer = isMultiplayerActive();
         const isHostPlayer = isHost();
         const buttonY = k.height() - 30;
         const { LG, SM } = UI_SIZES.BUTTON;
