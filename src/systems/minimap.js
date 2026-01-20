@@ -3,6 +3,8 @@
  *
  * Displays a compact or expanded view of the floor grid
  * Shows player position, visited rooms, and available paths
+ *
+ * Design: All states anchor to top-right with consistent margins
  */
 
 import { playMenuNav } from './sounds.js';
@@ -12,8 +14,49 @@ import { playMenuNav } from './sounds.js';
  */
 const MINIMAP_MODE = {
     MINIMIZED: 'minimized',  // Just a map button
-    OPEN: 'open',            // Small minimap
+    OPEN: 'open',            // Small minimap (no legend)
     MAXIMIZED: 'maximized'   // Large minimap with legend
+};
+
+/**
+ * UI Layout Constants
+ */
+const LAYOUT = {
+    MARGIN_RIGHT: 12,      // Distance from right edge
+    MARGIN_TOP: 32,        // Below credits counter (at y: 6)
+    BUTTON_SIZE: 38,       // Minimized button size
+    OPEN_WIDTH: 130,       // Open state width
+    OPEN_HEIGHT: 85,       // Open state height
+    MAX_MIN_WIDTH: 200,    // Maximized minimum width
+    MAX_MIN_HEIGHT: 160,   // Maximized minimum height
+    CELL_SIZE_SMALL: 11,   // Grid cell size for open state
+    CELL_SIZE_LARGE: 16,   // Grid cell size for maximized state
+    CORNER_RADIUS: 4,      // Rounded corner visual (simulated)
+    Z_BASE: 900,           // Base z-index
+    Z_TEXT: 901,           // Text z-index
+    Z_ICON: 902,           // Icon/badge z-index
+};
+
+/**
+ * Color Palette
+ */
+const COLORS = {
+    BG_DARK: [18, 18, 28],
+    BG_PANEL: [25, 25, 40],
+    BG_HEADER: [35, 35, 55],
+    BORDER: [80, 120, 180],
+    BORDER_HOVER: [120, 160, 220],
+    TEXT_TITLE: [200, 210, 255],
+    TEXT_MUTED: [140, 140, 160],
+    ICON_MAP: [130, 160, 220],
+    BADGE_FLOOR: [255, 220, 80],
+    CURRENT: [255, 255, 100],
+    VISITED: [80, 220, 100],
+    AVAILABLE: [120, 120, 140],
+    BOSS: [255, 90, 90],
+    HIDDEN: [50, 50, 70],
+    CELL_BG: [30, 30, 45],
+    CELL_BORDER: [45, 45, 60],
 };
 
 /**
@@ -23,31 +66,25 @@ export class Minimap {
     constructor(k, floorMap) {
         this.k = k;
         this.floorMap = floorMap;
-        this.mode = MINIMAP_MODE.MINIMIZED; // Start minimized
+        this.mode = MINIMAP_MODE.MINIMIZED;
         this.elements = [];
+        this.isHovered = false;
 
         this.render();
     }
 
     /**
-     * Get current position for minimized button (calculated fresh each time)
+     * Get the right anchor X position (consistent for all states)
      */
-    getButtonPos() {
-        return { x: this.k.width() - 50, y: 70 };
+    getRightX() {
+        return this.k.width() - LAYOUT.MARGIN_RIGHT;
     }
 
     /**
-     * Get current position for open minimap (calculated fresh each time)
+     * Get the top Y position (consistent for all states)
      */
-    getOpenPos() {
-        return { x: this.k.width() - 120, y: 70 };
-    }
-
-    /**
-     * Get current position for maximized minimap (calculated fresh each time)
-     */
-    getMaximizedPos() {
-        return { x: this.k.width() - 250, y: 70 };
+    getTopY() {
+        return LAYOUT.MARGIN_TOP;
     }
 
     /**
@@ -60,7 +97,6 @@ export class Minimap {
             console.warn('[Minimap] Sound playback failed:', e);
         }
 
-        // Cycle through states
         if (this.mode === MINIMAP_MODE.MINIMIZED) {
             this.mode = MINIMAP_MODE.OPEN;
         } else if (this.mode === MINIMAP_MODE.OPEN) {
@@ -69,7 +105,6 @@ export class Minimap {
             this.mode = MINIMAP_MODE.MINIMIZED;
         }
 
-        // Delay update to next frame to avoid destroying elements during click event
         this.k.wait(0, () => {
             this.update();
         });
@@ -109,278 +144,286 @@ export class Minimap {
     }
 
     /**
-     * Render minimized state - just a small map button
+     * Create a clickable background panel with hover effect
      */
-    renderMinimized() {
-        const { x, y } = this.getButtonPos();
-        const buttonSize = 40;
-
-        // Button background
+    createPanel(width, height, x, y) {
         const bg = this.k.add([
-            this.k.rect(buttonSize, buttonSize),
+            this.k.rect(width, height),
             this.k.pos(x, y),
-            this.k.anchor('center'),
-            this.k.color(30, 30, 50),
-            this.k.outline(2, this.k.rgb(100, 150, 200)),
+            this.k.anchor('topright'),
+            this.k.color(...COLORS.BG_PANEL),
+            this.k.outline(2, this.k.rgb(...COLORS.BORDER)),
             this.k.fixed(),
-            this.k.z(900),
+            this.k.z(LAYOUT.Z_BASE),
             this.k.area(),
+            this.k.opacity(0.95),
             'minimap'
         ]);
 
+        bg.onHover(() => {
+            bg.outline.color = this.k.rgb(...COLORS.BORDER_HOVER);
+            bg.outline.width = 3;
+        });
+
+        bg.onHoverEnd(() => {
+            bg.outline.color = this.k.rgb(...COLORS.BORDER);
+            bg.outline.width = 2;
+        });
+
         bg.onClick(() => this.toggle());
         this.elements.push(bg);
+        return bg;
+    }
+
+    /**
+     * Render minimized state - compact map button
+     */
+    renderMinimized() {
+        const x = this.getRightX();
+        const y = this.getTopY();
+        const size = LAYOUT.BUTTON_SIZE;
+
+        // Button background
+        this.createPanel(size, size, x, y);
+
+        // Calculate center of button (panel anchored topright, so center is left and down from anchor)
+        const centerX = x - size / 2;
+        const centerY = y + size / 2;
 
         // Map icon
         const icon = this.k.add([
-            this.k.text('◧', { size: 24 }),
-            this.k.pos(x, y),
+            this.k.text('◧', { size: 22 }),
+            this.k.pos(centerX, centerY),
             this.k.anchor('center'),
-            this.k.color(150, 180, 255),
+            this.k.color(...COLORS.ICON_MAP),
             this.k.fixed(),
-            this.k.z(901),
+            this.k.z(LAYOUT.Z_TEXT),
             'minimap'
         ]);
         this.elements.push(icon);
 
-        // Floor number badge
+        // Floor number badge (top-left corner of button)
         const badge = this.k.add([
-            this.k.text(`${this.floorMap.floor}`, { size: 10 }),
-            this.k.pos(x + 12, y - 12),
-            this.k.anchor('center'),
-            this.k.color(255, 255, 100),
+            this.k.text(`F${this.floorMap.floor}`, { size: 9 }),
+            this.k.pos(x - size + 4, y + 4),
+            this.k.anchor('topleft'),
+            this.k.color(...COLORS.BADGE_FLOOR),
             this.k.fixed(),
-            this.k.z(902),
+            this.k.z(LAYOUT.Z_ICON),
             'minimap'
         ]);
         this.elements.push(badge);
     }
 
     /**
-     * Render open state - small minimap view
+     * Render open state - compact minimap without legend
      */
     renderOpen() {
-        const { x, y } = this.getOpenPos();
-        const cellSize = 12;
+        const x = this.getRightX();
+        const y = this.getTopY();
+        const width = LAYOUT.OPEN_WIDTH;
+        const height = LAYOUT.OPEN_HEIGHT;
+        const cellSize = LAYOUT.CELL_SIZE_SMALL;
         const grid = this.floorMap.getGridForMinimap();
 
-        // Background
-        const bg = this.k.add([
-            this.k.rect(140, 80),
-            this.k.pos(x - 10, y - 10),
-            this.k.anchor('topleft'),
-            this.k.color(20, 20, 30),
-            this.k.outline(2, this.k.rgb(100, 150, 200)),
+        // Background panel
+        this.createPanel(width, height, x, y);
+
+        // Header bar
+        const headerHeight = 18;
+        const header = this.k.add([
+            this.k.rect(width - 4, headerHeight),
+            this.k.pos(x - 2, y + 2),
+            this.k.anchor('topright'),
+            this.k.color(...COLORS.BG_HEADER),
             this.k.fixed(),
-            this.k.z(900),
-            this.k.area(),
+            this.k.z(LAYOUT.Z_TEXT),
             'minimap'
         ]);
-
-        bg.onClick(() => this.toggle());
-        this.elements.push(bg);
+        this.elements.push(header);
 
         // Title
         const title = this.k.add([
             this.k.text(`Floor ${this.floorMap.floor}`, { size: 10 }),
-            this.k.pos(x + 60, y),
+            this.k.pos(x - width / 2, y + 2 + headerHeight / 2),
             this.k.anchor('center'),
-            this.k.color(200, 200, 255),
+            this.k.color(...COLORS.TEXT_TITLE),
             this.k.fixed(),
-            this.k.z(901),
+            this.k.z(LAYOUT.Z_ICON),
             'minimap'
         ]);
         this.elements.push(title);
 
-        // Grid
-        const startY = y + 15;
-        for (let row = 0; row < grid.length; row++) {
-            for (let col = 0; col < grid[row].length; col++) {
-                const cell = grid[row][col];
-                const cellX = x + col * cellSize;
-                const cellY = startY + row * cellSize;
+        // Grid area
+        const gridWidth = grid[0].length * cellSize;
+        const gridHeight = grid.length * cellSize;
+        const gridStartX = x - width / 2 - gridWidth / 2;
+        const gridStartY = y + headerHeight + 8;
 
-                let char = '▫';
-                let color = [100, 100, 100];
+        this.renderGrid(grid, gridStartX, gridStartY, cellSize, false);
 
-                switch (cell.type) {
-                    case 'current':
-                        char = '★';
-                        color = [255, 255, 100];
-                        break;
-                    case 'visited':
-                        char = cell.room.isBossRoom ? 'B' : '●';
-                        color = cell.room.isBossRoom ? [255, 100, 100] : [100, 255, 100];
-                        break;
-                    case 'revealed':
-                        char = cell.room.isBossRoom ? 'B' : '▫';
-                        color = cell.room.isBossRoom ? [255, 150, 150] : [150, 150, 150];
-                        break;
-                    case 'hidden':
-                        char = '▪';
-                        color = [60, 60, 80];
-                        break;
-                    case 'empty':
-                        char = ' ';
-                        break;
-                }
-
-                if (char !== ' ') {
-                    const cellText = this.k.add([
-                        this.k.text(char, { size: 10 }),
-                        this.k.pos(cellX, cellY),
-                        this.k.anchor('topleft'),
-                        this.k.color(...color),
-                        this.k.fixed(),
-                        this.k.z(901),
-                        'minimap'
-                    ]);
-                    this.elements.push(cellText);
-                }
-            }
-        }
-
-        // Room counter
-        const roomText = this.k.add([
-            this.k.text(`${this.floorMap.getVisitedCount()}/${this.floorMap.getTotalRooms()}`, { size: 9 }),
-            this.k.pos(x + 60, y + 65),
+        // Room counter at bottom
+        const counter = this.k.add([
+            this.k.text(`${this.floorMap.getVisitedCount()}/${this.floorMap.getTotalRooms()} rooms`, { size: 8 }),
+            this.k.pos(x - width / 2, y + height - 8),
             this.k.anchor('center'),
-            this.k.color(180, 180, 180),
+            this.k.color(...COLORS.TEXT_MUTED),
             this.k.fixed(),
-            this.k.z(901),
+            this.k.z(LAYOUT.Z_TEXT),
             'minimap'
         ]);
-        this.elements.push(roomText);
+        this.elements.push(counter);
     }
 
     /**
-     * Render maximized state - large minimap with legend
+     * Render maximized state - full minimap with legend
      */
     renderMaximized() {
-        const { x, y } = this.getMaximizedPos();
-        const cellSize = 18;
+        const x = this.getRightX();
+        const y = this.getTopY();
+        const cellSize = LAYOUT.CELL_SIZE_LARGE;
         const grid = this.floorMap.getGridForMinimap();
 
-        const width = Math.max(220, grid[0].length * cellSize + 40);
-        const height = Math.max(180, grid.length * cellSize + 100);
+        // Calculate dimensions based on grid
+        const gridWidth = grid[0].length * cellSize;
+        const gridHeight = grid.length * cellSize;
+        const legendHeight = 70;
+        const headerHeight = 26;
+        const padding = 16;
 
-        // Background
-        const bg = this.k.add([
-            this.k.rect(width, height),
-            this.k.pos(x, y),
-            this.k.anchor('topleft'),
-            this.k.color(15, 15, 25),
-            this.k.outline(3, this.k.rgb(100, 150, 255)),
+        const width = Math.max(LAYOUT.MAX_MIN_WIDTH, gridWidth + padding * 2);
+        const height = Math.max(LAYOUT.MAX_MIN_HEIGHT, gridHeight + headerHeight + legendHeight + padding);
+
+        // Ensure it stays on screen (left edge)
+        const safeWidth = Math.min(width, this.k.width() - LAYOUT.MARGIN_RIGHT - 10);
+
+        // Background panel
+        this.createPanel(safeWidth, height, x, y);
+
+        // Header bar
+        const header = this.k.add([
+            this.k.rect(safeWidth - 4, headerHeight),
+            this.k.pos(x - 2, y + 2),
+            this.k.anchor('topright'),
+            this.k.color(...COLORS.BG_HEADER),
             this.k.fixed(),
-            this.k.z(900),
-            this.k.area(),
+            this.k.z(LAYOUT.Z_TEXT),
             'minimap'
         ]);
+        this.elements.push(header);
 
-        bg.onClick(() => this.toggle());
-        this.elements.push(bg);
-
-        // Title bar
-        const titleBg = this.k.add([
-            this.k.rect(width, 30),
-            this.k.pos(x, y),
-            this.k.anchor('topleft'),
-            this.k.color(30, 30, 50),
-            this.k.fixed(),
-            this.k.z(901),
-            'minimap'
-        ]);
-        this.elements.push(titleBg);
-
+        // Title with room count
         const title = this.k.add([
-            this.k.text(`FLOOR ${this.floorMap.floor} - ROOM ${this.floorMap.getVisitedCount()}/${this.floorMap.getTotalRooms()}`, { size: 12 }),
-            this.k.pos(x + width / 2, y + 15),
+            this.k.text(`FLOOR ${this.floorMap.floor}  ·  ${this.floorMap.getVisitedCount()}/${this.floorMap.getTotalRooms()}`, { size: 11 }),
+            this.k.pos(x - safeWidth / 2, y + 2 + headerHeight / 2),
             this.k.anchor('center'),
-            this.k.color(200, 220, 255),
+            this.k.color(...COLORS.TEXT_TITLE),
             this.k.fixed(),
-            this.k.z(902),
+            this.k.z(LAYOUT.Z_ICON),
             'minimap'
         ]);
         this.elements.push(title);
 
-        // Grid
-        const gridStartX = x + 20;
-        const gridStartY = y + 50;
+        // Grid area (centered)
+        const actualGridWidth = Math.min(gridWidth, safeWidth - padding * 2);
+        const gridStartX = x - safeWidth / 2 - actualGridWidth / 2;
+        const gridStartY = y + headerHeight + 12;
 
+        this.renderGrid(grid, gridStartX, gridStartY, cellSize, true);
+
+        // Legend section
+        const legendY = gridStartY + gridHeight + 12;
+        this.renderLegend(x - safeWidth + padding, legendY);
+    }
+
+    /**
+     * Render the room grid
+     */
+    renderGrid(grid, startX, startY, cellSize, showBackground) {
         for (let row = 0; row < grid.length; row++) {
             for (let col = 0; col < grid[row].length; col++) {
                 const cell = grid[row][col];
-                const cellX = gridStartX + col * cellSize;
-                const cellY = gridStartY + row * cellSize;
+                const cellX = startX + col * cellSize;
+                const cellY = startY + row * cellSize;
 
-                // Cell background
-                let bgColor = [30, 30, 40];
-                let borderColor = [50, 50, 60];
+                if (cell.type === 'empty') continue;
 
-                if (cell.type !== 'empty') {
+                // Cell background (only in maximized)
+                if (showBackground) {
                     const cellBg = this.k.add([
                         this.k.rect(cellSize - 2, cellSize - 2),
                         this.k.pos(cellX, cellY),
                         this.k.anchor('topleft'),
-                        this.k.color(...bgColor),
-                        this.k.outline(1, this.k.rgb(...borderColor)),
+                        this.k.color(...COLORS.CELL_BG),
+                        this.k.outline(1, this.k.rgb(...COLORS.CELL_BORDER)),
                         this.k.fixed(),
-                        this.k.z(901),
+                        this.k.z(LAYOUT.Z_TEXT),
                         'minimap'
                     ]);
                     this.elements.push(cellBg);
                 }
 
                 // Cell icon
-                let char = '';
-                let color = [100, 100, 100];
-
-                switch (cell.type) {
-                    case 'current':
-                        char = '★';
-                        color = [255, 255, 100];
-                        break;
-                    case 'visited':
-                        char = cell.room.isBossRoom ? 'B' : '●';
-                        color = cell.room.isBossRoom ? [255, 100, 100] : [100, 255, 100];
-                        break;
-                    case 'revealed':
-                        char = cell.room.isBossRoom ? 'B' : '▫';
-                        color = cell.room.isBossRoom ? [255, 150, 150] : [150, 150, 150];
-                        break;
-                    case 'hidden':
-                        char = '▪';
-                        color = [80, 80, 100];
-                        break;
-                }
-
+                const { char, color } = this.getCellDisplay(cell);
                 if (char) {
+                    const fontSize = showBackground ? 12 : 9;
                     const cellText = this.k.add([
-                        this.k.text(char, { size: 14 }),
-                        this.k.pos(cellX + cellSize / 2, cellY + cellSize / 2),
+                        this.k.text(char, { size: fontSize }),
+                        this.k.pos(cellX + cellSize / 2 - 1, cellY + cellSize / 2 - 1),
                         this.k.anchor('center'),
                         this.k.color(...color),
                         this.k.fixed(),
-                        this.k.z(902),
+                        this.k.z(LAYOUT.Z_ICON),
                         'minimap'
                     ]);
                     this.elements.push(cellText);
                 }
             }
         }
+    }
 
-        // Legend
-        const legendY = gridStartY + grid.length * cellSize + 20;
+    /**
+     * Get display character and color for a cell
+     */
+    getCellDisplay(cell) {
+        switch (cell.type) {
+            case 'current':
+                return { char: '★', color: COLORS.CURRENT };
+            case 'visited':
+                return cell.room.isBossRoom
+                    ? { char: 'B', color: COLORS.BOSS }
+                    : { char: '●', color: COLORS.VISITED };
+            case 'revealed':
+                return cell.room.isBossRoom
+                    ? { char: 'B', color: [...COLORS.BOSS.map(c => Math.min(255, c + 50))] }
+                    : { char: '◦', color: COLORS.AVAILABLE };
+            case 'hidden':
+                return { char: '·', color: COLORS.HIDDEN };
+            default:
+                return { char: '', color: [100, 100, 100] };
+        }
+    }
+
+    /**
+     * Render the legend section
+     */
+    renderLegend(startX, startY) {
         const legends = [
-            { char: '★', label: 'Current Room', color: [255, 255, 100] },
-            { char: '●', label: 'Cleared Room', color: [100, 255, 100] },
-            { char: '▫', label: 'Available Room', color: [150, 150, 150] },
-            { char: 'B', label: 'Boss Room', color: [255, 100, 100] }
+            { char: '★', label: 'Current', color: COLORS.CURRENT },
+            { char: '●', label: 'Cleared', color: COLORS.VISITED },
+            { char: '◦', label: 'Available', color: COLORS.AVAILABLE },
+            { char: 'B', label: 'Boss', color: COLORS.BOSS }
         ];
 
+        // Arrange in 2x2 grid for compact layout
+        const colWidth = 80;
+        const rowHeight = 14;
+
         legends.forEach((legend, i) => {
-            const itemX = x + 20;
-            const itemY = legendY + i * 15;
+            const col = i % 2;
+            const row = Math.floor(i / 2);
+            const itemX = startX + col * colWidth;
+            const itemY = startY + row * rowHeight;
 
             const symbol = this.k.add([
                 this.k.text(legend.char, { size: 10 }),
@@ -388,18 +431,18 @@ export class Minimap {
                 this.k.anchor('topleft'),
                 this.k.color(...legend.color),
                 this.k.fixed(),
-                this.k.z(902),
+                this.k.z(LAYOUT.Z_ICON),
                 'minimap'
             ]);
             this.elements.push(symbol);
 
             const label = this.k.add([
-                this.k.text(legend.label, { size: 9 }),
-                this.k.pos(itemX + 20, itemY),
+                this.k.text(legend.label, { size: 8 }),
+                this.k.pos(itemX + 14, itemY + 1),
                 this.k.anchor('topleft'),
-                this.k.color(180, 180, 200),
+                this.k.color(...COLORS.TEXT_MUTED),
                 this.k.fixed(),
-                this.k.z(902),
+                this.k.z(LAYOUT.Z_ICON),
                 'minimap'
             ]);
             this.elements.push(label);

@@ -46,7 +46,7 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'bestFloor', value: 10 },
-        hint: 'Double digits!'
+        unlocks: ['plasmaRifle']
     },
     firstSynergy: {
         id: 'firstSynergy',
@@ -641,6 +641,28 @@ export const ACHIEVEMENT_COLORS = {
     challenge: [255, 200, 100],   // Gold - challenge achievements
     benchmark: [200, 150, 255]    // Purple - benchmark achievements
 };
+
+// Default credit rewards by difficulty (for achievements without unlocks)
+export const ACHIEVEMENT_REWARDS = {
+    normal: 25,
+    challenge: 50,
+    benchmark: 100
+};
+
+/**
+ * Get the credit reward for an achievement
+ * Returns 0 if achievement has unlocks (the unlock IS the reward)
+ * @param {Object} achievement - Achievement object
+ * @returns {number} Credit reward amount
+ */
+export function getAchievementReward(achievement) {
+    if (!achievement) return 0;
+    // If achievement unlocks something, no credit reward
+    if (achievement.unlocks && achievement.unlocks.length > 0) return 0;
+    // Use explicit reward if set, otherwise use difficulty default
+    if (achievement.reward !== undefined) return achievement.reward;
+    return ACHIEVEMENT_REWARDS[achievement.difficulty] || ACHIEVEMENT_REWARDS.normal;
+}
 
 // Get achievements by category
 export function getAchievementsByCategory(category) {

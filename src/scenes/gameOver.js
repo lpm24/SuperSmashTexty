@@ -445,45 +445,52 @@ export function setupGameOverScene(k) {
         }
 
         // ==========================================
-        // ACHIEVEMENTS UNLOCKED - Below kill breakdown
+        // ACHIEVEMENTS UNLOCKED - Compact icon grid
         // ==========================================
         const unlockedAchievementIds = getRunUnlockedAchievements();
         if (unlockedAchievementIds.length > 0) {
-            rightY += 30;
+            rightY += 25;
 
             // Section title
             k.add([
-                k.text('ACHIEVEMENTS UNLOCKED', { size: 16 }),
+                k.text('ACHIEVEMENTS UNLOCKED', { size: 14 }),
                 k.pos(rightX, rightY),
                 k.anchor('center'),
                 k.color(255, 220, 100),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.MODAL)
             ]);
-            rightY += 24;
+            rightY += 20;
 
-            // Show up to 3 achievements inline
-            const maxAchievementsToShow = 3;
-            const achievementsToShow = unlockedAchievementIds.slice(0, maxAchievementsToShow);
-            const boxSize = 50;
-            const boxSpacing = 8;
-            const totalWidth = achievementsToShow.length * (boxSize + boxSpacing) - boxSpacing;
-            let achStartX = rightX - totalWidth / 2;
+            // Compact icon grid - show up to 8 achievements (2 rows of 4)
+            const iconSize = 36;
+            const iconSpacing = 6;
+            const maxPerRow = 4;
+            const maxToShow = 8;
+            const achievementsToShow = unlockedAchievementIds.slice(0, maxToShow);
 
             achievementsToShow.forEach((achId, index) => {
                 const achievement = ACHIEVEMENTS[achId];
                 if (!achievement) return;
 
-                const achX = achStartX + index * (boxSize + boxSpacing);
+                const row = Math.floor(index / maxPerRow);
+                const col = index % maxPerRow;
+                const rowCount = Math.min(achievementsToShow.length, maxPerRow);
+                const rowWidth = rowCount * (iconSize + iconSpacing) - iconSpacing;
+                const rowStartX = rightX - rowWidth / 2;
+
+                const achX = rowStartX + col * (iconSize + iconSpacing) + iconSize / 2;
+                const achY = rightY + row * (iconSize + iconSpacing) + iconSize / 2;
+
                 const difficultyColor = ACHIEVEMENT_COLORS[achievement.difficulty] || ACHIEVEMENT_COLORS.normal;
 
-                // Achievement box background with gold border
+                // Achievement icon box
                 const achBox = k.add([
-                    k.rect(boxSize, boxSize),
-                    k.pos(achX + boxSize / 2, rightY + boxSize / 2),
+                    k.rect(iconSize, iconSize),
+                    k.pos(achX, achY),
                     k.anchor('center'),
                     k.color(40, 35, 50),
-                    k.outline(2, k.rgb(255, 200, 100)),
+                    k.outline(2, k.rgb(...difficultyColor)),
                     k.area(),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.MODAL)
@@ -491,21 +498,10 @@ export function setupGameOverScene(k) {
 
                 // Achievement icon
                 k.add([
-                    k.text(achievement.icon, { size: 24 }),
-                    k.pos(achX + boxSize / 2, rightY + boxSize / 2 - 5),
+                    k.text(achievement.icon, { size: 20 }),
+                    k.pos(achX, achY),
                     k.anchor('center'),
-                    k.color(...difficultyColor),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.MODAL + 1)
-                ]);
-
-                // Achievement name (below icon, truncated)
-                const shortName = achievement.name.length > 8 ? achievement.name.substring(0, 7) + '..' : achievement.name;
-                k.add([
-                    k.text(shortName, { size: 10 }),
-                    k.pos(achX + boxSize / 2, rightY + boxSize + 8),
-                    k.anchor('center'),
-                    k.color(200, 200, 200),
+                    k.color(255, 255, 255),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.MODAL + 1)
                 ]);
@@ -515,13 +511,16 @@ export function setupGameOverScene(k) {
                     playMenuNav();
                     showAchievementModal(k, achievement);
                 });
+                achBox.cursor = 'pointer';
             });
 
-            rightY += boxSize + 20;
+            // Calculate rows used
+            const rowsUsed = Math.ceil(achievementsToShow.length / maxPerRow);
+            rightY += rowsUsed * (iconSize + iconSpacing) + 5;
 
             // Show "+N more" if there are more achievements
-            if (unlockedAchievementIds.length > maxAchievementsToShow) {
-                const moreCount = unlockedAchievementIds.length - maxAchievementsToShow;
+            if (unlockedAchievementIds.length > maxToShow) {
+                const moreCount = unlockedAchievementIds.length - maxToShow;
                 const moreText = k.add([
                     k.text(`+${moreCount} more`, { size: 12 }),
                     k.pos(rightX, rightY),
@@ -532,11 +531,11 @@ export function setupGameOverScene(k) {
                     k.z(UI_Z_LAYERS.MODAL)
                 ]);
 
-                // Make clickable to go to statistics/achievements page
                 moreText.onClick(() => {
                     playMenuNav();
                     k.go('statistics');
                 });
+                moreText.cursor = 'pointer';
             }
         }
 

@@ -1,6 +1,7 @@
 // Meta progression system - handles currency, saves, and unlocks
 
 import { generateRandomName, generateInviteCode } from './nameGenerator.js';
+import { getAchievementReward, getAchievementById } from '../data/achievements.js';
 
 const STORAGE_KEY = 'superSmashTexty_save';
 const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
@@ -507,6 +508,15 @@ export function unlockAchievement(achievementId) {
     }
     if (!save.achievements.includes(achievementId)) {
         save.achievements.push(achievementId);
+
+        // Award credit reward for the achievement
+        const achievement = getAchievementById(achievementId);
+        const reward = getAchievementReward(achievement);
+        if (reward > 0) {
+            save.currency = Math.min(Number.MAX_SAFE_INTEGER, save.currency + reward);
+            console.log(`[MetaProgression] Achievement "${achievementId}" awarded ${reward} credits`);
+        }
+
         saveGame(save);
 
         // Check if this achievement unlocks any characters
