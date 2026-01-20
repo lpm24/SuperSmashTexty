@@ -5,6 +5,7 @@ import { initAudio, playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { getDailyRunInfo, hasCompletedDailyToday, getTodayDailyCharacter } from '../systems/dailyRuns.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_SPACING,
@@ -673,14 +674,14 @@ export function setupMenuScene(k) {
             });
         });
 
-        // Main buttons - centered column
+        // Main buttons - centered column using standardized sizes
         const buttonStartY = 310;
-        const buttonSpacing = 50;
-        const buttonWidth = 280;
+        const buttonSpacing = 55;
+        const { XL, LG } = UI_SIZES.BUTTON;
 
         const playButton = createMenuButton(
             k, 'ACTION!', centerX, buttonStartY,
-            buttonWidth + 40, 50, UI_TEXT_SIZES.HEADER
+            XL.width, XL.height, UI_TEXT_SIZES.H1
         );
         playButton.onClick(() => {
             if (playButton.disabled) return;
@@ -702,7 +703,7 @@ export function setupMenuScene(k) {
 
         const characterButton = createMenuButton(
             k, 'CONTESTANTS', centerX, buttonStartY + buttonSpacing,
-            buttonWidth, 45, UI_TEXT_SIZES.BODY
+            LG.width, LG.height, UI_TEXT_SIZES.H2
         );
         characterButton.onClick(() => {
             playMenuSelect();
@@ -714,7 +715,7 @@ export function setupMenuScene(k) {
         const selectedCharData = CHARACTER_UNLOCKS[selectedCharKey];
         if (selectedCharData) {
             const isCharUnlocked = isUnlocked('characters', selectedCharKey) || selectedCharData.unlockedByDefault;
-            const charDisplayX = centerX + buttonWidth / 2 + 35;
+            const charDisplayX = centerX + LG.width / 2 + 35;
             const charDisplayY = buttonStartY + buttonSpacing;
             const charDisplaySize = 45;
 
@@ -755,7 +756,7 @@ export function setupMenuScene(k) {
 
         const shopButton = createMenuButton(
             k, 'MERCH', centerX, buttonStartY + buttonSpacing * 2,
-            buttonWidth, 45, UI_TEXT_SIZES.BODY
+            LG.width, LG.height, UI_TEXT_SIZES.H2
         );
         shopButton.onClick(() => {
             playMenuSelect();
@@ -764,7 +765,7 @@ export function setupMenuScene(k) {
 
         const statisticsButton = createMenuButton(
             k, 'RATINGS', centerX, buttonStartY + buttonSpacing * 3,
-            buttonWidth, 45, UI_TEXT_SIZES.BODY
+            LG.width, LG.height, UI_TEXT_SIZES.H2
         );
         statisticsButton.onClick(() => {
             playMenuSelect();
@@ -773,7 +774,7 @@ export function setupMenuScene(k) {
 
         const settingsButton = createMenuButton(
             k, 'OPTIONS', centerX, buttonStartY + buttonSpacing * 4,
-            buttonWidth, 45, UI_TEXT_SIZES.BODY
+            LG.width, LG.height, UI_TEXT_SIZES.H2
         );
         settingsButton.onClick(() => {
             playMenuSelect();
@@ -861,6 +862,18 @@ export function setupMenuScene(k) {
                 pattern.opacity = 0.08 + Math.abs(Math.sin(pattern.pulseTime)) * 0.1;
             });
         }
+
+        // ==========================================
+        // Version number (Micro text, bottom-right)
+        // ==========================================
+        k.add([
+            k.text('v0.1.1', { size: UI_TEXT_SIZES.MICRO }),
+            k.pos(k.width() - 10, k.height() - 10),
+            k.anchor('botright'),
+            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
 
         // ==========================================
         // EASTER EGG: Golden enemy flyby

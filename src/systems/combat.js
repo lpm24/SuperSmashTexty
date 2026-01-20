@@ -915,7 +915,11 @@ export function setupCombatSystem(k, player) {
         }
 
         // Use takeDamage to handle armor/shields
-        miniboss.takeDamage(finalDamage);
+        if (miniboss.takeDamage) {
+            miniboss.takeDamage(finalDamage);
+        } else {
+            miniboss.hurt(finalDamage);
+        }
 
         // Track who last hit this miniboss for kill attribution
         if (projectile.ownerSlotIndex !== undefined) {

@@ -513,11 +513,8 @@ export function setupShopScene(k) {
 
                     viewButtonBg.onClick(() => {
                         playMenuNav();
-                        console.log('[Shop] VIEW clicked, requiredAchievement:', requiredAchievement);
                         if (requiredAchievement) {
                             showAchievementModal(k, requiredAchievement);
-                        } else {
-                            console.warn('[Shop] No achievement found for:', unlock.requiredAchievement);
                         }
                     });
                     viewButtonBg.cursor = 'pointer';
