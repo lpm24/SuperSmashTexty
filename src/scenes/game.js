@@ -4018,7 +4018,7 @@ export function setupGameScene(k) {
 
         // Handle door interaction (proximity-based)
         eventHandlers.updates.push(k.onUpdate(() => {
-            if (!player.exists() || k.paused || doorEntered) return;
+            if (!player.exists() || k.paused || doorEntered || isUpgradeDraftActive()) return;
 
             // In multiplayer, only HOST checks for door transitions
             // Clients wait for room_transition broadcast from host
@@ -4125,6 +4125,9 @@ export function setupGameScene(k) {
                     }
                 } else {
                     // Single player: instant transition
+                    // Skip if player is dead (prevent race condition with game over)
+                    if (player.isDead || player.hp() <= 0) return;
+
                     const distance = k.vec2(
                         player.pos.x - door.pos.x,
                         player.pos.y - door.pos.y
