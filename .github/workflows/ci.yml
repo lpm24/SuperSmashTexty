@@ -32,5 +32,13 @@ jobs:
           exit 1
         fi
 
+    - name: Deploy to GitHub Pages
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: peaceiris/actions-gh-pages@v4
+      with:
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        publish_dir: ./dist
+        commit_message: 'Deploy: ${{ github.event.head_commit.message }}'
+
 
 
