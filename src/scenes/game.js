@@ -4257,6 +4257,16 @@ export function setupGameScene(k) {
             // Track room cleared
             runStats.roomsCleared++;
 
+            // Check achievements with current run stats (for in-game toasts)
+            const playerLevel = player.exists() ? player.level : 1;
+            checkAchievements(k, {
+                floor: gameState.currentFloor,
+                enemiesKilled: runStats.enemiesKilled,
+                bossesKilled: runStats.bossesKilled,
+                level: playerLevel,
+                currencyEarned: 0 // Currency is calculated at game over
+            });
+
             // Mark room as cleared in floor map
             if (gameState.floorMap && currentRoomNode) {
                 gameState.floorMap.markRoomCleared(currentRoomNode.position.x, currentRoomNode.position.y);

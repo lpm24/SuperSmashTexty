@@ -3,6 +3,7 @@ import { getSettings, updateSetting, resetSettings, saveSettings } from '../syst
 import { getPlayerName, setPlayerName, getInviteCode } from '../systems/metaProgression.js';
 import { generateRandomName } from '../systems/nameGenerator.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
@@ -10,6 +11,7 @@ import {
     createMenuParticles,
     createAnimatedTitle
 } from '../config/uiConfig.js';
+import { createTabs } from '../config/uiComponents.js';
 
 /**
  * Show reset confirmation dialog
@@ -887,27 +889,30 @@ export function setupSettingsScene(k) {
             return y + itemSpacing;
         }
         
+        // Button sizes
+        const { MD, SM } = UI_SIZES.BUTTON;
+
         // Reset button (created outside refreshSettings to avoid destruction on refresh)
         const resetButton = k.add([
-            k.rect(150, 35),
-            k.pos(k.width() / 2, k.height() - 80),
+            k.rect(MD.width, MD.height),
+            k.pos(k.width() / 2 + 80, k.height() - 40),
             k.anchor('center'),
-            k.color(100, 50, 50),
-            k.outline(2, k.rgb(150, 100, 100)),
+            k.color(...UI_COLORS.DANGER),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
-        
+
         const resetText = k.add([
-            k.text('Reset to Defaults', { size: 14 }),
-            k.pos(k.width() / 2, k.height() - 80),
+            k.text('RESET', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2 + 80, k.height() - 40),
             k.anchor('center'),
-            k.color(255, 200, 200),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
         resetButton.onClick(() => {
             // Show confirmation dialog
             showResetConfirmationDialog(k, () => {
@@ -915,14 +920,14 @@ export function setupSettingsScene(k) {
                 refreshSettings();
             });
         });
-        
+
         // Initial refresh
         refreshSettings();
-        
-        // Back button (standardized, matches other menus)
+
+        // Back button (SM size - secondary action)
         const backButton = k.add([
-            k.rect(120, 35),
-            k.pos(k.width() / 2, k.height() - 40),
+            k.rect(SM.width, SM.height),
+            k.pos(k.width() / 2 - 80, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -930,10 +935,10 @@ export function setupSettingsScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
-        
+
         const backText = k.add([
-            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 40),
+            k.text('BACK', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2 - 80, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),

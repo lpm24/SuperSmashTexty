@@ -2,6 +2,7 @@ import { isValidInviteCode } from '../systems/nameGenerator.js';
 import { joinPartyAsClient, restoreLocalPlayerToSoloParty, getPlayerName, getInviteCode, getSelectedCharacter } from '../systems/partySystem.js';
 import { playMenuNav, playMenuSelect } from '../systems/sounds.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS
@@ -195,12 +196,13 @@ export function initJoinPartyScene(k) {
             }
         }
 
-        // Cancel button
+        // Cancel button (MD size - secondary action)
+        const { MD } = UI_SIZES.BUTTON;
         const cancelButton = k.add([
-            k.rect(200, 50),
+            k.rect(MD.width, MD.height),
             k.pos(k.width() / 2, k.height() - 180),
             k.anchor('center'),
-            k.color(...UI_COLORS.SECONDARY),
+            k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
@@ -208,10 +210,10 @@ export function initJoinPartyScene(k) {
         ]);
 
         const cancelText = k.add([
-            k.text('Cancel', { size: UI_TEXT_SIZES.BUTTON }),
+            k.text('CANCEL', { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2, k.height() - 180),
             k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(11)
         ]);
@@ -227,12 +229,12 @@ export function initJoinPartyScene(k) {
 
         cancelButton.onHoverUpdate(() => {
             if (!isJoining) {
-                cancelButton.color = k.rgb(...UI_COLORS.SECONDARY_HOVER);
+                cancelButton.color = k.rgb(...UI_COLORS.NEUTRAL_HOVER);
             }
         });
 
         cancelButton.onHoverEnd(() => {
-            cancelButton.color = k.rgb(...UI_COLORS.SECONDARY);
+            cancelButton.color = k.rgb(...UI_COLORS.NEUTRAL);
         });
     });
 }

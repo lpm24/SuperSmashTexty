@@ -13,11 +13,14 @@ import { calculateScore, submitScore, formatScore } from '../systems/leaderboard
 import { getGlobalRank } from '../systems/onlineLeaderboards.js';
 import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
-    UI_TERMS
+    UI_TERMS,
+    createProgressBar
 } from '../config/uiConfig.js';
+import { createButton } from '../config/uiComponents.js';
 
 // Get enemy name from data files, with fallback to type key
 function getEnemyName(type) {
@@ -626,61 +629,85 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Controls - Buttons
+        // Controls - Buttons using standardized sizes
         const inMultiplayer = isMultiplayerActive();
         const isHostPlayer = isHost();
 
-        const buttonY = k.height() - 45;
-        const buttonWidth = 140;
-        const buttonHeight = 36;
+        const buttonY = k.height() - 40;
+        const { LG, SM } = UI_SIZES.BUTTON;
 
         // Play Again button
         const playAgainEnabled = !inMultiplayer || isHostPlayer;
         const playAgainText = inMultiplayer && !isHostPlayer
             ? 'Waiting...'
-            : 'Play Again';
+            : 'PLAY AGAIN';
 
-        // Play Again button background
+        // Play Again button (LG size) - primary CTA
         const playAgainBg = k.add([
-            k.rect(buttonWidth, buttonHeight),
+            k.rect(LG.width, LG.height),
             k.pos(k.width() / 2 - 80, buttonY),
             k.anchor('center'),
-            k.color(playAgainEnabled ? 60 : 40, playAgainEnabled ? 80 : 40, playAgainEnabled ? 60 : 40),
-            k.outline(2, k.rgb(playAgainEnabled ? 100 : 60, playAgainEnabled ? 200 : 80, playAgainEnabled ? 100 : 60)),
+            k.color(...(playAgainEnabled ? UI_COLORS.SUCCESS : UI_COLORS.BG_DISABLED)),
+            k.outline(2, k.rgb(...(playAgainEnabled ? UI_COLORS.BORDER : UI_COLORS.BG_DARK))),
             k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        k.add([
-            k.text(playAgainText, { size: 16 }),
+        const playAgainLabel = k.add([
+            k.text(playAgainText, { size: UI_TEXT_SIZES.H2 }),
             k.pos(k.width() / 2 - 80, buttonY),
             k.anchor('center'),
-            k.color(playAgainEnabled ? 150 : 80, playAgainEnabled ? 255 : 120, playAgainEnabled ? 150 : 80),
+            k.color(...(playAgainEnabled ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL + 1)
         ]);
 
-        // Menu button background
+        // Menu button (SM size) - secondary action
         const menuBg = k.add([
-            k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2 + 80, buttonY),
+            k.rect(SM.width, SM.height),
+            k.pos(k.width() / 2 + 130, buttonY),
             k.anchor('center'),
-            k.color(60, 60, 80),
-            k.outline(2, k.rgb(100, 100, 200)),
+            k.color(...UI_COLORS.NEUTRAL),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        k.add([
-            k.text('Menu', { size: 16 }),
-            k.pos(k.width() / 2 + 80, buttonY),
+        const menuLabel = k.add([
+            k.text('MENU', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2 + 130, buttonY),
             k.anchor('center'),
-            k.color(150, 150, 255),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL + 1)
         ]);
+
+        // Button hover effects
+        if (playAgainEnabled) {
+            playAgainBg.onHoverUpdate(() => {
+                playAgainBg.color = k.rgb(...UI_COLORS.SUCCESS_HOVER || [80, 180, 80]);
+                playAgainBg.scale = k.vec2(1.02, 1.02);
+                playAgainLabel.scale = k.vec2(1.02, 1.02);
+            });
+            playAgainBg.onHoverEnd(() => {
+                playAgainBg.color = k.rgb(...UI_COLORS.SUCCESS);
+                playAgainBg.scale = k.vec2(1, 1);
+                playAgainLabel.scale = k.vec2(1, 1);
+            });
+        }
+
+        menuBg.onHoverUpdate(() => {
+            menuBg.color = k.rgb(...UI_COLORS.NEUTRAL_HOVER);
+            menuBg.scale = k.vec2(1.02, 1.02);
+            menuLabel.scale = k.vec2(1.02, 1.02);
+        });
+        menuBg.onHoverEnd(() => {
+            menuBg.color = k.rgb(...UI_COLORS.NEUTRAL);
+            menuBg.scale = k.vec2(1, 1);
+            menuLabel.scale = k.vec2(1, 1);
+        });
 
         // Button click handlers
         if (playAgainEnabled) {
