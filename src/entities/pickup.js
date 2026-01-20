@@ -165,7 +165,7 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
     pickup.bounceDamping = 0.5; // Energy loss per bounce
     pickup.bouncing = true; // Whether still bouncing
 
-    // Visual effect - slight pulsing with rotation
+    // Visual effect - slight pulsing with rotation, and flashing before despawn
     pickup.onUpdate(() => {
         if (pickup.isFlyingToUI) {
             const targetPos = k.vec2(k.width() - 20, 20); // Currency UI position
@@ -177,7 +177,7 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
             }
             return;
         }
-        
+
         if (k.paused) {
             // Still allow animation during pause for visual feedback
             const pulse = Math.sin(pickup.age * PICKUP_CONFIG.CURRENCY_PULSE_SPEED) * PICKUP_CONFIG.CURRENCY_PULSE_AMOUNT;
@@ -190,6 +190,24 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
         // Pulse animation
         const pulse = Math.sin(pickup.age * PICKUP_CONFIG.CURRENCY_PULSE_SPEED) * PICKUP_CONFIG.CURRENCY_PULSE_AMOUNT;
         pickup.scale = k.vec2(1 + pulse);
+
+        // Flashing effect when about to despawn (last 4 seconds)
+        const timeRemaining = pickup.lifetime - pickup.age;
+        if (timeRemaining <= 4 && timeRemaining > 0) {
+            // Flash faster as time runs out: 4Hz at 4s, up to 12Hz at 0s
+            const flashSpeed = 4 + (4 - timeRemaining) * 2;
+            const flash = Math.sin(pickup.age * flashSpeed * Math.PI * 2);
+            // Opacity oscillates between 0.3 and 1.0
+            pickup.opacity = 0.65 + flash * 0.35;
+            // Also make it brighter/whiter when visible
+            if (flash > 0) {
+                pickup.color = k.rgb(255, 255, 200); // Bright gold/white flash
+            } else {
+                pickup.color = k.rgb(...PICKUP_CONFIG.CURRENCY_COLOR);
+            }
+        } else {
+            pickup.opacity = 1;
+        }
 
         // Bounce physics (only when not magnetizing)
         if (!pickup.magnetizing && pickup.bouncing) {

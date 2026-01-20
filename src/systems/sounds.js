@@ -7,13 +7,22 @@
 let audioContext = null;
 
 // Master volume control
-let masterVolume = 0.3;
+let masterVolume = 1.0;
 
 // Music volume control (separate from SFX)
 let musicVolume = 1.0;
 
+// SFX volume control (separate from music)
+let sfxVolume = 1.0;
+
 // Sound enabled flag
 let soundEnabled = true;
+
+// UI sounds enabled (menu clicks, notifications)
+let uiSoundsEnabled = true;
+
+// Combat sounds enabled (hit sounds, abilities)
+let combatSoundsEnabled = true;
 
 // Music playback state
 let currentMusic = null;
@@ -23,7 +32,8 @@ let musicEnabled = true;
 // Music file paths (relative to public folder)
 const MUSIC_TRACKS = {
     menu: './audio/menu-theme.mp3',
-    combat: './audio/combat-theme.mp3'
+    combat: './audio/combat-theme.mp3',
+    defeat: './audio/defeat-theme.mp3'
 };
 
 // Preloaded audio buffers
@@ -40,11 +50,29 @@ export function initAudio() {
 }
 
 /**
+ * Resume audio context if suspended (required for browser autoplay policy)
+ * Call this on first user interaction to enable audio
+ */
+export function resumeAudioContext() {
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume().then(() => {
+      console.log('[Audio] AudioContext resumed');
+    }).catch(err => {
+      console.warn('[Audio] Failed to resume AudioContext:', err);
+    });
+  }
+}
+
+/**
  * Get or create audio context
  */
 function getAudioContext() {
   if (!audioContext) {
     initAudio();
+  }
+  // Auto-resume if suspended
+  if (audioContext && audioContext.state === 'suspended') {
+    audioContext.resume();
   }
   return audioContext;
 }
@@ -54,6 +82,45 @@ function getAudioContext() {
  */
 export function setMasterVolume(volume) {
   masterVolume = Math.max(0, Math.min(1, volume));
+  // Update music volume to reflect master change
+  if (currentMusic) {
+    currentMusic.volume = musicVolume * masterVolume;
+  }
+}
+
+/**
+ * Get master volume
+ */
+export function getMasterVolume() {
+  return masterVolume;
+}
+
+/**
+ * Set SFX volume (0.0 to 1.0)
+ */
+export function setSfxVolume(volume) {
+  sfxVolume = Math.max(0, Math.min(1, volume));
+}
+
+/**
+ * Get SFX volume
+ */
+export function getSfxVolume() {
+  return sfxVolume;
+}
+
+/**
+ * Enable or disable UI sounds
+ */
+export function setUiSoundsEnabled(enabled) {
+  uiSoundsEnabled = enabled;
+}
+
+/**
+ * Enable or disable combat sounds
+ */
+export function setCombatSoundsEnabled(enabled) {
+  combatSoundsEnabled = enabled;
 }
 
 /**
@@ -69,10 +136,14 @@ export function setSoundEnabled(enabled) {
  * @param {number} duration - Duration in seconds
  * @param {string} type - Oscillator type ('sine', 'square', 'sawtooth', 'triangle')
  * @param {number} volume - Volume (0.0 to 1.0)
- * @param {object} options - Additional options (attack, decay, pitchBend, etc.)
+ * @param {object} options - Additional options (attack, decay, pitchBend, isUI, etc.)
  */
 function playTone(frequency, duration, type = 'square', volume = 0.3, options = {}) {
   if (!soundEnabled) return;
+
+  // Check if this is a UI sound or combat sound and if those are disabled
+  if (options.isUI && !uiSoundsEnabled) return;
+  if (options.isCombat && !combatSoundsEnabled) return;
 
   const ctx = getAudioContext();
   const now = ctx.currentTime;
@@ -92,7 +163,8 @@ function playTone(frequency, duration, type = 'square', volume = 0.3, options = 
 
   // Create gain node for volume envelope
   const gainNode = ctx.createGain();
-  const finalVolume = volume * masterVolume;
+  // Apply all volume multipliers: base volume * sfx volume * master volume
+  const finalVolume = volume * sfxVolume * masterVolume;
 
   // Attack
   const attack = options.attack || 0.01;
@@ -122,6 +194,9 @@ function playTone(frequency, duration, type = 'square', volume = 0.3, options = 
 function playNoise(duration, volume = 0.3, options = {}) {
   if (!soundEnabled) return;
 
+  // Check if this is a combat sound and if those are disabled
+  if (options.isCombat && !combatSoundsEnabled) return;
+
   const ctx = getAudioContext();
   const now = ctx.currentTime;
 
@@ -145,7 +220,8 @@ function playNoise(duration, volume = 0.3, options = {}) {
 
   // Create gain node
   const gainNode = ctx.createGain();
-  const finalVolume = volume * masterVolume;
+  // Apply all volume multipliers: base volume * sfx volume * master volume
+  const finalVolume = volume * sfxVolume * masterVolume;
 
   const attack = options.attack || 0.01;
   const decay = options.decay || 0.1;
@@ -884,6 +960,13 @@ export function playMenuMusic() {
  */
 export function playCombatMusic() {
     playMusicTrack('combat');
+}
+
+/**
+ * Play defeat/game over theme music
+ */
+export function playDefeatMusic() {
+    playMusicTrack('defeat');
 }
 
 /**

@@ -8,6 +8,7 @@ import { setupStatisticsScene } from './scenes/statistics.js';
 import { setupCharacterSelectScene } from './scenes/characterSelect.js';
 import { initJoinPartyScene } from './scenes/joinParty.js';
 import { setupLeaderboardsScene } from './scenes/leaderboards.js';
+import { setupProfileScene } from './scenes/profile.js';
 import { GAME_CONFIG } from './config/constants.js';
 
 // Initialize KAPLAY
@@ -33,6 +34,7 @@ setupStatisticsScene(k);
 setupCharacterSelectScene(k);
 initJoinPartyScene(k);
 setupLeaderboardsScene(k);
+setupProfileScene(k);
 
 // Start with menu
 k.go('menu');

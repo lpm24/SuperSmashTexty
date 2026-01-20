@@ -8,7 +8,9 @@ const DEFAULT_SETTINGS = {
     audio: {
         masterVolume: 1.0, // 0.0 to 1.0
         sfxVolume: 1.0,
-        musicVolume: 1.0
+        musicVolume: 0.35, // 35% default for new players
+        uiSounds: true,
+        combatSounds: true
     },
     controls: {
         // Key bindings (stored as key codes/names)
@@ -24,10 +26,22 @@ const DEFAULT_SETTINGS = {
         showScreenShake: true,
         showHitFreeze: true,
         showDamageNumbers: true,
-        compactHUD: false
+        compactHUD: false,
+        showFPS: false,
+        showTimer: true
     },
     gameplay: {
-        autoPause: false // Auto-pause on level up (already implemented, but can be toggled)
+        autoPause: false, // Auto-pause on level up
+        autoPickupCurrency: false,
+        autoPickupXP: false,
+        confirmBeforeQuit: true,
+        skipIntroAnimation: false
+    },
+    accessibility: {
+        colorblindMode: 'off', // 'off', 'deuteranopia', 'protanopia', 'tritanopia'
+        reducedMotion: false,
+        largeText: false,
+        highContrast: false
     }
 };
 

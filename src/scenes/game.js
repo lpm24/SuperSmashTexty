@@ -22,6 +22,7 @@ import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon, createPowe
 import { createDoor } from '../entities/door.js';
 import { createObstacle } from '../entities/obstacle.js';
 import { createProjectile } from '../entities/projectile.js';
+import { createBarrel, clearAllBarrels, handleProjectileBarrelCollision, findBarrelByPosition, getAllBarrels } from '../entities/barrel.js';
 
 // System imports
 import { SpatialGrid } from '../systems/spatialGrid.js';
@@ -32,7 +33,7 @@ import { getRandomEnemyType } from '../systems/enemySpawn.js';
 import { tryMakeElite } from '../systems/eliteSystem.js';
 import { showMovementHint, showLevelUpHint } from '../systems/tutorial.js';
 import { SeededRandom } from '../utils/seededRandom.js';
-import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey } from '../systems/roomGeneration.js';
+import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey, getBarrelPositions } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics } from '../systems/metaProgression.js';
@@ -260,6 +261,9 @@ export function setupGameScene(k) {
         // ==========================================
         // LEGACY STATE (keeping for now)
         // ==========================================
+
+        // Clear barrels from previous room/run
+        clearAllBarrels();
 
         // Reset game state on new game (when coming from menu)
         if (args?.resetState) {
@@ -1638,7 +1642,44 @@ export function setupGameScene(k) {
                 });
             }
         }
-        
+
+        // Spawn explosive barrels (not in first room or boss rooms)
+        if (!isFirstRoom && !isBossRoom && shouldCreateObstacles) {
+            const barrelPositions = getBarrelPositions(roomTemplate.key, getSeededRoomRNG(), currentFloor);
+
+            barrelPositions.forEach(pos => {
+                // Check if barrel would overlap with player spawn or entrance
+                const distToSpawn = Math.sqrt(
+                    Math.pow(pos.x - playerSpawnX, 2) +
+                    Math.pow(pos.y - playerSpawnY, 2)
+                );
+                const distToEntrance = Math.sqrt(
+                    Math.pow(pos.x - entranceDoorX, 2) +
+                    Math.pow(pos.y - entranceDoorY, 2)
+                );
+
+                // Skip if too close to spawn or entrance
+                if (distToSpawn < safeZoneRadius + 25 || distToEntrance < safeZoneRadius + 25) {
+                    return;
+                }
+
+                // Check for overlap with obstacles
+                let overlapsObstacle = false;
+                obstacles.forEach(obs => {
+                    if (!obs.exists()) return;
+                    const dist = Math.sqrt(
+                        Math.pow(pos.x - obs.pos.x, 2) +
+                        Math.pow(pos.y - obs.pos.y, 2)
+                    );
+                    if (dist < 50) overlapsObstacle = true;
+                });
+
+                if (!overlapsObstacle) {
+                    createBarrel(k, pos.x, pos.y);
+                }
+            });
+        }
+
         // HUD
         // Top-left panel background (outside room boundary)
         const topLeftPanelBg = k.add([
@@ -4017,6 +4058,25 @@ export function setupGameScene(k) {
                     );
                 }
             });
+
+            // Client-side: listen for barrel damage from host
+            onMessage('barrel_damage', (data) => {
+                const barrel = findBarrelByPosition(data.x, data.y);
+                if (barrel && barrel.exists() && !barrel.isExploding) {
+                    // Sync health directly (more reliable than applying damage)
+                    barrel.currentHealth = data.currentHealth;
+                    barrel.updateHealthBar();
+                }
+            });
+
+            // Client-side: listen for barrel explosions from host
+            onMessage('barrel_explode', (data) => {
+                const barrel = findBarrelByPosition(data.x, data.y);
+                if (barrel && barrel.exists() && !barrel.isExploding) {
+                    // Trigger local explosion (won't broadcast since we're not host)
+                    barrel.explode();
+                }
+            });
         }
 
         // Handle door interaction (proximity-based)
@@ -4127,7 +4187,7 @@ export function setupGameScene(k) {
                         }
                     }
                 } else {
-                    // Single player: instant transition
+                    // Single player: use progress bar like multiplayer
                     // Skip if player is dead (prevent race condition with game over)
                     if (player.isDead || player.hp() <= 0) return;
 
@@ -4136,10 +4196,62 @@ export function setupGameScene(k) {
                         player.pos.y - door.pos.y
                     ).len();
 
-                    if (distance <= 40) {
-                        doorEntered = true;
-                        playDoorOpen();
-                        handleDoorEntry(door.direction);
+                    const inRange = distance <= 40;
+
+                    if (inRange) {
+                        // Initialize progress bar if new door
+                        if (doorProgressDoor !== door) {
+                            doorProgressTime = 0;
+                            doorProgressDoor = door;
+                            doorProgressIsForced = false;
+
+                            if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                            if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+
+                            doorProgressBg = k.add([
+                                k.circle(20),
+                                k.pos(door.pos.x, door.pos.y),
+                                k.anchor('center'),
+                                k.color(80, 80, 80),
+                                k.opacity(0.8),
+                                k.z(200),
+                                'doorProgress'
+                            ]);
+
+                            doorProgressCircle = k.add([
+                                k.circle(18),
+                                k.pos(door.pos.x, door.pos.y),
+                                k.anchor('center'),
+                                k.color(100, 255, 100), // Green for single player
+                                k.opacity(0),
+                                k.z(201),
+                                'doorProgress'
+                            ]);
+                        }
+
+                        doorProgressTime += k.dt();
+                        const progress = Math.min(doorProgressTime / DOOR_PROGRESS_DURATION, 1);
+
+                        if (doorProgressCircle && doorProgressCircle.exists()) {
+                            doorProgressCircle.opacity = progress;
+                            doorProgressCircle.scale = k.vec2(progress, progress);
+                        }
+
+                        if (progress >= 1) {
+                            doorEntered = true;
+                            playDoorOpen();
+                            if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                            if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
+                            doorProgressDoor = null;
+                            handleDoorEntry(door.direction);
+                        }
+                    } else if (doorProgressDoor === door) {
+                        // Player left door range - reset progress
+                        doorProgressTime = 0;
+                        doorProgressDoor = null;
+                        doorProgressIsForced = false;
+                        if (doorProgressBg && doorProgressBg.exists()) k.destroy(doorProgressBg);
+                        if (doorProgressCircle && doorProgressCircle.exists()) k.destroy(doorProgressCircle);
                     }
                 }
             });

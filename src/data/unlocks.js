@@ -218,7 +218,7 @@ export const WEAPON_UNLOCKS = {
     }
 };
 
-// Cosmetic unlocks - visual customizations
+// Cosmetic unlocks - visual customizations (unlocked via achievements)
 export const COSMETIC_UNLOCKS = {
     // === Player Trails ===
     trailNone: {
@@ -231,42 +231,47 @@ export const COSMETIC_UNLOCKS = {
     trailFire: {
         name: 'Fire Trail',
         description: 'Leave a blazing trail behind you',
-        cost: 150,
+        cost: 0,
         unlockedByDefault: false,
         category: 'trail',
-        color: [255, 100, 50]
+        color: [255, 100, 50],
+        requiredAchievement: 'kill100'
     },
     trailIce: {
         name: 'Ice Trail',
         description: 'Leave a frosty trail behind you',
-        cost: 150,
+        cost: 0,
         unlockedByDefault: false,
         category: 'trail',
-        color: [100, 200, 255]
+        color: [100, 200, 255],
+        requiredAchievement: 'floor5'
     },
     trailPoison: {
         name: 'Toxic Trail',
         description: 'Leave a poisonous trail behind you',
-        cost: 150,
+        cost: 0,
         unlockedByDefault: false,
         category: 'trail',
-        color: [100, 255, 100]
+        color: [100, 255, 100],
+        requiredAchievement: 'kill500'
     },
     trailShadow: {
         name: 'Shadow Trail',
         description: 'Leave a dark trail behind you',
-        cost: 200,
+        cost: 0,
         unlockedByDefault: false,
         category: 'trail',
-        color: [80, 50, 120]
+        color: [80, 50, 120],
+        requiredAchievement: 'firstSynergy'
     },
     trailRainbow: {
         name: 'Rainbow Trail',
         description: 'Leave a colorful trail behind you',
-        cost: 400,
+        cost: 0,
         unlockedByDefault: false,
         category: 'trail',
-        color: 'rainbow'
+        color: 'rainbow',
+        requiredAchievement: 'synergyMaster'
     },
 
     // === Death Effects ===
@@ -280,30 +285,34 @@ export const COSMETIC_UNLOCKS = {
     deathExplosion: {
         name: 'Explosive Death',
         description: 'Enemies explode dramatically',
-        cost: 200,
+        cost: 0,
         unlockedByDefault: false,
-        category: 'death'
+        category: 'death',
+        requiredAchievement: 'firstBoss'
     },
     deathDisintegrate: {
         name: 'Disintegration',
         description: 'Enemies crumble into particles',
-        cost: 200,
+        cost: 0,
         unlockedByDefault: false,
-        category: 'death'
+        category: 'death',
+        requiredAchievement: 'boss5'
     },
     deathVaporize: {
         name: 'Vaporize',
         description: 'Enemies vanish in a puff of smoke',
-        cost: 250,
+        cost: 0,
         unlockedByDefault: false,
-        category: 'death'
+        category: 'death',
+        requiredAchievement: 'killStreak10'
     },
     deathPixelate: {
         name: 'Pixelate',
         description: 'Enemies break into pixels',
-        cost: 300,
+        cost: 0,
         unlockedByDefault: false,
-        category: 'death'
+        category: 'death',
+        requiredAchievement: 'multikill'
     },
 
     // === Player Glow ===
@@ -317,34 +326,38 @@ export const COSMETIC_UNLOCKS = {
     glowGold: {
         name: 'Golden Aura',
         description: 'Radiate a golden glow',
-        cost: 300,
+        cost: 0,
         unlockedByDefault: false,
         category: 'glow',
-        color: [255, 200, 50]
+        color: [255, 200, 50],
+        requiredAchievement: 'earn500'
     },
     glowCrimson: {
         name: 'Crimson Aura',
         description: 'Radiate a blood-red glow',
-        cost: 300,
+        cost: 0,
         unlockedByDefault: false,
         category: 'glow',
-        color: [200, 50, 50]
+        color: [200, 50, 50],
+        requiredAchievement: 'closeCall'
     },
     glowElectric: {
         name: 'Electric Aura',
         description: 'Crackle with electricity',
-        cost: 350,
+        cost: 0,
         unlockedByDefault: false,
         category: 'glow',
-        color: [100, 150, 255]
+        color: [100, 150, 255],
+        requiredAchievement: 'speedRunner'
     },
     glowVoid: {
         name: 'Void Aura',
         description: 'Emanate dark energy',
-        cost: 500,
+        cost: 0,
         unlockedByDefault: false,
         category: 'glow',
-        color: [50, 0, 80]
+        color: [50, 0, 80],
+        requiredAchievement: 'perfectFloor'
     }
 };
 

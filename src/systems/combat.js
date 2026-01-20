@@ -507,6 +507,33 @@ export function setupCombatSystem(k, player) {
         }
     });
 
+    // Collision: Projectile hits Barrel (damages barrel, can cause explosion)
+    k.onCollide('projectile', 'barrel', (projectile, barrel) => {
+        if (k.paused) return;
+        if (!barrel.exists() || barrel.isExploding) return;
+
+        // Only player projectiles damage barrels
+        if (projectile.isEnemyProjectile || projectile.isBossProjectile) {
+            return;
+        }
+
+        // Damage the barrel
+        if (barrel.takeDamage) {
+            barrel.takeDamage(1);
+        }
+
+        // Handle projectile destruction based on piercing
+        if (projectile.piercing > 0 || projectile.obstaclePiercing > 0) {
+            // Piercing projectiles continue through
+            if (projectile.piercedObstacles) {
+                projectile.piercedObstacles.add(barrel);
+            }
+        } else if (!projectile.isExplosive) {
+            // Non-piercing, non-explosive projectiles are destroyed
+            if (projectile.exists()) k.destroy(projectile);
+        }
+    });
+
     // Collision: Projectile hits Enemy (consolidated handler for all projectile types)
     k.onCollide('projectile', 'enemy', (projectile, enemy) => {
         if (k.paused) return;

@@ -1,7 +1,7 @@
 // Shop scene - allows players to purchase unlocks
-import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked, purchaseBooster, getActiveBoostersCount, getEquippedCosmetic, setEquippedCosmetic } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked, purchaseBooster, getActiveBoostersCount, getEquippedCosmetic, setEquippedCosmetic, getSaveStats } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS, COSMETIC_UNLOCKS, RUN_BOOSTER_UNLOCKS } from '../data/unlocks.js';
-import { getAchievementById } from '../data/achievements.js';
+import { getAchievementById, getAchievementProgress } from '../data/achievements.js';
 import { showAchievementModal } from '../components/achievementModal.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
 import {
@@ -118,6 +118,9 @@ export function setupShopScene(k) {
 
         // Flag to prevent multiple simultaneous purchases
         let isPurchasing = false;
+
+        // Flag to prevent double-handling of pagination clicks in same frame
+        let paginationClickHandled = false;
         
         // Refresh shop display
         function refreshShop() {
@@ -233,7 +236,9 @@ export function setupShopScene(k) {
                 const isUnlockedChar = currentCategory === 'characters' && isUnlocked('characters', key);
                 const isUnlockedWeapon = currentCategory === 'weapons' && isUnlocked('weapons', key);
                 const isMaxedUpgrade = currentCategory === 'permanentUpgrades' && getPermanentUpgradeLevel(key) >= (unlock.maxLevel || 1);
-                const isOwnedCosmetic = currentCategory === 'cosmetics' && (isUnlocked('cosmetics', key) || unlock.unlockedByDefault);
+                // Cosmetics are "owned" if: default, purchased, OR achievement requirement is met
+                const isCosmeticAchievementUnlocked = currentCategory === 'cosmetics' && unlock.requiredAchievement && !isAchievementLocked;
+                const isOwnedCosmetic = currentCategory === 'cosmetics' && (isUnlocked('cosmetics', key) || unlock.unlockedByDefault || isCosmeticAchievementUnlocked);
                 const isEquippedCosmetic = currentCategory === 'cosmetics' && getEquippedCosmetic(unlock.category) === key;
 
                 // Card border color based on status
@@ -294,13 +299,16 @@ export function setupShopScene(k) {
                 if (currentCategory === 'cosmetics') {
                     const cosmeticIcon = unlock.category === 'trail' ? '~' : unlock.category === 'death' ? '✕' : '○';
                     // Get a safe color array (handles 'rainbow' string and missing colors)
-                    const cosmeticColor = Array.isArray(unlock.color) ? unlock.color : [150, 150, 200];
+                    const baseColor = Array.isArray(unlock.color) ? unlock.color : [150, 150, 200];
+                    // Dim the color when achievement-locked
+                    const cosmeticColor = isAchievementLocked ? [60, 60, 70] : baseColor;
+                    const borderColor = isAchievementLocked ? [50, 50, 60] : baseColor;
                     const iconBg = k.add([
                         k.rect(36, 36),
                         k.pos(itemX + 8, itemY + 8),
                         k.anchor('topleft'),
                         k.color(25, 25, 35),
-                        k.outline(1, k.rgb(...cosmeticColor)),
+                        k.outline(1, k.rgb(...borderColor)),
                         k.fixed(),
                         k.z(1001)
                     ]);
@@ -356,18 +364,61 @@ export function setupShopScene(k) {
                 // === MIDDLE ROW: Description (constrained to 2 lines max) ===
                 const descWidth = cardWidth - contentStartX + itemX - 90; // Leave room for button
                 const descY = itemY + 30;
-                const descriptionText = isAchievementLocked
-                    ? `Requires: ${requiredAchievement?.name || 'Achievement'}`
-                    : unlock.description;
+
+                // Build description text with achievement progress for locked items
+                let descriptionText = unlock.description;
+                let achievementProgress = null;
+                if (isAchievementLocked && requiredAchievement) {
+                    const stats = getSaveStats();
+                    achievementProgress = getAchievementProgress(requiredAchievement.id, stats);
+                    if (achievementProgress) {
+                        descriptionText = `${requiredAchievement.name} (${achievementProgress.current}/${achievementProgress.target})`;
+                    } else {
+                        descriptionText = `Requires: ${requiredAchievement.name}`;
+                    }
+                }
 
                 const descText = k.add([
                     k.text(descriptionText, { size: 12, width: descWidth }),
                     k.pos(contentStartX, descY),
                     k.anchor('topleft'),
-                    k.color(isAchievementLocked ? 120 : 180, isAchievementLocked ? 90 : 180, isAchievementLocked ? 90 : 180),
+                    k.color(isAchievementLocked ? 140 : 180, isAchievementLocked ? 110 : 180, isAchievementLocked ? 110 : 180),
                     k.fixed(),
                     k.z(1001)
                 ]);
+
+                // Show mini progress bar for achievement-locked items with trackable progress
+                if (isAchievementLocked && achievementProgress && achievementProgress.target > 1) {
+                    const miniBarWidth = Math.min(descWidth, 120);
+                    const miniBarHeight = 4;
+                    const miniBarX = contentStartX;
+                    const miniBarY = descY + 18;
+
+                    // Background bar
+                    const miniBarBg = k.add([
+                        k.rect(miniBarWidth, miniBarHeight),
+                        k.pos(miniBarX, miniBarY),
+                        k.anchor('topleft'),
+                        k.color(40, 35, 45),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    unlockItems.push(miniBarBg);
+
+                    // Filled portion
+                    const fillWidth = Math.max(0, achievementProgress.progress * miniBarWidth);
+                    if (fillWidth > 0) {
+                        const miniBarFill = k.add([
+                            k.rect(fillWidth, miniBarHeight),
+                            k.pos(miniBarX, miniBarY),
+                            k.anchor('topleft'),
+                            k.color(100, 80, 130),
+                            k.fixed(),
+                            k.z(1002)
+                        ]);
+                        unlockItems.push(miniBarFill);
+                    }
+                }
                 
                 // === BOTTOM ROW: Status/Progress + Action Button ===
                 const bottomY = itemY + cardHeight - 28;
@@ -412,10 +463,13 @@ export function setupShopScene(k) {
                     if (isEquippedCosmetic) {
                         statusText = 'EQUIPPED';
                     } else if (isOwnedCosmetic) {
-                        statusText = 'OWNED';
-                    } else {
+                        // Differentiate between achievement-unlocked and purchased
+                        statusText = isCosmeticAchievementUnlocked ? 'UNLOCKED' : 'OWNED';
+                    } else if (!isAchievementLocked) {
+                        // Only show purchase option if not achievement-locked
                         canPurchase = currency >= purchaseCost;
                     }
+                    // If achievement-locked, no status text needed (VIEW button handles it)
                 } else if (currentCategory === 'characters') {
                     if (!isUnlockedChar) {
                         canPurchase = currency >= purchaseCost;
@@ -474,22 +528,34 @@ export function setupShopScene(k) {
                 // Status text (for non-progress items)
                 let statusLabel = null;
                 if (statusText && !showProgressBar) {
+                    // Color based on status type
+                    let statusColor;
+                    switch (statusText) {
+                        case 'EQUIPPED':
+                            statusColor = [100, 200, 255]; // Cyan for equipped
+                            break;
+                        case 'UNLOCKED':
+                            statusColor = [180, 140, 255]; // Purple for achievement-unlocked
+                            break;
+                        case 'MAXED':
+                        case 'OWNED':
+                            statusColor = [100, 200, 100]; // Green for owned/maxed
+                            break;
+                        default:
+                            statusColor = [180, 180, 180]; // Gray default
+                    }
                     statusLabel = k.add([
                         k.text(statusText, { size: 11 }),
                         k.pos(contentStartX, bottomY + 7),
                         k.anchor('topleft'),
-                        k.color(
-                            statusText === 'EQUIPPED' ? 100 : statusText === 'MAXED' || statusText === 'OWNED' ? 100 : 180,
-                            statusText === 'EQUIPPED' ? 200 : statusText === 'MAXED' || statusText === 'OWNED' ? 200 : 180,
-                            statusText === 'EQUIPPED' ? 255 : statusText === 'MAXED' || statusText === 'OWNED' ? 100 : 180
-                        ),
+                        k.color(...statusColor),
                         k.fixed(),
                         k.z(1001)
                     ]);
                 }
                 
                 // Purchase button or View Achievement button
-                if (isAchievementLocked) {
+                if (isAchievementLocked && requiredAchievement) {
                     // Show "View" button for achievement-locked items
                     const viewButtonBg = k.add([
                         k.rect(buttonWidth, buttonHeight),
@@ -497,9 +563,9 @@ export function setupShopScene(k) {
                         k.anchor('topleft'),
                         k.color(50, 40, 60),
                         k.outline(1, k.rgb(100, 80, 130)),
-                        k.area(),
+                        k.area({ width: buttonWidth, height: buttonHeight }),
                         k.fixed(),
-                        k.z(1001)
+                        k.z(1010)
                     ]);
 
                     const viewButtonText = k.add([
@@ -508,18 +574,41 @@ export function setupShopScene(k) {
                         k.anchor('center'),
                         k.color(160, 130, 200),
                         k.fixed(),
-                        k.z(1002)
+                        k.z(1011)
                     ]);
 
+                    // Hover effects for better feedback
+                    viewButtonBg.onHover(() => {
+                        viewButtonBg.color = k.rgb(70, 55, 85);
+                        viewButtonBg.outline.color = k.rgb(140, 110, 180);
+                        viewButtonText.color = k.rgb(200, 170, 255);
+                    });
+                    viewButtonBg.onHoverEnd(() => {
+                        viewButtonBg.color = k.rgb(50, 40, 60);
+                        viewButtonBg.outline.color = k.rgb(100, 80, 130);
+                        viewButtonText.color = k.rgb(160, 130, 200);
+                    });
+
+                    // Store achievement reference for closure
+                    const achievementToShow = requiredAchievement;
                     viewButtonBg.onClick(() => {
                         playMenuNav();
-                        if (requiredAchievement) {
-                            showAchievementModal(k, requiredAchievement);
-                        }
+                        showAchievementModal(k, achievementToShow);
                     });
                     viewButtonBg.cursor = 'pointer';
 
                     unlockItems.push(viewButtonBg, viewButtonText);
+                } else if (isAchievementLocked) {
+                    // Achievement locked but no specific achievement found - show locked status
+                    const lockedText = k.add([
+                        k.text('LOCKED', { size: 11 }),
+                        k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
+                        k.anchor('center'),
+                        k.color(100, 80, 80),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+                    unlockItems.push(lockedText);
                 } else if (canPurchase || (currentCategory === 'permanentUpgrades' && progressLevel < progressMax)) {
                     const buttonBg = k.add([
                         k.rect(buttonWidth, buttonHeight),
@@ -735,13 +824,76 @@ export function setupShopScene(k) {
                         k.z(1002)
                     ]);
 
-                    equipButtonBg.onClick(() => {
-                        playMenuNav();
-                        setEquippedCosmetic(unlock.category, key);
-                        refreshShop();
+                    // Hover effects
+                    equipButtonBg.onHover(() => {
+                        equipButtonBg.color = k.rgb(50, 100, 150);
+                        equipButtonBg.outline.color = k.rgb(100, 170, 240);
+                        equipButtonText.color = k.rgb(230, 245, 255);
+                    });
+                    equipButtonBg.onHoverEnd(() => {
+                        equipButtonBg.color = k.rgb(40, 80, 120);
+                        equipButtonBg.outline.color = k.rgb(80, 140, 200);
+                        equipButtonText.color = k.rgb(200, 230, 255);
                     });
 
+                    equipButtonBg.onClick(() => {
+                        if (isPurchasing) return;
+                        isPurchasing = true;
+                        playMenuNav();
+                        setEquippedCosmetic(unlock.category, key);
+                        isPurchasing = false;
+                        refreshShop();
+                    });
+                    equipButtonBg.cursor = 'pointer';
+
                     unlockItems.push(equipButtonBg, equipButtonText);
+                } else if (currentCategory === 'cosmetics' && isEquippedCosmetic && !key.includes('None')) {
+                    // Show UNEQUIP button for equipped cosmetics (except default "None" cosmetics)
+                    const unequipButtonBg = k.add([
+                        k.rect(buttonWidth, buttonHeight),
+                        k.pos(buttonX, bottomY),
+                        k.anchor('topleft'),
+                        k.color(80, 50, 50),
+                        k.outline(1, k.rgb(160, 100, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(1001)
+                    ]);
+
+                    const unequipButtonText = k.add([
+                        k.text('UNEQUIP', { size: 11 }),
+                        k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
+                        k.anchor('center'),
+                        k.color(255, 180, 180),
+                        k.fixed(),
+                        k.z(1002)
+                    ]);
+
+                    // Hover effects
+                    unequipButtonBg.onHover(() => {
+                        unequipButtonBg.color = k.rgb(100, 60, 60);
+                        unequipButtonBg.outline.color = k.rgb(200, 120, 120);
+                        unequipButtonText.color = k.rgb(255, 210, 210);
+                    });
+                    unequipButtonBg.onHoverEnd(() => {
+                        unequipButtonBg.color = k.rgb(80, 50, 50);
+                        unequipButtonBg.outline.color = k.rgb(160, 100, 100);
+                        unequipButtonText.color = k.rgb(255, 180, 180);
+                    });
+
+                    unequipButtonBg.onClick(() => {
+                        if (isPurchasing) return;
+                        isPurchasing = true;
+                        playMenuNav();
+                        // Reset to default "None" cosmetic for this category
+                        const noneKey = unlock.category + 'None';
+                        setEquippedCosmetic(unlock.category, noneKey);
+                        isPurchasing = false;
+                        refreshShop();
+                    });
+                    unequipButtonBg.cursor = 'pointer';
+
+                    unlockItems.push(unequipButtonBg, unequipButtonText);
                 }
 
                 // Push all items (only push statusLabel if it exists)
@@ -761,11 +913,80 @@ export function setupShopScene(k) {
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
                 const pipsEndX = paginationCenterX + ((totalPages - 1) * pipSpacing) / 2;
 
-                // Arrows positioned outside the pips with offset for pip clickable area (16px) + gap
-                const arrowOffset = 25;
+                // Arrows positioned well outside the pips to prevent overlap
+                const arrowOffset = 35;
                 const leftArrowX = pipsStartX - arrowOffset;
                 const rightArrowX = pipsEndX + arrowOffset;
 
+                // Left arrow FIRST (so it registers clicks before pips)
+                const leftArrowBg = k.add([
+                    k.rect(30, 30),
+                    k.pos(leftArrowX, paginationY),
+                    k.anchor('center'),
+                    k.color(0, 0, 0),
+                    k.opacity(0),
+                    k.area({ width: 30, height: 30 }),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 10)
+                ]);
+
+                const leftArrowText = k.add([
+                    k.text('<', { size: 24 }),
+                    k.pos(leftArrowX, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 10)
+                ]);
+
+                if (currentPage > 0) {
+                    leftArrowBg.onClick(() => {
+                        if (paginationClickHandled) return;
+                        paginationClickHandled = true;
+                        k.wait(0, () => { paginationClickHandled = false; });
+                        playMenuNav();
+                        currentPage--;
+                        refreshShop();
+                    });
+                    leftArrowBg.cursor = 'pointer';
+                }
+                paginationItems.push(leftArrowBg, leftArrowText);
+
+                // Right arrow SECOND (so it registers clicks before pips)
+                const rightArrowBg = k.add([
+                    k.rect(30, 30),
+                    k.pos(rightArrowX, paginationY),
+                    k.anchor('center'),
+                    k.color(0, 0, 0),
+                    k.opacity(0),
+                    k.area({ width: 30, height: 30 }),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 10)
+                ]);
+
+                const rightArrowText = k.add([
+                    k.text('>', { size: 24 }),
+                    k.pos(rightArrowX, paginationY),
+                    k.anchor('center'),
+                    k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 10)
+                ]);
+
+                if (currentPage < totalPages - 1) {
+                    rightArrowBg.onClick(() => {
+                        if (paginationClickHandled) return;
+                        paginationClickHandled = true;
+                        k.wait(0, () => { paginationClickHandled = false; });
+                        playMenuNav();
+                        currentPage++;
+                        refreshShop();
+                    });
+                    rightArrowBg.cursor = 'pointer';
+                }
+                paginationItems.push(rightArrowBg, rightArrowText);
+
+                // Page indicator pips LAST (lower z-index, won't interfere with arrows)
                 for (let i = 0; i < totalPages; i++) {
                     const isCurrentPage = i === currentPage;
                     const pipX = pipsStartX + i * pipSpacing;
@@ -792,6 +1013,9 @@ export function setupShopScene(k) {
 
                     const pageIndex = i;
                     pipBg.onClick(() => {
+                        if (paginationClickHandled) return;
+                        paginationClickHandled = true;
+                        k.wait(0, () => { paginationClickHandled = false; });
                         if (pageIndex !== currentPage) {
                             playMenuNav();
                             currentPage = pageIndex;
@@ -802,68 +1026,6 @@ export function setupShopScene(k) {
 
                     paginationItems.push(pipBg, pipText);
                 }
-
-                // Left arrow (higher z-index to sit on top and take priority)
-                const leftArrowBg = k.add([
-                    k.rect(30, 30),
-                    k.pos(leftArrowX, paginationY),
-                    k.anchor('center'),
-                    k.color(0, 0, 0),
-                    k.opacity(0),
-                    k.area({ width: 30, height: 30 }),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
-                ]);
-
-                const leftArrowText = k.add([
-                    k.text('<', { size: 24 }),
-                    k.pos(leftArrowX, paginationY),
-                    k.anchor('center'),
-                    k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                ]);
-
-                if (currentPage > 0) {
-                    leftArrowBg.onClick(() => {
-                        playMenuNav();
-                        currentPage--;
-                        refreshShop();
-                    });
-                    leftArrowBg.cursor = 'pointer';
-                }
-                paginationItems.push(leftArrowBg, leftArrowText);
-
-                // Right arrow (higher z-index to sit on top and take priority)
-                const rightArrowBg = k.add([
-                    k.rect(30, 30),
-                    k.pos(rightArrowX, paginationY),
-                    k.anchor('center'),
-                    k.color(0, 0, 0),
-                    k.opacity(0),
-                    k.area({ width: 30, height: 30 }),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
-                ]);
-
-                const rightArrowText = k.add([
-                    k.text('>', { size: 24 }),
-                    k.pos(rightArrowX, paginationY),
-                    k.anchor('center'),
-                    k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                ]);
-
-                if (currentPage < totalPages - 1) {
-                    rightArrowBg.onClick(() => {
-                        playMenuNav();
-                        currentPage++;
-                        refreshShop();
-                    });
-                    rightArrowBg.cursor = 'pointer';
-                }
-                paginationItems.push(rightArrowBg, rightArrowText);
             }
         }
         

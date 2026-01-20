@@ -35,7 +35,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'bestFloor', value: 5 },
-        hint: 'The halfway point awaits'
+        hint: 'The halfway point awaits',
+        unlocks: ['trailIce']
     },
     floor10: {
         id: 'floor10',
@@ -56,7 +57,8 @@ export const ACHIEVEMENTS = {
         icon: '🔗',
         unlocked: false,
         difficulty: 'normal',
-        hint: 'Collect upgrades that work together'
+        hint: 'Collect upgrades that work together',
+        unlocks: ['trailShadow']
     },
     allCharacters: {
         id: 'allCharacters',
@@ -112,7 +114,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'totalEnemiesKilled', value: 100 },
-        hint: 'Keep fighting!'
+        hint: 'Keep fighting!',
+        unlocks: ['trailFire']
     },
     kill500: {
         id: 'kill500',
@@ -123,7 +126,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'totalEnemiesKilled', value: 500 },
-        hint: 'The carnage continues'
+        hint: 'The carnage continues',
+        unlocks: ['trailPoison']
     },
     kill1000: {
         id: 'kill1000',
@@ -144,7 +148,8 @@ export const ACHIEVEMENTS = {
         icon: '🔥',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Defeat enemies rapidly'
+        hint: 'Defeat enemies rapidly',
+        unlocks: ['deathVaporize']
     },
     multikill: {
         id: 'multikill',
@@ -154,7 +159,8 @@ export const ACHIEVEMENTS = {
         icon: '💥',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Use piercing or explosive attacks'
+        hint: 'Use piercing or explosive attacks',
+        unlocks: ['deathPixelate']
     },
 
     // =============================================================================
@@ -169,7 +175,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'totalBossesKilled', value: 1 },
-        hint: 'Clear Floor 1 to face a boss'
+        hint: 'Clear Floor 1 to face a boss',
+        unlocks: ['deathExplosion']
     },
     boss5: {
         id: 'boss5',
@@ -180,7 +187,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'totalBossesKilled', value: 5 },
-        hint: 'Keep defeating floor bosses'
+        hint: 'Keep defeating floor bosses',
+        unlocks: ['deathDisintegrate']
     },
     boss10: {
         id: 'boss10',
@@ -361,7 +369,8 @@ export const ACHIEVEMENTS = {
         icon: '🔮',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Build for multiple synergy combos'
+        hint: 'Build for multiple synergy combos',
+        unlocks: ['trailRainbow']
     },
 
     // =============================================================================
@@ -387,7 +396,8 @@ export const ACHIEVEMENTS = {
         unlocked: false,
         difficulty: 'normal',
         threshold: { stat: 'totalCurrencyEarned', value: 500 },
-        hint: 'Keep earning and saving'
+        hint: 'Keep earning and saving',
+        unlocks: ['glowGold']
     },
     earn1000: {
         id: 'earn1000',
@@ -445,7 +455,8 @@ export const ACHIEVEMENTS = {
         icon: '🛡️',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Dodge everything on an entire floor'
+        hint: 'Dodge everything on an entire floor',
+        unlocks: ['glowVoid']
     },
     speedRunner: {
         id: 'speedRunner',
@@ -455,7 +466,8 @@ export const ACHIEVEMENTS = {
         icon: '⚡',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Rush through the first 3 floors'
+        hint: 'Rush through the first 3 floors',
+        unlocks: ['glowElectric']
     },
     bossRush: {
         id: 'bossRush',
@@ -495,7 +507,8 @@ export const ACHIEVEMENTS = {
         icon: '😰',
         unlocked: false,
         difficulty: 'challenge',
-        hint: 'Get very close to death but survive'
+        hint: 'Get very close to death but survive',
+        unlocks: ['glowCrimson']
     },
     pacifist: {
         id: 'pacifist',

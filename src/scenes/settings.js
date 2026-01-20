@@ -1,18 +1,14 @@
 // Settings scene - allows players to configure game options
 import { getSettings, updateSetting, resetSettings, saveSettings } from '../systems/settings.js';
-import { getPlayerName, setPlayerName, getInviteCode } from '../systems/metaProgression.js';
-import { generateRandomName } from '../systems/nameGenerator.js';
-import { setMusicVolume, setMasterVolume } from '../systems/sounds.js';
+import { setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled, playMenuNav } from '../systems/sounds.js';
 import {
     UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
-    formatButtonText,
     createMenuParticles,
     createAnimatedTitle
 } from '../config/uiConfig.js';
-import { createTabs } from '../config/uiComponents.js';
 
 /**
  * Show reset confirmation dialog
@@ -134,178 +130,14 @@ function showResetConfirmationDialog(k, onConfirm) {
     });
 }
 
-/**
- * Show name edit dialog
- */
-function showNameEditDialog(k, currentName, onSave) {
-    // Overlay
-    const overlay = k.add([
-        k.rect(k.width(), k.height()),
-        k.pos(0, 0),
-        k.color(0, 0, 0),
-        k.opacity(0.7),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY)
-    ]);
-
-    // Dialog box
-    const dialogWidth = 400;
-    const dialogHeight = 180;
-    const dialogBg = k.add([
-        k.rect(dialogWidth, dialogHeight),
-        k.pos(k.width() / 2, k.height() / 2),
-        k.anchor('center'),
-        k.color(...UI_COLORS.BG_MEDIUM),
-        k.outline(3, k.rgb(...UI_COLORS.BORDER)),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 1)
-    ]);
-
-    // Title
-    k.add([
-        k.text('Edit Player Name', { size: UI_TEXT_SIZES.LABEL }),
-        k.pos(k.width() / 2, k.height() / 2 - 60),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2)
-    ]);
-
-    // Input display background
-    const inputBg = k.add([
-        k.rect(300, 40),
-        k.pos(k.width() / 2, k.height() / 2 - 10),
-        k.anchor('center'),
-        k.color(...UI_COLORS.BG_LIGHT),
-        k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2)
-    ]);
-
-    // Input display
-    let inputText = currentName;
-    const inputDisplay = k.add([
-        k.text(inputText, { size: UI_TEXT_SIZES.LABEL }),
-        k.pos(k.width() / 2, k.height() / 2 - 10),
-        k.anchor('center'),
-        k.color(...UI_COLORS.GOLD),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3)
-    ]);
-
-    // Error/Info message
-    const infoMsg = k.add([
-        k.text('(Max 20 characters)', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2, k.height() / 2 + 25),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_SECONDARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2)
-    ]);
-
-    // Close function
-    function closeDialog() {
-        k.destroy(overlay);
-        k.destroy(dialogBg);
-        inputBg.destroy();
-        inputDisplay.destroy();
-        infoMsg.destroy();
-    }
-
-    // Cancel button
-    const cancelButton = k.add([
-        k.rect(100, 30),
-        k.pos(k.width() / 2 - 60, k.height() / 2 + 60),
-        k.anchor('center'),
-        k.color(...UI_COLORS.BG_MEDIUM),
-        k.outline(2, k.rgb(...UI_COLORS.TEXT_PRIMARY)),
-        k.area(),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2)
-    ]);
-
-    k.add([
-        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2 - 60, k.height() / 2 + 60),
-        k.anchor('center'),
-        k.color(...UI_COLORS.TEXT_PRIMARY),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3)
-    ]);
-
-    cancelButton.onClick(() => {
-        closeDialog();
-    });
-
-    // Save button
-    const saveButton = k.add([
-        k.rect(100, 30),
-        k.pos(k.width() / 2 + 60, k.height() / 2 + 60),
-        k.anchor('center'),
-        k.color(...UI_COLORS.BG_MEDIUM),
-        k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-        k.area(),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 2)
-    ]);
-
-    k.add([
-        k.text('Save', { size: UI_TEXT_SIZES.SMALL - 2 }),
-        k.pos(k.width() / 2 + 60, k.height() / 2 + 60),
-        k.anchor('center'),
-        k.color(...UI_COLORS.GOLD),
-        k.fixed(),
-        k.z(UI_Z_LAYERS.OVERLAY + 3)
-    ]);
-
-    saveButton.onClick(() => {
-        if (inputText.trim().length > 0) {
-            onSave(inputText.trim());
-            closeDialog();
-        } else {
-            infoMsg.text = 'Name cannot be empty!';
-            infoMsg.color = k.rgb(255, 100, 100);
-        }
-    });
-
-    // Keyboard input
-    k.onCharInput((ch) => {
-        // Allow letters, numbers, spaces
-        if (inputText.length < 20 && /[a-zA-Z0-9 ]/.test(ch)) {
-            inputText += ch;
-            inputDisplay.text = inputText;
-            infoMsg.text = '(Max 20 characters)';
-            infoMsg.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
-        }
-    });
-
-    k.onKeyPress('backspace', () => {
-        if (inputText.length > 0) {
-            inputText = inputText.slice(0, -1);
-            inputDisplay.text = inputText || ' '; // Show space if empty
-        }
-    });
-
-    k.onKeyPress('escape', () => {
-        closeDialog();
-    });
-
-    k.onKeyPress('enter', () => {
-        if (inputText.trim().length > 0) {
-            onSave(inputText.trim());
-            closeDialog();
-        }
-    });
-}
-
 export function setupSettingsScene(k) {
     k.scene('settings', (args) => {
         // Check if we came from game (pause menu)
         const fromGame = args?.fromGame || false;
         
         let settings = getSettings();
-        let currentTab = 'player'; // player, audio, controls, visual, gameplay
-        
+        let currentTab = 'audio'; // audio, video, gameplay, controls, access, data
+
         // Background
         k.add([
             k.rect(k.width(), k.height()),
@@ -324,16 +156,17 @@ export function setupSettingsScene(k) {
 
         // Tab buttons
         const tabY = 80;
-        const tabSpacing = 120;
-        const tabWidth = 100;
+        const tabSpacing = 100;
+        const tabWidth = 90;
         const tabHeight = 30;
         
         const tabs = [
-            { key: 'player', label: 'Player' },
             { key: 'audio', label: 'Audio' },
+            { key: 'video', label: 'Video' },
+            { key: 'gameplay', label: 'Gameplay' },
             { key: 'controls', label: 'Controls' },
-            { key: 'visual', label: 'Visual' },
-            { key: 'gameplay', label: 'Gameplay' }
+            { key: 'access', label: 'Access.' },
+            { key: 'data', label: 'Data' }
         ];
         
         // Calculate centered positions for tabs
@@ -410,152 +243,73 @@ export function setupSettingsScene(k) {
             const startY = contentY + 20;
             let currentY = startY;
 
-            if (currentTab === 'player') {
-                // Player Name Section
-                const nameLabel = k.add([
-                    k.text('Player Name:', { size: UI_TEXT_SIZES.LABEL }),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.TEXT_PRIMARY),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-                settingsItems.push(nameLabel);
-                currentY += 40;
-
-                // Current name display with edit button
-                let currentName = getPlayerName();
-                const nameDisplayBg = k.add([
-                    k.rect(300, 40),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.BG_LIGHT),
-                    k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-
-                const nameDisplay = k.add([
-                    k.text(currentName, { size: UI_TEXT_SIZES.LABEL }),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.GOLD),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
-                settingsItems.push(nameDisplayBg, nameDisplay);
-                currentY += 60;
-
-                // Edit Name button
-                const editButton = k.add([
-                    k.rect(140, 35),
-                    k.pos(k.width() / 2 - 80, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.BG_MEDIUM),
-                    k.outline(2, k.rgb(...UI_COLORS.TEXT_PRIMARY)),
-                    k.area(),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-
-                const editText = k.add([
-                    k.text('Edit Name', { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(k.width() / 2 - 80, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.TEXT_PRIMARY),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
-
-                editButton.onClick(() => {
-                    showNameEditDialog(k, currentName, (newName) => {
-                        setPlayerName(newName);
-                        nameDisplay.text = newName;
-                        currentName = newName;
-                    });
-                });
-
-                // Randomize button
-                const randomButton = k.add([
-                    k.rect(140, 35),
-                    k.pos(k.width() / 2 + 80, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.BG_MEDIUM),
-                    k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-                    k.area(),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-
-                const randomText = k.add([
-                    k.text('Randomize', { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(k.width() / 2 + 80, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.GOLD),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
-                ]);
-
-                randomButton.onClick(() => {
-                    const newName = generateRandomName();
-                    setPlayerName(newName);
-                    nameDisplay.text = newName;
-                    currentName = newName;
-                });
-
-                settingsItems.push(editButton, editText, randomButton, randomText);
-                currentY += 60;
-
-                // Invite Code Section
-                const codeLabel = k.add([
-                    k.text('Your Invite Code:', { size: UI_TEXT_SIZES.LABEL }),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.TEXT_PRIMARY),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-                settingsItems.push(codeLabel);
-                currentY += 40;
-
-                const inviteCode = getInviteCode();
-                const codeDisplay = k.add([
-                    k.text(inviteCode, { size: UI_TEXT_SIZES.TITLE }),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.GOLD),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-                settingsItems.push(codeDisplay);
-                currentY += 50;
-
-                const codeNote = k.add([
-                    k.text('Share this code with friends to join your party!', { size: UI_TEXT_SIZES.SMALL - 2 }),
-                    k.pos(k.width() / 2, currentY),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.TEXT_SECONDARY),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                ]);
-                settingsItems.push(codeNote);
-
-            } else if (currentTab === 'audio') {
+            if (currentTab === 'audio') {
                 // Master Volume
                 currentY = addVolumeSlider(k, 'Master Volume', settings.audio.masterVolume, currentY, (value) => {
                     updateSetting('audio', 'masterVolume', value);
                     setMasterVolume(value);
                 });
 
-                // SFX Volume
-                currentY = addVolumeSlider(k, 'SFX Volume', settings.audio.sfxVolume, currentY, (value) => {
-                    updateSetting('audio', 'sfxVolume', value);
-                });
-
                 // Music Volume
                 currentY = addVolumeSlider(k, 'Music Volume', settings.audio.musicVolume, currentY, (value) => {
                     updateSetting('audio', 'musicVolume', value);
                     setMusicVolume(value);
+                });
+
+                // SFX Volume
+                currentY = addVolumeSlider(k, 'SFX Volume', settings.audio.sfxVolume, currentY, (value) => {
+                    updateSetting('audio', 'sfxVolume', value);
+                    setSfxVolume(value);
+                    // Play a preview sound when adjusting
+                    playMenuNav();
+                });
+
+                // UI Sounds toggle
+                currentY = addToggle(k, 'UI Sounds', settings.audio.uiSounds !== false, currentY, (value) => {
+                    updateSetting('audio', 'uiSounds', value);
+                    setUiSoundsEnabled(value);
+                });
+
+                // Combat Sounds toggle
+                currentY = addToggle(k, 'Combat Sounds', settings.audio.combatSounds !== false, currentY, (value) => {
+                    updateSetting('audio', 'combatSounds', value);
+                    setCombatSoundsEnabled(value);
+                });
+
+            } else if (currentTab === 'video') {
+                // Show Particles
+                currentY = addToggle(k, 'Show Particles', settings.visual.showParticles, currentY, (value) => {
+                    updateSetting('visual', 'showParticles', value);
+                });
+
+                // Show Screen Shake
+                currentY = addToggle(k, 'Screen Shake', settings.visual.showScreenShake, currentY, (value) => {
+                    updateSetting('visual', 'showScreenShake', value);
+                });
+
+                // Show Hit Freeze
+                currentY = addToggle(k, 'Hit Freeze', settings.visual.showHitFreeze, currentY, (value) => {
+                    updateSetting('visual', 'showHitFreeze', value);
+                });
+
+                // Show Damage Numbers
+                currentY = addToggle(k, 'Damage Numbers', settings.visual.showDamageNumbers, currentY, (value) => {
+                    updateSetting('visual', 'showDamageNumbers', value);
+                });
+
+                // Compact HUD
+                currentY = addToggle(k, 'Compact HUD', settings.visual.compactHUD, currentY, (value) => {
+                    updateSetting('visual', 'compactHUD', value);
+                });
+
+                // FPS Counter
+                currentY = addToggle(k, 'FPS Counter', settings.visual.showFPS || false, currentY, (value) => {
+                    updateSetting('visual', 'showFPS', value);
+                });
+
+                // Show Timer
+                currentY = addToggle(k, 'Show Timer', settings.visual.showTimer !== false, currentY, (value) => {
+                    updateSetting('visual', 'showTimer', value);
                 });
 
             } else if (currentTab === 'controls') {
@@ -621,50 +375,211 @@ export function setupSettingsScene(k) {
                     settingsItems.push(noteText);
                 }
                 
-            } else if (currentTab === 'visual') {
-                // Show Particles
-                currentY = addToggle(k, 'Show Particles', settings.visual.showParticles, currentY, (value) => {
-                    updateSetting('visual', 'showParticles', value);
-                });
-                
-                // Show Screen Shake
-                currentY = addToggle(k, 'Screen Shake', settings.visual.showScreenShake, currentY, (value) => {
-                    updateSetting('visual', 'showScreenShake', value);
-                });
-
-                // Show Hit Freeze
-                currentY = addToggle(k, 'Hit Freeze', settings.visual.showHitFreeze, currentY, (value) => {
-                    updateSetting('visual', 'showHitFreeze', value);
-                });
-
-                // Show Damage Numbers
-                currentY = addToggle(k, 'Damage Numbers', settings.visual.showDamageNumbers, currentY, (value) => {
-                    updateSetting('visual', 'showDamageNumbers', value);
-                });
-                
-                // Compact HUD
-                currentY = addToggle(k, 'Compact HUD', settings.visual.compactHUD, currentY, (value) => {
-                    updateSetting('visual', 'compactHUD', value);
-                });
-                
             } else if (currentTab === 'gameplay') {
                 // Auto-pause on level up
-                currentY = addToggle(k, 'Auto-pause on Level Up', settings.gameplay.autoPause, currentY, (value) => {
+                currentY = addToggle(k, 'Auto-pause on Level Up', settings.gameplay.autoPause || false, currentY, (value) => {
                     updateSetting('gameplay', 'autoPause', value);
                 });
-                
-                // Note (positioned to avoid button overlap)
-                if (currentY < k.height() - bottomButtonArea) {
-                    const noteText = k.add([
-                        k.text('(More gameplay options coming soon)', { size: 12 }),
-                        k.pos(k.width() / 2, currentY + 20),
-                        k.anchor('center'),
-                        k.color(150, 150, 150),
-                        k.fixed(),
-                        k.z(UI_Z_LAYERS.UI_ELEMENTS)
-                    ]);
-                    settingsItems.push(noteText);
-                }
+
+                // Auto-pickup Currency
+                currentY = addToggle(k, 'Auto-pickup Currency', settings.gameplay.autoPickupCurrency || false, currentY, (value) => {
+                    updateSetting('gameplay', 'autoPickupCurrency', value);
+                });
+
+                // Auto-pickup XP
+                currentY = addToggle(k, 'Auto-pickup XP', settings.gameplay.autoPickupXP || false, currentY, (value) => {
+                    updateSetting('gameplay', 'autoPickupXP', value);
+                });
+
+                // Confirm Before Quit
+                currentY = addToggle(k, 'Confirm Before Quit', settings.gameplay.confirmBeforeQuit !== false, currentY, (value) => {
+                    updateSetting('gameplay', 'confirmBeforeQuit', value);
+                });
+
+                // Skip Intro Animation
+                currentY = addToggle(k, 'Skip Intro Animation', settings.gameplay.skipIntroAnimation || false, currentY, (value) => {
+                    updateSetting('gameplay', 'skipIntroAnimation', value);
+                });
+
+            } else if (currentTab === 'access') {
+                // Accessibility tab
+
+                // Colorblind Mode dropdown (simplified as toggle for now)
+                currentY = addToggle(k, 'Colorblind Mode', settings.accessibility?.colorblindMode !== 'off', currentY, (value) => {
+                    updateSetting('accessibility', 'colorblindMode', value ? 'deuteranopia' : 'off');
+                });
+
+                // Reduced Motion
+                currentY = addToggle(k, 'Reduced Motion', settings.accessibility?.reducedMotion || false, currentY, (value) => {
+                    updateSetting('accessibility', 'reducedMotion', value);
+                    // Also disable particles and screen shake
+                    if (value) {
+                        updateSetting('visual', 'showParticles', false);
+                        updateSetting('visual', 'showScreenShake', false);
+                    }
+                });
+
+                // Large Text
+                currentY = addToggle(k, 'Large Text', settings.accessibility?.largeText || false, currentY, (value) => {
+                    updateSetting('accessibility', 'largeText', value);
+                });
+
+                // High Contrast
+                currentY = addToggle(k, 'High Contrast', settings.accessibility?.highContrast || false, currentY, (value) => {
+                    updateSetting('accessibility', 'highContrast', value);
+                });
+
+            } else if (currentTab === 'data') {
+                // Data management tab
+
+                // Export Save button
+                const exportButton = k.add([
+                    k.rect(200, 35),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.BG_MEDIUM),
+                    k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const exportText = k.add([
+                    k.text('Export Save Data', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                let exportStatusText = null;
+
+                exportButton.onClick(() => {
+                    try {
+                        const saveData = localStorage.getItem('superSmashTexty_save') || '{}';
+                        navigator.clipboard.writeText(saveData).then(() => {
+                            if (exportStatusText && exportStatusText.exists()) {
+                                exportStatusText.text = 'Copied to clipboard!';
+                                exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                            }
+                        }).catch(() => {
+                            if (exportStatusText && exportStatusText.exists()) {
+                                exportStatusText.text = 'Failed to copy';
+                                exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                            }
+                        });
+                    } catch (e) {
+                        console.error('Export failed:', e);
+                    }
+                });
+                settingsItems.push(exportButton, exportText);
+                currentY += 50;
+
+                // Status text for export
+                exportStatusText = k.add([
+                    k.text('', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(k.width() / 2, currentY - 10),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                settingsItems.push(exportStatusText);
+                currentY += 30;
+
+                // Import Save button
+                const importButton = k.add([
+                    k.rect(200, 35),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.BG_MEDIUM),
+                    k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const importText = k.add([
+                    k.text('Import Save Data', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                importButton.onClick(() => {
+                    navigator.clipboard.readText().then((text) => {
+                        try {
+                            const data = JSON.parse(text);
+                            if (data && typeof data === 'object') {
+                                localStorage.setItem('superSmashTexty_save', text);
+                                if (exportStatusText && exportStatusText.exists()) {
+                                    exportStatusText.text = 'Import successful! Refresh to apply.';
+                                    exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                                }
+                            }
+                        } catch (e) {
+                            if (exportStatusText && exportStatusText.exists()) {
+                                exportStatusText.text = 'Invalid save data';
+                                exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                            }
+                        }
+                    }).catch(() => {
+                        if (exportStatusText && exportStatusText.exists()) {
+                            exportStatusText.text = 'Failed to read clipboard';
+                            exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                        }
+                    });
+                });
+                settingsItems.push(importButton, importText);
+                currentY += 60;
+
+                // Reset Progress button
+                const resetProgressButton = k.add([
+                    k.rect(200, 35),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.DANGER),
+                    k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                    k.area(),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+
+                const resetProgressText = k.add([
+                    k.text('Reset All Progress', { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                resetProgressButton.onClick(() => {
+                    // Double-confirm for dangerous action
+                    showResetConfirmationDialog(k, () => {
+                        localStorage.removeItem('superSmashTexty_save');
+                        if (exportStatusText && exportStatusText.exists()) {
+                            exportStatusText.text = 'Progress reset! Refresh to apply.';
+                            exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                        }
+                    });
+                });
+                settingsItems.push(resetProgressButton, resetProgressText);
+                currentY += 50;
+
+                // Warning note
+                const warningText = k.add([
+                    k.text('Warning: Reset cannot be undone!', { size: 10 }),
+                    k.pos(k.width() / 2, currentY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.DANGER),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                ]);
+                settingsItems.push(warningText);
             }
         }
         

@@ -13,10 +13,15 @@ const DEFAULT_SAVE = {
     currency: 0,
     playerName: null, // Will be generated on first load
     inviteCode: null, // Will be generated on first load
+    // Player XP/Level system (cosmetic prestige)
+    totalXP: 0,
+    playerLevel: 1,
+    selectedPortrait: 'default',
     unlocks: {
         characters: ['survivor'], // Default character is always unlocked
         weapons: ['default'], // Default weapon is always unlocked
-        permanentUpgrades: [] // Array of unlock keys
+        permanentUpgrades: [], // Array of unlock keys
+        portraits: ['default'] // Default portrait is always unlocked
     },
     permanentUpgradeLevels: {}, // Track levels for permanent upgrades: { upgradeKey: level }
     permanentUpgradePurchaseHistory: {}, // Track purchase costs: { upgradeKey: [cost1, cost2, ...] }
@@ -29,7 +34,9 @@ const DEFAULT_SAVE = {
         bestFloor: 1,
         bestRoom: 1,
         bestLevel: 1,
-        totalCurrencyEarned: 0
+        totalCurrencyEarned: 0,
+        totalPlayTime: 0, // Total play time in seconds
+        fastestRunTime: 0 // Fastest run completion time in seconds
     },
     achievements: [], // Array of unlocked achievement IDs
     runHistory: [] // Array of last 20 run records
@@ -804,5 +811,207 @@ export function getEquippedCosmetics() {
         death: 'deathNone',
         glow: 'glowNone'
     };
+}
+
+// ============ PLAYER XP/LEVEL SYSTEM ============
+
+/**
+ * Calculate player level from total XP
+ * Formula: level = floor(sqrt(totalXP / 100)) + 1
+ * - Level 1: 0 XP
+ * - Level 2: 100 XP
+ * - Level 5: 1,600 XP
+ * - Level 10: 8,100 XP
+ * - Level 20: 36,100 XP
+ * - Level 50: 240,100 XP
+ * @param {number} xp - Total XP
+ * @returns {number} Player level
+ */
+export function calculateLevelFromXP(xp) {
+    return Math.floor(Math.sqrt(xp / 100)) + 1;
+}
+
+/**
+ * Calculate XP required for a specific level
+ * @param {number} level - Target level
+ * @returns {number} Total XP required to reach that level
+ */
+export function getXPRequiredForLevel(level) {
+    if (level <= 1) return 0;
+    return Math.pow(level - 1, 2) * 100;
+}
+
+/**
+ * Get current player level
+ * @returns {number} Current level
+ */
+export function getPlayerLevel() {
+    const save = loadSave();
+    return calculateLevelFromXP(save.totalXP || 0);
+}
+
+/**
+ * Get total XP earned
+ * @returns {number} Total XP
+ */
+export function getTotalXP() {
+    const save = loadSave();
+    return save.totalXP || 0;
+}
+
+/**
+ * Get XP required for next level
+ * @returns {number} XP needed for next level
+ */
+export function getXPForNextLevel() {
+    const currentLevel = getPlayerLevel();
+    return getXPRequiredForLevel(currentLevel + 1);
+}
+
+/**
+ * Get XP progress towards next level (0-1)
+ * @returns {number} Progress percentage (0-1)
+ */
+export function getXPProgress() {
+    const totalXP = getTotalXP();
+    const currentLevel = calculateLevelFromXP(totalXP);
+    const currentLevelXP = getXPRequiredForLevel(currentLevel);
+    const nextLevelXP = getXPRequiredForLevel(currentLevel + 1);
+
+    if (nextLevelXP === currentLevelXP) return 1;
+    return (totalXP - currentLevelXP) / (nextLevelXP - currentLevelXP);
+}
+
+/**
+ * Add XP to player and check for level ups
+ * @param {number} amount - XP to add
+ * @returns {Object} Result with newXP, newLevel, levelsGained
+ */
+export function addXP(amount) {
+    const save = loadSave();
+    const oldLevel = calculateLevelFromXP(save.totalXP || 0);
+
+    save.totalXP = (save.totalXP || 0) + amount;
+    const newLevel = calculateLevelFromXP(save.totalXP);
+
+    // Update stored level
+    save.playerLevel = newLevel;
+
+    saveGame(save);
+
+    return {
+        newXP: save.totalXP,
+        newLevel: newLevel,
+        levelsGained: newLevel - oldLevel,
+        oldLevel: oldLevel
+    };
+}
+
+/**
+ * Calculate XP earned from a run
+ * @param {Object} runStats - Run statistics
+ * @returns {number} XP earned
+ */
+export function calculateRunXP(runStats) {
+    let xp = 0;
+
+    // Floors reached: 50 XP per floor
+    xp += (runStats.floorsReached || 0) * 50;
+
+    // Enemies killed: 2 XP each
+    xp += (runStats.enemiesKilled || 0) * 2;
+
+    // Bosses killed: 100 XP each
+    xp += (runStats.bossesKilled || 0) * 100;
+
+    // Run completion bonus (reached floor 5+): 200 XP
+    if ((runStats.floorsReached || 0) >= 5) {
+        xp += 200;
+    }
+
+    // Daily run completion bonus: 500 XP
+    if (runStats.isDailyRun) {
+        xp += 500;
+    }
+
+    return xp;
+}
+
+// ============ PORTRAIT SYSTEM ============
+
+/**
+ * Get selected portrait ID
+ * @returns {string} Portrait ID
+ */
+export function getSelectedPortrait() {
+    const save = loadSave();
+    return save.selectedPortrait || 'default';
+}
+
+/**
+ * Set selected portrait
+ * @param {string} portraitId - Portrait ID to select
+ * @returns {boolean} True if successful
+ */
+export function setSelectedPortrait(portraitId) {
+    const save = loadSave();
+
+    // Check if portrait is unlocked
+    if (!isPortraitUnlocked(portraitId)) {
+        return false;
+    }
+
+    save.selectedPortrait = portraitId;
+    saveGame(save);
+    return true;
+}
+
+/**
+ * Check if a portrait is unlocked
+ * @param {string} portraitId - Portrait ID to check
+ * @returns {boolean} True if unlocked
+ */
+export function isPortraitUnlocked(portraitId) {
+    const save = loadSave();
+
+    // Default portrait is always unlocked
+    if (portraitId === 'default') return true;
+
+    // Check unlocks array
+    if (save.unlocks?.portraits?.includes(portraitId)) {
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Unlock a portrait
+ * @param {string} portraitId - Portrait ID to unlock
+ * @returns {boolean} True if newly unlocked
+ */
+export function unlockPortrait(portraitId) {
+    const save = loadSave();
+
+    if (!save.unlocks.portraits) {
+        save.unlocks.portraits = ['default'];
+    }
+
+    if (!save.unlocks.portraits.includes(portraitId)) {
+        save.unlocks.portraits.push(portraitId);
+        saveGame(save);
+        return true;
+    }
+
+    return false;
+}
+
+/**
+ * Get all unlocked portraits
+ * @returns {Array} Array of unlocked portrait IDs
+ */
+export function getUnlockedPortraits() {
+    const save = loadSave();
+    return save.unlocks?.portraits || ['default'];
 }
 

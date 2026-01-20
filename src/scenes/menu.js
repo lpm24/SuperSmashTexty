@@ -1,7 +1,8 @@
 // Main menu scene
-import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency } from '../systems/metaProgression.js';
+import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency, getPlayerLevel, getXPProgress, getTotalXP, getXPForNextLevel, getSelectedPortrait } from '../systems/metaProgression.js';
+import { PORTRAITS, getPortraitById } from '../data/portraits.js';
 import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady } from '../systems/partySystem.js';
-import { initAudio, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume } from '../systems/sounds.js';
+import { initAudio, resumeAudioContext, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled } from '../systems/sounds.js';
 import { getSettings } from '../systems/settings.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { getDailyRunInfo, hasCompletedDailyToday, getTodayDailyCharacter } from '../systems/dailyRuns.js';
@@ -129,6 +130,28 @@ export function setupMenuScene(k) {
         const settings = getSettings();
         setMasterVolume(settings.audio.masterVolume);
         setMusicVolume(settings.audio.musicVolume);
+        setSfxVolume(settings.audio.sfxVolume);
+
+        // Apply UI/Combat sound toggles if they exist in settings
+        if (settings.audio.uiSounds !== undefined) {
+            setUiSoundsEnabled(settings.audio.uiSounds);
+        }
+        if (settings.audio.combatSounds !== undefined) {
+            setCombatSoundsEnabled(settings.audio.combatSounds);
+        }
+
+        // Resume audio context on first user interaction (browser autoplay policy)
+        let audioResumed = false;
+        const resumeAudio = () => {
+            if (!audioResumed) {
+                audioResumed = true;
+                resumeAudioContext();
+                // Try playing music again after context resumes
+                playMenuMusic();
+            }
+        };
+        k.onClick(resumeAudio);
+        k.onKeyPress(resumeAudio);
 
         // Start menu music
         playMenuMusic();
@@ -165,12 +188,140 @@ export function setupMenuScene(k) {
         ]);
 
         // ==========================================
-        // LEFT COLUMN: Party Panel + Daily Run
+        // PROFILE CARD (Top-left)
+        // ==========================================
+        const profileCardX = LAYOUT.LEFT_COLUMN_X;
+        const profileCardY = LAYOUT.TOP_MARGIN;
+        const profileCardWidth = LAYOUT.LEFT_COLUMN_WIDTH;
+        const profileCardHeight = 120;
+
+        // Profile card background (clickable)
+        const profileCardBg = k.add([
+            k.rect(profileCardWidth, profileCardHeight),
+            k.pos(profileCardX, profileCardY),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND),
+            'profileCard'
+        ]);
+
+        // Portrait
+        const portrait = getPortraitById(getSelectedPortrait()) || PORTRAITS.default;
+        const portraitSize = 50;
+        const portraitX = profileCardX + 35;
+        const portraitY = profileCardY + 40;
+
+        k.add([
+            k.rect(portraitSize, portraitSize),
+            k.pos(portraitX, portraitY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_LIGHT),
+            k.outline(2, k.rgb(...(portrait.color || [200, 200, 200]))),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
+        ]);
+
+        k.add([
+            k.text(portrait.icon, { size: 28 }),
+            k.pos(portraitX, portraitY - 2),
+            k.anchor('center'),
+            k.color(...(portrait.color || [200, 200, 200])),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Player name
+        const playerName = getPlayerName();
+        k.add([
+            k.text(playerName.length > 12 ? playerName.substring(0, 12) + '..' : playerName, { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(portraitX + portraitSize / 2 + 10, profileCardY + 18),
+            k.anchor('left'),
+            k.color(...UI_COLORS.GOLD),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Level
+        const playerLevel = getPlayerLevel();
+        k.add([
+            k.text(`Lv.${playerLevel}`, { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(portraitX + portraitSize / 2 + 10, profileCardY + 38),
+            k.anchor('left'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // XP progress bar
+        const xpProgress = getXPProgress();
+        const xpBarWidth = profileCardWidth - 80;
+        const xpBarHeight = 8;
+        const xpBarX = portraitX + portraitSize / 2 + 10;
+        const xpBarY = profileCardY + 58;
+
+        // Bar background
+        k.add([
+            k.rect(xpBarWidth, xpBarHeight),
+            k.pos(xpBarX, xpBarY),
+            k.anchor('left'),
+            k.color(40, 40, 60),
+            k.outline(1, k.rgb(60, 60, 80)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
+        ]);
+
+        // Bar fill
+        k.add([
+            k.rect(xpBarWidth * xpProgress, xpBarHeight - 2),
+            k.pos(xpBarX + 1, xpBarY),
+            k.anchor('left'),
+            k.color(100, 180, 255),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+        ]);
+
+        // XP percentage
+        k.add([
+            k.text(`${Math.round(xpProgress * 100)}%`, { size: 10 }),
+            k.pos(xpBarX + xpBarWidth + 8, xpBarY),
+            k.anchor('left'),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Click hint
+        k.add([
+            k.text('Click for Profile', { size: 9 }),
+            k.pos(profileCardX + profileCardWidth / 2, profileCardY + profileCardHeight - 12),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_DISABLED),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Profile card click handler
+        profileCardBg.onClick(() => {
+            playMenuSelect();
+            k.go('profile');
+        });
+
+        profileCardBg.onHoverUpdate(() => {
+            profileCardBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+        });
+        profileCardBg.onHoverEnd(() => {
+            profileCardBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+        });
+
+        // ==========================================
+        // LEFT COLUMN: Party Panel (Below Profile)
         // ==========================================
         initParty(k);
 
         const partyPanelX = LAYOUT.LEFT_COLUMN_X;
-        const partyPanelY = LAYOUT.TOP_MARGIN;
+        const partyPanelY = profileCardY + profileCardHeight + 10;
         const partyPanelWidth = LAYOUT.LEFT_COLUMN_WIDTH;
         const slotHeight = 24;
         const slotSpacing = 3;
@@ -448,16 +599,18 @@ export function setupMenuScene(k) {
         });
 
         // ==========================================
-        // DAILY RUN PANEL (Below Party Panel)
+        // DAILY RUN PANEL (Top-right)
         // ==========================================
-        const dailyRunY = partyPanelY + partyPanelHeight + 15;
+        const dailyPanelWidth = LAYOUT.RIGHT_COLUMN_WIDTH;
         const dailyPanelHeight = 120;
+        const dailyPanelX = rightColumnX;
+        const dailyRunY = LAYOUT.TOP_MARGIN;
         const dailyInfo = getDailyRunInfo();
         const dailyChar = CHARACTER_UNLOCKS[dailyInfo.character] || CHARACTER_UNLOCKS.survivor;
 
         k.add([
-            k.rect(partyPanelWidth, dailyPanelHeight),
-            k.pos(partyPanelX, dailyRunY),
+            k.rect(dailyPanelWidth, dailyPanelHeight),
+            k.pos(dailyPanelX, dailyRunY),
             k.color(...UI_COLORS.BG_MEDIUM),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.fixed(),
@@ -466,7 +619,7 @@ export function setupMenuScene(k) {
 
         k.add([
             k.text('DAILY RUN', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 12),
+            k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 12),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
@@ -475,7 +628,7 @@ export function setupMenuScene(k) {
 
         k.add([
             k.text(dailyChar.char, { size: 28 }),
-            k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 45),
+            k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 45),
             k.anchor('center'),
             k.color(...dailyChar.color),
             k.fixed(),
@@ -484,7 +637,7 @@ export function setupMenuScene(k) {
 
         k.add([
             k.text(dailyChar.name, { size: UI_TEXT_SIZES.SMALL - 2 }),
-            k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 68),
+            k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 68),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
@@ -497,7 +650,7 @@ export function setupMenuScene(k) {
         if (dailyInfo.completed) {
             k.add([
                 k.text('COMPLETED', { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 95),
+                k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 95),
                 k.anchor('center'),
                 k.color(...UI_COLORS.SUCCESS),
                 k.fixed(),
@@ -506,7 +659,7 @@ export function setupMenuScene(k) {
         } else if (dailyDisabledInMultiplayer) {
             k.add([
                 k.text('SOLO ONLY', { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 95),
+                k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 95),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_DISABLED),
                 k.fixed(),
@@ -514,8 +667,8 @@ export function setupMenuScene(k) {
             ]);
         } else {
             const dailyPlayButton = k.add([
-                k.rect(partyPanelWidth - 40, 28),
-                k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 95),
+                k.rect(dailyPanelWidth - 40, 28),
+                k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 95),
                 k.anchor('center'),
                 k.color(...UI_COLORS.SECONDARY),
                 k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -556,11 +709,11 @@ export function setupMenuScene(k) {
         // RIGHT COLUMN: Credits + Leaderboards
         // ==========================================
 
-        // Credits display (top right)
+        // Credits display (top right of center area)
         const creditIndicator = createCreditIndicator(k, currency, currencyName);
 
-        // Leaderboards panel (below credits)
-        const leaderboardsY = 70;
+        // Leaderboards panel (below daily run panel on right)
+        const leaderboardsY = dailyRunY + dailyPanelHeight + 15;
         const leaderboardsPanelHeight = 100;
 
         k.add([
