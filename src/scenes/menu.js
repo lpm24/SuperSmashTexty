@@ -193,7 +193,7 @@ export function setupMenuScene(k) {
         const profileCardX = LAYOUT.LEFT_COLUMN_X;
         const profileCardY = LAYOUT.TOP_MARGIN;
         const profileCardWidth = LAYOUT.LEFT_COLUMN_WIDTH;
-        const profileCardHeight = 120;
+        const profileCardHeight = 75; // Compact height - just portrait, name, level, XP bar
 
         // Profile card background (clickable)
         const profileCardBg = k.add([
@@ -209,9 +209,9 @@ export function setupMenuScene(k) {
 
         // Portrait
         const portrait = getPortraitById(getSelectedPortrait()) || PORTRAITS.default;
-        const portraitSize = 50;
-        const portraitX = profileCardX + 35;
-        const portraitY = profileCardY + 40;
+        const portraitSize = 45;
+        const portraitX = profileCardX + 32;
+        const portraitY = profileCardY + profileCardHeight / 2;
 
         k.add([
             k.rect(portraitSize, portraitSize),
@@ -224,8 +224,8 @@ export function setupMenuScene(k) {
         ]);
 
         k.add([
-            k.text(portrait.icon, { size: 28 }),
-            k.pos(portraitX, portraitY - 2),
+            k.text(portrait.icon, { size: 24 }),
+            k.pos(portraitX, portraitY),
             k.anchor('center'),
             k.color(...(portrait.color || [200, 200, 200])),
             k.fixed(),
@@ -235,9 +235,10 @@ export function setupMenuScene(k) {
         // Player name (with fallback for null/undefined)
         const playerName = getPlayerName() || 'Player';
         const displayName = playerName.length > 12 ? playerName.substring(0, 12) + '..' : playerName;
+        const infoX = portraitX + portraitSize / 2 + 10;
         k.add([
             k.text(displayName, { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(portraitX + portraitSize / 2 + 10, profileCardY + 18),
+            k.pos(infoX, profileCardY + 15),
             k.anchor('left'),
             k.color(...UI_COLORS.GOLD),
             k.fixed(),
@@ -247,8 +248,8 @@ export function setupMenuScene(k) {
         // Level
         const playerLevel = getPlayerLevel();
         k.add([
-            k.text(`Lv.${playerLevel}`, { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(portraitX + portraitSize / 2 + 10, profileCardY + 38),
+            k.text(`Lv.${playerLevel}`, { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(infoX, profileCardY + 32),
             k.anchor('left'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
@@ -257,10 +258,10 @@ export function setupMenuScene(k) {
 
         // XP progress bar
         const xpProgress = getXPProgress();
-        const xpBarWidth = profileCardWidth - 80;
+        const xpBarWidth = profileCardWidth - 75;
         const xpBarHeight = 8;
-        const xpBarX = portraitX + portraitSize / 2 + 10;
-        const xpBarY = profileCardY + 58;
+        const xpBarX = infoX;
+        const xpBarY = profileCardY + 50;
 
         // Bar background
         k.add([
@@ -290,16 +291,6 @@ export function setupMenuScene(k) {
             k.pos(xpBarX + xpBarWidth / 2, xpBarY),
             k.anchor('center'),
             k.color(255, 255, 255),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        // Click hint
-        k.add([
-            k.text('Click for Profile', { size: 9 }),
-            k.pos(profileCardX + profileCardWidth / 2, profileCardY + profileCardHeight - 12),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_DISABLED),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -606,7 +597,7 @@ export function setupMenuScene(k) {
         const dailyPanelWidth = LAYOUT.RIGHT_COLUMN_WIDTH;
         const dailyPanelHeight = 120;
         const dailyPanelX = rightColumnX;
-        const dailyRunY = LAYOUT.TOP_MARGIN + 35; // Move down to avoid overlap with credits
+        const dailyRunY = LAYOUT.TOP_MARGIN + 50; // Move down to avoid overlap with credits
         const dailyInfo = getDailyRunInfo();
         const dailyChar = CHARACTER_UNLOCKS[dailyInfo.character] || CHARACTER_UNLOCKS.survivor;
 
@@ -681,7 +672,7 @@ export function setupMenuScene(k) {
 
             k.add([
                 k.text('PLAY', { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(partyPanelX + partyPanelWidth / 2, dailyRunY + 95),
+                k.pos(dailyPanelX + dailyPanelWidth / 2, dailyRunY + 95),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
