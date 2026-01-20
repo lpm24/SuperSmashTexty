@@ -867,7 +867,7 @@ export function setupMenuScene(k) {
         // Version number (Micro text, bottom-right)
         // ==========================================
         k.add([
-            k.text('v0.1.1', { size: UI_TEXT_SIZES.MICRO }),
+            k.text(__APP_VERSION__, { size: UI_TEXT_SIZES.MICRO }),
             k.pos(k.width() - 10, k.height() - 10),
             k.anchor('botright'),
             k.color(...UI_COLORS.TEXT_DISABLED),
