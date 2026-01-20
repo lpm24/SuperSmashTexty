@@ -362,14 +362,9 @@ export function setupMenuScene(k) {
                 // Show portrait emoji for players, slot number for empty slots
                 let slotIcon = `${slot.slotNumber}`;
                 if (!slot.isEmpty) {
-                    if (slot.isLocal) {
-                        // Local player - use their selected portrait
-                        const portrait = getPortraitById(getSelectedPortrait()) || PORTRAITS.default;
-                        slotIcon = portrait.icon;
-                    } else {
-                        // Remote player - use default emoji (portrait sync not implemented)
-                        slotIcon = '😊';
-                    }
+                    // Use the synced portrait from party data
+                    const portrait = getPortraitById(slot.selectedPortrait) || PORTRAITS.default;
+                    slotIcon = portrait.icon;
                 }
                 const slotIconEl = k.add([
                     k.text(slotIcon, { size: slot.isEmpty ? UI_TEXT_SIZES.SMALL : UI_TEXT_SIZES.SMALL + 2 }),

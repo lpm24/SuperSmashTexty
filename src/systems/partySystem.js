@@ -3,7 +3,7 @@
  * Manages multiplayer party state and joining
  */
 
-import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode, getPermanentUpgradeLevel } from './metaProgression.js';
+import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode, getPermanentUpgradeLevel, getSelectedPortrait } from './metaProgression.js';
 import {
     initNetwork,
     connectToHost,
@@ -20,10 +20,10 @@ import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlay
 // Party state
 const party = {
     slots: [
-        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, isLocal: true, peerId: null, isReady: false }, // Slot 1: Local player
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }, // Slot 2: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }, // Slot 3: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, isLocal: false, peerId: null, isReady: false }  // Slot 4: Empty
+        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: true, peerId: null, isReady: false }, // Slot 1: Local player
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }, // Slot 2: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }, // Slot 3: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }  // Slot 4: Empty
     ],
     isHost: true, // Local player is always the host for now
     maxSlots: 4,
@@ -56,11 +56,13 @@ export async function initParty(k = null) {
         const playerName = getPlayerName();
         const inviteCode = getInviteCode();
         const selectedCharacter = getSelectedCharacter();
+        const selectedPortrait = getSelectedPortrait();
 
         party.slots[0].playerId = 'local';
         party.slots[0].playerName = playerName || 'Player'; // Fallback if name not set
         party.slots[0].inviteCode = inviteCode || '000000'; // Fallback if code not set
         party.slots[0].selectedCharacter = selectedCharacter || 'survivor'; // Fallback if character not set
+        party.slots[0].selectedPortrait = selectedPortrait || 'default'; // Fallback if portrait not set
         party.slots[0].isLocal = true;
         party.slots[0].permanentUpgradeLevels = {
             startingHealth: getPermanentUpgradeLevel('startingHealth'),
@@ -130,6 +132,7 @@ export function setupNetworkHandlers() {
             payload.playerName || 'Player',
             payload.inviteCode || '000000',
             payload.selectedCharacter || 'survivor',
+            payload.selectedPortrait || 'default',
             fromPeerId,
             payload.permanentUpgradeLevels || null
         );
@@ -142,6 +145,7 @@ export function setupNetworkHandlers() {
                     playerName: slot.playerName,
                     inviteCode: slot.inviteCode,
                     selectedCharacter: slot.selectedCharacter,
+                    selectedPortrait: slot.selectedPortrait,
                     permanentUpgradeLevels: slot.permanentUpgradeLevels,
                     isLocal: false // All remote for the client
                 })),
@@ -287,7 +291,7 @@ export function addPlayerToParty(playerName, inviteCode) {
  * @param {string} peerId - Peer ID of the joining player
  * @returns {number|null} Slot index if successful, null if party full
  */
-function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, peerId, permanentUpgradeLevels = null) {
+function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, selectedPortrait, peerId, permanentUpgradeLevels = null) {
     // Find first empty slot
     for (let i = 1; i < party.slots.length; i++) {
         if (party.slots[i].playerId === null) {
@@ -295,6 +299,7 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
             party.slots[i].playerName = playerName;
             party.slots[i].inviteCode = inviteCode;
             party.slots[i].selectedCharacter = selectedCharacter;
+            party.slots[i].selectedPortrait = selectedPortrait;
             party.slots[i].peerId = peerId;
             party.slots[i].permanentUpgradeLevels = permanentUpgradeLevels;
             party.peerIdToSlot.set(peerId, i);
@@ -326,6 +331,7 @@ export async function joinPartyAsClient(hostInviteCode) {
                 playerName: null,
                 inviteCode: null,
                 selectedCharacter: null,
+                selectedPortrait: null,
                 isLocal: false,
                 peerId: null
             };
@@ -356,11 +362,12 @@ export async function joinPartyAsClient(hostInviteCode) {
         // Connect to host
         await connectToHost(hostInviteCode);
 
-        // Send our player info including selected character and permanent upgrades
+        // Send our player info including selected character, portrait, and permanent upgrades
         sendToHost('join_request', {
             playerName: savedLocalPlayer.playerName,
             inviteCode: savedLocalPlayer.inviteCode,
             selectedCharacter: savedLocalPlayer.selectedCharacter,
+            selectedPortrait: getSelectedPortrait() || 'default',
             permanentUpgradeLevels: {
                 startingHealth: getPermanentUpgradeLevel('startingHealth'),
                 startingDamage: getPermanentUpgradeLevel('startingDamage'),
@@ -541,6 +548,7 @@ function broadcastPartyUpdate() {
             playerName: slot.playerName,
             inviteCode: slot.inviteCode,
             selectedCharacter: slot.selectedCharacter,
+            selectedPortrait: slot.selectedPortrait,
             permanentUpgradeLevels: slot.permanentUpgradeLevels,
             isLocal: false, // Always false for remote players
             isReady: slot.isReady || false,
@@ -763,6 +771,7 @@ export function getPartyDisplayInfo() {
         isLocal: slot.isLocal,
         inviteCode: slot.inviteCode,
         selectedCharacter: slot.selectedCharacter || 'survivor',
+        selectedPortrait: slot.selectedPortrait || 'default',
         isReady: slot.isReady || false,
         isDisconnected: slot.isDisconnected || false
     }));
