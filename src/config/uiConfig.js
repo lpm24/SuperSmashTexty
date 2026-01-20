@@ -5,17 +5,49 @@
  */
 
 // =============================================================================
-// TYPOGRAPHY
+// SIZE SYSTEM - Button Hierarchy
+// =============================================================================
+
+export const UI_SIZES = {
+    // Button sizes - use these for consistent button dimensions
+    BUTTON: {
+        XS: { width: 80, height: 24 },    // Tab buttons, small actions
+        SM: { width: 120, height: 30 },   // Secondary actions, back buttons
+        MD: { width: 160, height: 36 },   // Standard actions
+        LG: { width: 280, height: 45 },   // Primary CTAs (Play, Start, Confirm)
+        XL: { width: 320, height: 50 }    // Full-width menu buttons
+    },
+    // Card sizes - use these for consistent card dimensions
+    CARD: {
+        FULL: { width: 340, height: 105 },  // Shop items, detailed cards
+        HALF: { width: 165, height: 100 },  // Character select, dual-column
+        ICON: { width: 60, height: 60 }     // Stat icons, cosmetic previews
+    },
+    // Progress bar sizes
+    PROGRESS: {
+        STANDARD: { width: 100, height: 8 },   // Upgrade progress
+        WIDE: { width: 200, height: 12 },      // XP bars, loading
+        NARROW: { width: 80, height: 6 }       // Inline stats
+    }
+};
+
+// =============================================================================
+// TYPOGRAPHY SCALE
 // =============================================================================
 
 export const UI_TEXT_SIZES = {
-    TITLE: 36,           // Scene titles
-    HEADER: 24,          // Section headers
-    LABEL: 18,           // Important labels
-    BODY: 16,            // Descriptions, stats
-    SMALL: 14,           // Hints, secondary info
-    BUTTON: 20,          // Button text
-    HUD: 16              // In-game HUD
+    H1: 24,              // Scene titles (was TITLE at 36, reduced for better fit)
+    H2: 18,              // Section headers
+    BODY: 16,            // Main content
+    SMALL: 14,           // Descriptions
+    TINY: 12,            // Labels, hints
+    MICRO: 11,           // Stats, fine print
+    // Legacy names (for backwards compatibility)
+    TITLE: 36,           // Scene titles (legacy)
+    HEADER: 24,          // Section headers (legacy)
+    LABEL: 18,           // Important labels (legacy)
+    BUTTON: 20,          // Button text (legacy)
+    HUD: 16              // In-game HUD (legacy)
 };
 
 // =============================================================================
@@ -82,10 +114,17 @@ export const UI_COLORS = {
 };
 
 // =============================================================================
-// SPACING
+// SPACING - Standard spacing scale
 // =============================================================================
 
 export const UI_SPACING = {
+    // Standard spacing scale
+    XS: 4,                    // Extra small spacing
+    SM: 8,                    // Small spacing
+    MD: 16,                   // Medium spacing
+    LG: 24,                   // Large spacing
+    XL: 32,                   // Extra large spacing
+    // Legacy spacing (for backwards compatibility)
     BUTTON_VERTICAL: 65,      // Vertical spacing between menu buttons
     BUTTON_HORIZONTAL: 20,    // Horizontal spacing between buttons
     ITEM_SPACING: 50,         // Spacing between list items
@@ -195,7 +234,7 @@ export const UI_Z_LAYERS = {
     UI_ELEMENTS: 200,
     UI_TEXT: 300,
     OVERLAY: 500,
-    MODAL: 1000,
+    MODAL: 1500,
     TOOLTIP: 2000,
     PAUSE_MENU: 2001,
     DEBUG: 9999
@@ -551,5 +590,107 @@ export function createCreditIndicator(k, currency, currencyName) {
         panel,
         text,
         updateCurrency
+    };
+}
+
+// =============================================================================
+// STYLED TEXT HELPER
+// =============================================================================
+
+/**
+ * Create styled text using the typography scale
+ * @param {Object} k - Kaplay instance
+ * @param {string} content - Text content
+ * @param {Object} options - Configuration options
+ * @param {string} options.level - Typography level: 'H1', 'H2', 'BODY', 'SMALL', 'TINY', 'MICRO'
+ * @param {number} options.x - X position
+ * @param {number} options.y - Y position
+ * @param {string} options.anchor - Anchor point (default: 'center')
+ * @param {Array} options.color - RGB color array (default: TEXT_PRIMARY)
+ * @returns {Object} - The text game object
+ */
+export function createStyledText(k, content, options = {}) {
+    const {
+        level = 'BODY',
+        x = 0,
+        y = 0,
+        anchor = 'center',
+        color = UI_COLORS.TEXT_PRIMARY
+    } = options;
+
+    const size = UI_TEXT_SIZES[level] || UI_TEXT_SIZES.BODY;
+
+    return k.add([
+        k.text(content, { size }),
+        k.pos(x, y),
+        k.anchor(anchor),
+        k.color(...color),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.UI_TEXT)
+    ]);
+}
+
+// =============================================================================
+// PROGRESS BAR HELPER
+// =============================================================================
+
+/**
+ * Create a progress bar
+ * @param {Object} k - Kaplay instance
+ * @param {Object} options - Configuration options
+ * @param {number} options.x - X position
+ * @param {number} options.y - Y position
+ * @param {number} options.width - Bar width (default: 100)
+ * @param {number} options.height - Bar height (default: 8)
+ * @param {number} options.value - Current value (0-1)
+ * @param {Array} options.fillColor - RGB color for filled portion
+ * @param {Array} options.bgColor - RGB color for background
+ * @returns {Object} - Object with bg, fill elements and update function
+ */
+export function createProgressBar(k, options = {}) {
+    const {
+        x = 0,
+        y = 0,
+        width = UI_SIZES.PROGRESS.STANDARD.width,
+        height = UI_SIZES.PROGRESS.STANDARD.height,
+        value = 0,
+        fillColor = UI_COLORS.PRIMARY,
+        bgColor = UI_COLORS.BG_DARK
+    } = options;
+
+    const clampedValue = Math.max(0, Math.min(1, value));
+
+    // Background
+    const bg = k.add([
+        k.rect(width, height),
+        k.pos(x, y),
+        k.anchor('topleft'),
+        k.color(...bgColor),
+        k.outline(1, k.rgb(60, 60, 80)),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.UI_ELEMENTS)
+    ]);
+
+    // Fill
+    const fillWidth = Math.max(0, (width - 2) * clampedValue);
+    const fill = k.add([
+        k.rect(fillWidth, height - 2),
+        k.pos(x + 1, y + 1),
+        k.anchor('topleft'),
+        k.color(...fillColor),
+        k.fixed(),
+        k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+    ]);
+
+    // Update function
+    const updateValue = (newValue) => {
+        const clamped = Math.max(0, Math.min(1, newValue));
+        fill.width = Math.max(0, (width - 2) * clamped);
+    };
+
+    return {
+        bg,
+        fill,
+        updateValue
     };
 }

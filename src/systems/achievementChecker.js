@@ -19,6 +19,38 @@ let runChallengeData = {
     bossStartHP: 0           // HP at start of boss fight
 };
 
+// Store kaplay instance for showing toasts from event functions
+let kInstance = null;
+
+/**
+ * Helper function to unlock an achievement and show toast immediately
+ * @param {string} achievementId - Achievement ID to unlock
+ * @returns {boolean} True if newly unlocked
+ */
+function unlockAndNotify(achievementId) {
+    if (isAchievementUnlocked(achievementId)) return false;
+
+    if (unlockAchievement(achievementId)) {
+        runUnlockedAchievements.push(achievementId);
+
+        // Show toast immediately if we have a kaplay instance
+        if (kInstance) {
+            const achievement = ACHIEVEMENTS[achievementId];
+            if (achievement) {
+                playAchievement();
+                showAchievementToast(achievement);
+
+                // Broadcast in multiplayer
+                if (isMultiplayerActive()) {
+                    broadcastAchievementUnlocked(achievementId, getLocalPlayerSlot());
+                }
+            }
+        }
+        return true;
+    }
+    return false;
+}
+
 /**
  * Initialize achievement checker for a new run
  * @param {Object} k - Kaplay instance for toast notifications
@@ -32,6 +64,9 @@ export function initAchievementChecker(k) {
         currentBossNoDamage: true,
         bossStartHP: 0
     };
+
+    // Store kaplay instance for showing toasts from event functions
+    kInstance = k;
 
     // Initialize toast system
     if (k) {
@@ -100,25 +135,19 @@ export function onBossDefeated(playerCurrentHP, playerMaxHP) {
     runChallengeData.bossesKilledThisRun++;
 
     // Check noHitBoss achievement
-    if (runChallengeData.currentBossNoDamage && !isAchievementUnlocked('noHitBoss')) {
-        if (unlockAchievement('noHitBoss')) {
-            runUnlockedAchievements.push('noHitBoss');
-        }
+    if (runChallengeData.currentBossNoDamage) {
+        unlockAndNotify('noHitBoss');
     }
 
     // Check glassCannonWin achievement (below 25% HP)
     const hpPercent = playerCurrentHP / playerMaxHP;
-    if (hpPercent < 0.25 && !isAchievementUnlocked('glassCannonWin')) {
-        if (unlockAchievement('glassCannonWin')) {
-            runUnlockedAchievements.push('glassCannonWin');
-        }
+    if (hpPercent < 0.25) {
+        unlockAndNotify('glassCannonWin');
     }
 
     // Check bossRush achievement (3 bosses in one run)
-    if (runChallengeData.bossesKilledThisRun >= 3 && !isAchievementUnlocked('bossRush')) {
-        if (unlockAchievement('bossRush')) {
-            runUnlockedAchievements.push('bossRush');
-        }
+    if (runChallengeData.bossesKilledThisRun >= 3) {
+        unlockAndNotify('bossRush');
     }
 
     // Reset boss tracking for next boss
@@ -132,19 +161,15 @@ export function onBossDefeated(playerCurrentHP, playerMaxHP) {
  */
 export function onFloorCompleted(floor) {
     // Check perfectFloor achievement
-    if (wasFloorPerfect(floor) && !isAchievementUnlocked('perfectFloor')) {
-        if (unlockAchievement('perfectFloor')) {
-            runUnlockedAchievements.push('perfectFloor');
-        }
+    if (wasFloorPerfect(floor)) {
+        unlockAndNotify('perfectFloor');
     }
 
     // Check speedRunner achievement (Floor 3 in under 5 minutes)
     if (floor >= 3) {
         const runDuration = (Date.now() - runChallengeData.runStartTime) / 1000;
-        if (runDuration < 300 && !isAchievementUnlocked('speedRunner')) { // 5 minutes = 300 seconds
-            if (unlockAchievement('speedRunner')) {
-                runUnlockedAchievements.push('speedRunner');
-            }
+        if (runDuration < 300) { // 5 minutes = 300 seconds
+            unlockAndNotify('speedRunner');
         }
     }
 
@@ -156,11 +181,7 @@ export function onFloorCompleted(floor) {
  * Called when a synergy is activated (for firstSynergy achievement)
  */
 export function onSynergyActivated() {
-    if (!isAchievementUnlocked('firstSynergy')) {
-        if (unlockAchievement('firstSynergy')) {
-            runUnlockedAchievements.push('firstSynergy');
-        }
-    }
+    unlockAndNotify('firstSynergy');
 }
 
 /**
@@ -171,10 +192,8 @@ export function checkAllCharactersUnlocked() {
     const unlockedCharacters = saveData.unlocks?.characters || ['survivor'];
     const totalCharacters = Object.keys(CHARACTER_UNLOCKS).length;
 
-    if (unlockedCharacters.length >= totalCharacters && !isAchievementUnlocked('allCharacters')) {
-        if (unlockAchievement('allCharacters')) {
-            runUnlockedAchievements.push('allCharacters');
-        }
+    if (unlockedCharacters.length >= totalCharacters) {
+        unlockAndNotify('allCharacters');
     }
 }
 
@@ -191,10 +210,8 @@ export function checkMaxUpgrade() {
             const currentLevel = upgradeLevels[key] || 0;
             const maxLevel = upgrade.maxLevel || 1;
 
-            if (currentLevel >= maxLevel && !isAchievementUnlocked('maxUpgrade')) {
-                if (unlockAchievement('maxUpgrade')) {
-                    runUnlockedAchievements.push('maxUpgrade');
-                }
+            if (currentLevel >= maxLevel) {
+                unlockAndNotify('maxUpgrade');
                 break;
             }
         }
@@ -202,148 +219,79 @@ export function checkMaxUpgrade() {
 }
 
 // Check all achievements based on current stats
-export function checkAchievements(k) {
-    const stats = getSaveStats();
+// Can be called during gameplay or at game over
+// @param {Object} k - Kaplay instance (optional, uses stored instance if not provided)
+// @param {Object} currentRunStats - Optional current run stats to augment saved stats
+//   { floor, enemiesKilled, bossesKilled, level, currencyEarned }
+export function checkAchievements(k, currentRunStats = null) {
+    // Update kInstance if provided (for showing toasts)
+    if (k) {
+        kInstance = k;
+        initToastSystem(k);
+    }
+
+    const savedStats = getSaveStats();
+
+    // Merge saved stats with current run stats if provided
+    const stats = {
+        bestFloor: Math.max(savedStats.bestFloor || 0, currentRunStats?.floor || 0),
+        totalEnemiesKilled: (savedStats.totalEnemiesKilled || 0) + (currentRunStats?.enemiesKilled || 0),
+        totalBossesKilled: (savedStats.totalBossesKilled || 0) + (currentRunStats?.bossesKilled || 0),
+        totalRuns: savedStats.totalRuns || 0,
+        bestLevel: Math.max(savedStats.bestLevel || 0, currentRunStats?.level || 0),
+        totalCurrencyEarned: (savedStats.totalCurrencyEarned || 0) + (currentRunStats?.currencyEarned || 0)
+    };
+
     const newlyUnlocked = [];
 
+    // Helper to check and unlock with notification
+    const check = (condition, achievementId) => {
+        if (condition && unlockAndNotify(achievementId)) {
+            newlyUnlocked.push(achievementId);
+        }
+    };
+
     // Floor progression achievements
-    if (stats.bestFloor >= 2 && !isAchievementUnlocked('floor2')) {
-        if (unlockAchievement('floor2')) newlyUnlocked.push('floor2');
-    }
-    if (stats.bestFloor >= 3 && !isAchievementUnlocked('floor3')) {
-        if (unlockAchievement('floor3')) newlyUnlocked.push('floor3');
-    }
-    if (stats.bestFloor >= 5 && !isAchievementUnlocked('floor5')) {
-        if (unlockAchievement('floor5')) newlyUnlocked.push('floor5');
-    }
-    if (stats.bestFloor >= 10 && !isAchievementUnlocked('floor10')) {
-        if (unlockAchievement('floor10')) newlyUnlocked.push('floor10');
-    }
-    if (stats.bestFloor >= 15 && !isAchievementUnlocked('floor15')) {
-        if (unlockAchievement('floor15')) newlyUnlocked.push('floor15');
-    }
-    if (stats.bestFloor >= 20 && !isAchievementUnlocked('floor20')) {
-        if (unlockAchievement('floor20')) newlyUnlocked.push('floor20');
-    }
+    check(stats.bestFloor >= 2, 'floor2');
+    check(stats.bestFloor >= 3, 'floor3');
+    check(stats.bestFloor >= 5, 'floor5');
+    check(stats.bestFloor >= 10, 'floor10');
+    check(stats.bestFloor >= 15, 'floor15');
+    check(stats.bestFloor >= 20, 'floor20');
 
     // Combat achievements
-    if (stats.totalEnemiesKilled >= 1 && !isAchievementUnlocked('firstKill')) {
-        if (unlockAchievement('firstKill')) newlyUnlocked.push('firstKill');
-    }
-    if (stats.totalEnemiesKilled >= 100 && !isAchievementUnlocked('kill100')) {
-        if (unlockAchievement('kill100')) newlyUnlocked.push('kill100');
-    }
-    if (stats.totalEnemiesKilled >= 500 && !isAchievementUnlocked('kill500')) {
-        if (unlockAchievement('kill500')) newlyUnlocked.push('kill500');
-    }
-    if (stats.totalEnemiesKilled >= 1000 && !isAchievementUnlocked('kill1000')) {
-        if (unlockAchievement('kill1000')) newlyUnlocked.push('kill1000');
-    }
-    if (stats.totalEnemiesKilled >= 5000 && !isAchievementUnlocked('kill5000')) {
-        if (unlockAchievement('kill5000')) newlyUnlocked.push('kill5000');
-    }
-    if (stats.totalEnemiesKilled >= 10000 && !isAchievementUnlocked('kill10000')) {
-        if (unlockAchievement('kill10000')) newlyUnlocked.push('kill10000');
-    }
+    check(stats.totalEnemiesKilled >= 1, 'firstKill');
+    check(stats.totalEnemiesKilled >= 100, 'kill100');
+    check(stats.totalEnemiesKilled >= 500, 'kill500');
+    check(stats.totalEnemiesKilled >= 1000, 'kill1000');
+    check(stats.totalEnemiesKilled >= 5000, 'kill5000');
+    check(stats.totalEnemiesKilled >= 10000, 'kill10000');
 
     // Boss achievements
-    if (stats.totalBossesKilled >= 1 && !isAchievementUnlocked('firstBoss')) {
-        if (unlockAchievement('firstBoss')) newlyUnlocked.push('firstBoss');
-    }
-    if (stats.totalBossesKilled >= 5 && !isAchievementUnlocked('boss5')) {
-        if (unlockAchievement('boss5')) newlyUnlocked.push('boss5');
-    }
-    if (stats.totalBossesKilled >= 10 && !isAchievementUnlocked('boss10')) {
-        if (unlockAchievement('boss10')) newlyUnlocked.push('boss10');
-    }
-    if (stats.totalBossesKilled >= 25 && !isAchievementUnlocked('boss25')) {
-        if (unlockAchievement('boss25')) newlyUnlocked.push('boss25');
-    }
-    if (stats.totalBossesKilled >= 50 && !isAchievementUnlocked('boss50')) {
-        if (unlockAchievement('boss50')) newlyUnlocked.push('boss50');
-    }
+    check(stats.totalBossesKilled >= 1, 'firstBoss');
+    check(stats.totalBossesKilled >= 5, 'boss5');
+    check(stats.totalBossesKilled >= 10, 'boss10');
+    check(stats.totalBossesKilled >= 25, 'boss25');
+    check(stats.totalBossesKilled >= 50, 'boss50');
 
     // Run achievements
-    if (stats.totalRuns >= 1 && !isAchievementUnlocked('firstRun')) {
-        if (unlockAchievement('firstRun')) newlyUnlocked.push('firstRun');
-    }
-    if (stats.totalRuns >= 10 && !isAchievementUnlocked('run10')) {
-        if (unlockAchievement('run10')) newlyUnlocked.push('run10');
-    }
-    if (stats.totalRuns >= 50 && !isAchievementUnlocked('run50')) {
-        if (unlockAchievement('run50')) newlyUnlocked.push('run50');
-    }
-    if (stats.totalRuns >= 100 && !isAchievementUnlocked('run100')) {
-        if (unlockAchievement('run100')) newlyUnlocked.push('run100');
-    }
+    check(stats.totalRuns >= 1, 'firstRun');
+    check(stats.totalRuns >= 10, 'run10');
+    check(stats.totalRuns >= 50, 'run50');
+    check(stats.totalRuns >= 100, 'run100');
 
     // Upgrade achievements (best level in a run)
-    if (stats.bestLevel >= 10 && !isAchievementUnlocked('level10')) {
-        if (unlockAchievement('level10')) newlyUnlocked.push('level10');
-    }
-    if (stats.bestLevel >= 20 && !isAchievementUnlocked('level20')) {
-        if (unlockAchievement('level20')) newlyUnlocked.push('level20');
-    }
-    if (stats.bestLevel >= 30 && !isAchievementUnlocked('level30')) {
-        if (unlockAchievement('level30')) newlyUnlocked.push('level30');
-    }
-    if (stats.bestLevel >= 50 && !isAchievementUnlocked('level50')) {
-        if (unlockAchievement('level50')) newlyUnlocked.push('level50');
-    }
+    check(stats.bestLevel >= 10, 'level10');
+    check(stats.bestLevel >= 20, 'level20');
+    check(stats.bestLevel >= 30, 'level30');
+    check(stats.bestLevel >= 50, 'level50');
 
     // Currency achievements
-    if (stats.totalCurrencyEarned >= 100 && !isAchievementUnlocked('earn100')) {
-        if (unlockAchievement('earn100')) newlyUnlocked.push('earn100');
-    }
-    if (stats.totalCurrencyEarned >= 500 && !isAchievementUnlocked('earn500')) {
-        if (unlockAchievement('earn500')) newlyUnlocked.push('earn500');
-    }
-    if (stats.totalCurrencyEarned >= 1000 && !isAchievementUnlocked('earn1000')) {
-        if (unlockAchievement('earn1000')) newlyUnlocked.push('earn1000');
-    }
-    if (stats.totalCurrencyEarned >= 5000 && !isAchievementUnlocked('earn5000')) {
-        if (unlockAchievement('earn5000')) newlyUnlocked.push('earn5000');
-    }
-    if (stats.totalCurrencyEarned >= 10000 && !isAchievementUnlocked('earn10000')) {
-        if (unlockAchievement('earn10000')) newlyUnlocked.push('earn10000');
-    }
-
-    // Track run unlocks
-    newlyUnlocked.forEach(id => {
-        if (!runUnlockedAchievements.includes(id)) {
-            runUnlockedAchievements.push(id);
-        }
-    });
-
-    // Show toast notifications for newly unlocked achievements
-    if (newlyUnlocked.length > 0 && k) {
-        // Make sure toast system is initialized
-        initToastSystem(k);
-
-        // Check if we're in multiplayer to broadcast achievements
-        const inMultiplayer = isMultiplayerActive();
-        const localSlot = inMultiplayer ? getLocalPlayerSlot() : 0;
-
-        newlyUnlocked.forEach((achId, index) => {
-            const achievement = ACHIEVEMENTS[achId];
-            if (achievement) {
-                // Play sound for first achievement
-                if (index === 0) {
-                    playAchievement();
-                }
-
-                // Stagger toasts slightly
-                k.wait(index * 0.5, () => {
-                    showAchievementToast(achievement);
-                });
-
-                // Broadcast to other players in multiplayer
-                if (inMultiplayer) {
-                    broadcastAchievementUnlocked(achId, localSlot);
-                }
-            }
-        });
-    }
+    check(stats.totalCurrencyEarned >= 100, 'earn100');
+    check(stats.totalCurrencyEarned >= 500, 'earn500');
+    check(stats.totalCurrencyEarned >= 1000, 'earn1000');
+    check(stats.totalCurrencyEarned >= 5000, 'earn5000');
+    check(stats.totalCurrencyEarned >= 10000, 'earn10000');
 
     return newlyUnlocked;
 }

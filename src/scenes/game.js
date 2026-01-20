@@ -37,7 +37,7 @@ import { checkAndApplySynergies, trackUpgrade } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
-import { checkAchievements } from '../systems/achievementChecker.js';
+import { checkAchievements, initAchievementChecker } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio } from '../systems/sounds.js';
@@ -57,6 +57,7 @@ import { MINIBOSS_TYPES, getMinibossDefinition } from '../data/minibosses.js';
 // Config imports
 import { PICKUP_CONFIG } from '../config/constants.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
@@ -289,6 +290,10 @@ export function setupGameScene(k) {
                 killsByType: {},
                 startTime: Date.now() // Track run start time
             };
+
+            // Initialize achievement checker for new run (clears previous run's achievements)
+            initAchievementChecker(k);
+
             // Initialize per-run rerolls from Mulligan permanent upgrade
             const mulliganLevel = getPermanentUpgradeLevel('mulligan');
             gameState.rerollsRemaining = mulliganLevel;
@@ -468,9 +473,11 @@ export function setupGameScene(k) {
         
         // Create player
         let player;
+        // For daily runs, always use the daily character (even on room transitions)
+        const characterOverride = gameState.isDailyRun ? gameState.dailyCharacter : null;
         if (gameState.playerStats) {
             // Restore player with previous stats
-            player = createPlayer(k, playerSpawnX, playerSpawnY);
+            player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
             // Restore stats
             Object.assign(player, gameState.playerStats);
             // CRITICAL: Local player is NEVER remote - host's saved stats may have isRemote: true
@@ -4640,42 +4647,42 @@ export function setupGameScene(k) {
             });
         });
         
-        // Pause overlay - compact box that fits just the title and buttons
+        // Pause overlay - styled modal backdrop
         const pauseOverlay = k.add([
-            k.rect(270, 250),
+            k.rect(300, 260),
             k.pos(k.width() / 2, k.height() / 2),
             k.anchor('center'),
-            k.color(0, 0, 0),
-            k.opacity(0.9),
-            k.outline(3, k.rgb(200, 200, 200)),
+            k.color(...UI_COLORS.BG_DARK),
+            k.opacity(0.95),
+            k.outline(3, k.rgb(...UI_COLORS.BORDER)),
             k.fixed(),
             k.z(2000),
             'pauseOverlay'
         ]);
-        
+
+        // Paused title with H1 styling
         const pauseText = k.add([
-            k.text('PAUSED', { size: 48 }),
-            k.pos(k.width() / 2, k.height() / 2 - 100),
+            k.text('PAUSED', { size: UI_TEXT_SIZES.H1 * 2 }),
+            k.pos(k.width() / 2, k.height() / 2 - 95),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
             k.z(2001),
             'pauseText'
         ]);
-        
-        // Pause menu buttons
-        const buttonY = k.height() / 2;
-        const buttonSpacing = 60;
-        const buttonWidth = 200;
-        const buttonHeight = 40;
 
-        // Resume button
+        // Pause menu buttons using standardized sizes
+        const pauseCenterY = k.height() / 2;
+        const pauseButtonSpacing = 55;
+        const { LG, SM } = UI_SIZES.BUTTON;
+
+        // Resume button (LG size - primary CTA)
         const resumeButton = k.add([
-            k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2, buttonY - buttonSpacing / 2),
+            k.rect(LG.width, LG.height),
+            k.pos(k.width() / 2, pauseCenterY - 20),
             k.anchor('center'),
-            k.color(50, 150, 50),
-            k.outline(2, k.rgb(100, 200, 100)),
+            k.color(...UI_COLORS.SUCCESS),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(2001),
@@ -4683,22 +4690,22 @@ export function setupGameScene(k) {
         ]);
 
         const resumeText = k.add([
-            k.text('Resume', { size: 18 }),
-            k.pos(k.width() / 2, buttonY - buttonSpacing / 2),
+            k.text('RESUME', { size: UI_TEXT_SIZES.H2 }),
+            k.pos(k.width() / 2, pauseCenterY - 20),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
             k.z(2002),
             'pauseButton'
         ]);
 
-        // Quit to Menu button
+        // Quit to Menu button (SM size - danger action)
         const quitButton = k.add([
-            k.rect(buttonWidth, buttonHeight),
-            k.pos(k.width() / 2, buttonY + buttonSpacing / 2),
+            k.rect(SM.width, SM.height),
+            k.pos(k.width() / 2, pauseCenterY + 45),
             k.anchor('center'),
-            k.color(150, 50, 50),
-            k.outline(2, k.rgb(200, 100, 100)),
+            k.color(...UI_COLORS.DANGER),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
             k.z(2001),
@@ -4706,10 +4713,10 @@ export function setupGameScene(k) {
         ]);
 
         const quitText = k.add([
-            k.text('Quit to Menu', { size: 18 }),
-            k.pos(k.width() / 2, buttonY + buttonSpacing / 2),
+            k.text('QUIT', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2, pauseCenterY + 45),
             k.anchor('center'),
-            k.color(255, 255, 255),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
             k.z(2002),
             'pauseButton'

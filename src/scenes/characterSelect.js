@@ -5,6 +5,7 @@ import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
@@ -15,6 +16,7 @@ import {
     createMenuParticles,
     createAnimatedTitle
 } from '../config/uiConfig.js';
+import { createStatBar } from '../config/uiComponents.js';
 
 // Helper function to get unlock requirement text
 function getUnlockText(char) {
@@ -59,13 +61,15 @@ export function setupCharacterSelectScene(k) {
         
         // Character selection layout: Left side = selection grid, Right side = details
         const characterKeys = Object.keys(CHARACTER_UNLOCKS);
-        const leftPanelWidth = 350;
+        const leftPanelWidth = 360;
         const rightPanelX = leftPanelWidth + 20;
         const rightPanelWidth = k.width() - rightPanelX - 20;
         const startY = 120;
-        const cardWidth = 150;
-        const cardHeight = 100;
-        const cardSpacing = 15;
+        // Use standardized Half card size from UI_SIZES
+        const { HALF: cardSize } = UI_SIZES.CARD;
+        const cardWidth = cardSize.width;
+        const cardHeight = cardSize.height;
+        const cardSpacing = 12;
         const cardsPerRow = 2;
         const rowsPerPage = 3;
         const charactersPerPage = cardsPerRow * rowsPerPage;
@@ -191,20 +195,24 @@ export function setupCharacterSelectScene(k) {
             });
 
             // Pagination controls (only show if more than one page)
-            // Matches shop/statistics pagination style
             if (totalPages > 1) {
                 const paginationY = startY + rowsPerPage * (cardHeight + cardSpacing) + 15;
                 const paginationCenterX = leftPanelWidth / 2;
 
-                // Page indicator pips (created first, lower z-index)
+                // Page indicator pips
                 const pipSpacing = 20;
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+                const pipsEndX = paginationCenterX + ((totalPages - 1) * pipSpacing) / 2;
+
+                // Arrows positioned outside the pips with offset for pip clickable area (16px) + gap
+                const arrowOffset = 25;
+                const leftArrowX = pipsStartX - arrowOffset;
+                const rightArrowX = pipsEndX + arrowOffset;
 
                 for (let i = 0; i < totalPages; i++) {
                     const isCurrentPage = i === currentPage;
                     const pipX = pipsStartX + i * pipSpacing;
 
-                    // Pip hitbox (explicit bounded area)
                     const pipBg = k.add([
                         k.rect(16, 16),
                         k.pos(pipX, paginationY),
@@ -238,10 +246,10 @@ export function setupCharacterSelectScene(k) {
                     paginationItems.push(pipBg, pipText);
                 }
 
-                // Left arrow (created after pips, higher z-index for click priority)
+                // Left arrow (higher z-index to sit on top and take priority)
                 const leftArrowBg = k.add([
                     k.rect(30, 30),
-                    k.pos(paginationCenterX - 80, paginationY),
+                    k.pos(leftArrowX, paginationY),
                     k.anchor('center'),
                     k.color(0, 0, 0),
                     k.opacity(0),
@@ -252,7 +260,7 @@ export function setupCharacterSelectScene(k) {
 
                 const leftArrowText = k.add([
                     k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 80, paginationY),
+                    k.pos(leftArrowX, paginationY),
                     k.anchor('center'),
                     k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                     k.fixed(),
@@ -269,10 +277,10 @@ export function setupCharacterSelectScene(k) {
                 }
                 paginationItems.push(leftArrowBg, leftArrowText);
 
-                // Right arrow (created after pips, higher z-index for click priority)
+                // Right arrow (higher z-index to sit on top and take priority)
                 const rightArrowBg = k.add([
                     k.rect(30, 30),
-                    k.pos(paginationCenterX + 80, paginationY),
+                    k.pos(rightArrowX, paginationY),
                     k.anchor('center'),
                     k.color(0, 0, 0),
                     k.opacity(0),
@@ -283,7 +291,7 @@ export function setupCharacterSelectScene(k) {
 
                 const rightArrowText = k.add([
                     k.text('>', { size: 24 }),
-                    k.pos(paginationCenterX + 80, paginationY),
+                    k.pos(rightArrowX, paginationY),
                     k.anchor('center'),
                     k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                     k.fixed(),
@@ -342,7 +350,7 @@ export function setupCharacterSelectScene(k) {
             detailItems.push(detailDesc);
             detailY += 60;
 
-            // Stats
+            // Stats with visual bars
             const statsLabel = k.add([
                 k.text('Stats:', { size: UI_TEXT_SIZES.LABEL }),
                 k.pos(rightPanelX + 20, detailY),
@@ -352,40 +360,51 @@ export function setupCharacterSelectScene(k) {
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(statsLabel);
-            detailY += 30;
+            detailY += 28;
 
-            const statsText = k.add([
-                k.text(`${UI_TERMS.HEALTH}: ${viewedChar.stats.health}`, { size: UI_TEXT_SIZES.BODY }),
-                k.pos(rightPanelX + 40, detailY),
-                k.anchor('left'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-            detailItems.push(statsText);
-            detailY += 25;
+            // Stat bar constants
+            const statBarWidth = 100;
+            const statBarX = rightPanelX + 40;
+            const statRowHeight = 24;
 
-            const speedText = k.add([
-                k.text(`${UI_TERMS.SPEED}: ${viewedChar.stats.speed}`, { size: UI_TEXT_SIZES.BODY }),
-                k.pos(rightPanelX + 40, detailY),
-                k.anchor('left'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-            detailItems.push(speedText);
-            detailY += 25;
+            // Health stat bar (max 200 for scale)
+            const healthBar = createStatBar(k, {
+                label: UI_TERMS.HEALTH,
+                value: viewedChar.stats.health,
+                maxValue: 200,
+                x: statBarX,
+                y: detailY,
+                width: statBarWidth,
+                color: UI_COLORS.SUCCESS
+            });
+            detailItems.push(...healthBar.elements);
+            detailY += statRowHeight;
 
-            const damageText = k.add([
-                k.text(`${UI_TERMS.DAMAGE}: ${viewedChar.stats.damage}`, { size: UI_TEXT_SIZES.BODY }),
-                k.pos(rightPanelX + 40, detailY),
-                k.anchor('left'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-            detailItems.push(damageText);
-            detailY += 40;
+            // Speed stat bar (max 300 for scale)
+            const speedBar = createStatBar(k, {
+                label: UI_TERMS.SPEED,
+                value: viewedChar.stats.speed,
+                maxValue: 300,
+                x: statBarX,
+                y: detailY,
+                width: statBarWidth,
+                color: UI_COLORS.PRIMARY
+            });
+            detailItems.push(...speedBar.elements);
+            detailY += statRowHeight;
+
+            // Damage stat bar (max 200 for scale)
+            const damageBar = createStatBar(k, {
+                label: UI_TERMS.DAMAGE,
+                value: viewedChar.stats.damage,
+                maxValue: 200,
+                x: statBarX,
+                y: detailY,
+                width: statBarWidth,
+                color: UI_COLORS.DANGER
+            });
+            detailItems.push(...damageBar.elements);
+            detailY += 35;
 
             // Currently selected indicator (show if viewing the confirmed selection)
             if (viewedCharacterKey === confirmedCharacterKey) {

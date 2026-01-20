@@ -3,6 +3,7 @@ import { getSaveStats, getUnlockedAchievements, getCurrencyName, getRunHistory }
 import { ACHIEVEMENTS, getAchievementCategories, getAchievementsByCategory, ACHIEVEMENT_COLORS, getAchievementProgress } from '../data/achievements.js';
 import { playMenuNav } from '../systems/sounds.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS,
@@ -608,6 +609,16 @@ export function setupStatisticsScene(k) {
                         const paginationY = viewportBottom - 55;
                         const paginationCenterX = k.width() / 2;
 
+                        // Page indicator pips
+                        const pipSpacing = 20;
+                        const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+                        const pipsEndX = paginationCenterX + ((totalPages - 1) * pipSpacing) / 2;
+
+                        // Arrows positioned outside the pips with offset for pip clickable area (16px) + gap
+                        const arrowOffset = 25;
+                        const leftArrowX = pipsStartX - arrowOffset;
+                        const rightArrowX = pipsEndX + arrowOffset;
+
                         // Helper function to handle page change
                         const goToPage = (newPage) => {
                             if (isNavigating || newPage === currentPage || newPage < 0 || newPage >= totalPages) return;
@@ -620,37 +631,6 @@ export function setupStatisticsScene(k) {
                                 k.wait(0.15, () => { isNavigating = false; });
                             });
                         };
-
-                        // Left arrow button (with explicit area, higher z-index for click priority)
-                        const leftArrowBg = k.add([
-                            k.rect(30, 30),
-                            k.pos(paginationCenterX - 80, paginationY),
-                            k.anchor('center'),
-                            k.color(0, 0, 0),
-                            k.opacity(0),
-                            k.area({ width: 30, height: 30 }),
-                            k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
-                        ]);
-                        const leftArrowText = k.add([
-                            k.text('<', { size: 24 }),
-                            k.pos(paginationCenterX - 80, paginationY),
-                            k.anchor('center'),
-                            k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
-                            k.fixed(),
-                            k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                        ]);
-
-                        if (currentPage > 0) {
-                            const targetPage = currentPage - 1;  // Capture at registration time
-                            leftArrowBg.onClick(() => goToPage(targetPage));
-                            leftArrowBg.cursor = 'pointer';
-                        }
-                        contentItems.push(leftArrowBg, leftArrowText);
-
-                        // Page indicator pips (with explicit small areas)
-                        const pipSpacing = 20;
-                        const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
 
                         for (let i = 0; i < totalPages; i++) {
                             const isCurrentPip = i === currentPage;
@@ -682,10 +662,37 @@ export function setupStatisticsScene(k) {
                             contentItems.push(pipBg, pipText);
                         }
 
-                        // Right arrow button (with explicit area, higher z-index for click priority)
+                        // Left arrow (higher z-index to sit on top and take priority)
+                        const leftArrowBg = k.add([
+                            k.rect(30, 30),
+                            k.pos(leftArrowX, paginationY),
+                            k.anchor('center'),
+                            k.color(0, 0, 0),
+                            k.opacity(0),
+                            k.area({ width: 30, height: 30 }),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+                        ]);
+                        const leftArrowText = k.add([
+                            k.text('<', { size: 24 }),
+                            k.pos(leftArrowX, paginationY),
+                            k.anchor('center'),
+                            k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
+                            k.fixed(),
+                            k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                        ]);
+
+                        if (currentPage > 0) {
+                            const targetPage = currentPage - 1;
+                            leftArrowBg.onClick(() => goToPage(targetPage));
+                            leftArrowBg.cursor = 'pointer';
+                        }
+                        contentItems.push(leftArrowBg, leftArrowText);
+
+                        // Right arrow (higher z-index to sit on top and take priority)
                         const rightArrowBg = k.add([
                             k.rect(30, 30),
-                            k.pos(paginationCenterX + 80, paginationY),
+                            k.pos(rightArrowX, paginationY),
                             k.anchor('center'),
                             k.color(0, 0, 0),
                             k.opacity(0),
@@ -695,7 +702,7 @@ export function setupStatisticsScene(k) {
                         ]);
                         const rightArrowText = k.add([
                             k.text('>', { size: 24 }),
-                            k.pos(paginationCenterX + 80, paginationY),
+                            k.pos(rightArrowX, paginationY),
                             k.anchor('center'),
                             k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                             k.fixed(),
@@ -703,7 +710,7 @@ export function setupStatisticsScene(k) {
                         ]);
 
                         if (currentPage < totalPages - 1) {
-                            const targetPage = currentPage + 1;  // Capture at registration time
+                            const targetPage = currentPage + 1;
                             rightArrowBg.onClick(() => goToPage(targetPage));
                             rightArrowBg.cursor = 'pointer';
                         }
@@ -930,9 +937,10 @@ export function setupStatisticsScene(k) {
         // Initial refresh
         refreshContent();
 
-        // Back button (standardized)
+        // Back button (SM size - secondary action)
+        const { SM } = UI_SIZES.BUTTON;
         const backButton = k.add([
-            k.rect(120, 35),
+            k.rect(SM.width, SM.height),
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
@@ -943,7 +951,7 @@ export function setupStatisticsScene(k) {
         ]);
 
         const backText = k.add([
-            k.text(formatButtonText('Back'), { size: UI_TEXT_SIZES.BODY }),
+            k.text('BACK', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),

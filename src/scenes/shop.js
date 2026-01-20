@@ -293,12 +293,14 @@ export function setupShopScene(k) {
                 // Cosmetic icon
                 if (currentCategory === 'cosmetics') {
                     const cosmeticIcon = unlock.category === 'trail' ? '~' : unlock.category === 'death' ? '✕' : '○';
+                    // Get a safe color array (handles 'rainbow' string and missing colors)
+                    const cosmeticColor = Array.isArray(unlock.color) ? unlock.color : [150, 150, 200];
                     const iconBg = k.add([
                         k.rect(36, 36),
                         k.pos(itemX + 8, itemY + 8),
                         k.anchor('topleft'),
                         k.color(25, 25, 35),
-                        k.outline(1, k.rgb(...(unlock.color || [100, 100, 150]))),
+                        k.outline(1, k.rgb(...cosmeticColor)),
                         k.fixed(),
                         k.z(1001)
                     ]);
@@ -306,7 +308,7 @@ export function setupShopScene(k) {
                         k.text(cosmeticIcon, { size: 22 }),
                         k.pos(itemX + 26, itemY + 26),
                         k.anchor('center'),
-                        k.color(...(unlock.color || [150, 150, 200])),
+                        k.color(...cosmeticColor),
                         k.fixed(),
                         k.z(1002)
                     ]);
@@ -511,10 +513,14 @@ export function setupShopScene(k) {
 
                     viewButtonBg.onClick(() => {
                         playMenuNav();
+                        console.log('[Shop] VIEW clicked, requiredAchievement:', requiredAchievement);
                         if (requiredAchievement) {
                             showAchievementModal(k, requiredAchievement);
+                        } else {
+                            console.warn('[Shop] No achievement found for:', unlock.requiredAchievement);
                         }
                     });
+                    viewButtonBg.cursor = 'pointer';
 
                     unlockItems.push(viewButtonBg, viewButtonText);
                 } else if (canPurchase || (currentCategory === 'permanentUpgrades' && progressLevel < progressMax)) {
@@ -753,15 +759,20 @@ export function setupShopScene(k) {
                 const paginationY = k.height() - 115;
                 const paginationCenterX = k.width() / 2;
 
-                // Page indicator pips (created first, lower z-index)
+                // Page indicator pips
                 const pipSpacing = 20;
                 const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+                const pipsEndX = paginationCenterX + ((totalPages - 1) * pipSpacing) / 2;
+
+                // Arrows positioned outside the pips with offset for pip clickable area (16px) + gap
+                const arrowOffset = 25;
+                const leftArrowX = pipsStartX - arrowOffset;
+                const rightArrowX = pipsEndX + arrowOffset;
 
                 for (let i = 0; i < totalPages; i++) {
                     const isCurrentPage = i === currentPage;
                     const pipX = pipsStartX + i * pipSpacing;
 
-                    // Pip hitbox (explicit bounded area)
                     const pipBg = k.add([
                         k.rect(16, 16),
                         k.pos(pipX, paginationY),
@@ -782,7 +793,6 @@ export function setupShopScene(k) {
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
 
-                    // Allow clicking pips to jump to page
                     const pageIndex = i;
                     pipBg.onClick(() => {
                         if (pageIndex !== currentPage) {
@@ -796,10 +806,10 @@ export function setupShopScene(k) {
                     paginationItems.push(pipBg, pipText);
                 }
 
-                // Left arrow (created after pips, higher z-index for click priority)
+                // Left arrow (higher z-index to sit on top and take priority)
                 const leftArrowBg = k.add([
                     k.rect(30, 30),
-                    k.pos(paginationCenterX - 80, paginationY),
+                    k.pos(leftArrowX, paginationY),
                     k.anchor('center'),
                     k.color(0, 0, 0),
                     k.opacity(0),
@@ -810,7 +820,7 @@ export function setupShopScene(k) {
 
                 const leftArrowText = k.add([
                     k.text('<', { size: 24 }),
-                    k.pos(paginationCenterX - 80, paginationY),
+                    k.pos(leftArrowX, paginationY),
                     k.anchor('center'),
                     k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                     k.fixed(),
@@ -827,10 +837,10 @@ export function setupShopScene(k) {
                 }
                 paginationItems.push(leftArrowBg, leftArrowText);
 
-                // Right arrow (created after pips, higher z-index for click priority)
+                // Right arrow (higher z-index to sit on top and take priority)
                 const rightArrowBg = k.add([
                     k.rect(30, 30),
-                    k.pos(paginationCenterX + 80, paginationY),
+                    k.pos(rightArrowX, paginationY),
                     k.anchor('center'),
                     k.color(0, 0, 0),
                     k.opacity(0),
@@ -841,7 +851,7 @@ export function setupShopScene(k) {
 
                 const rightArrowText = k.add([
                     k.text('>', { size: 24 }),
-                    k.pos(paginationCenterX + 80, paginationY),
+                    k.pos(rightArrowX, paginationY),
                     k.anchor('center'),
                     k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                     k.fixed(),

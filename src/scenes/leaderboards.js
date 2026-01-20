@@ -21,6 +21,7 @@ import { getTodayDateString, getDailyCharacter } from '../systems/dailyRuns.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
 import { playMenuSelect, playMenuNav } from '../systems/sounds.js';
 import {
+    UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
     UI_Z_LAYERS
@@ -505,15 +506,20 @@ export function setupLeaderboardsScene(k) {
         function renderPaginationControls(y, totalPages) {
             const paginationCenterX = k.width() / 2;
 
-            // Page indicator pips (created first, lower z-index)
+            // Page indicator pips
             const pipSpacing = 20;
             const pipsStartX = paginationCenterX - ((totalPages - 1) * pipSpacing) / 2;
+            const pipsEndX = paginationCenterX + ((totalPages - 1) * pipSpacing) / 2;
+
+            // Arrows positioned outside the pips with offset for pip clickable area (16px) + gap
+            const arrowOffset = 25;
+            const leftArrowX = pipsStartX - arrowOffset;
+            const rightArrowX = pipsEndX + arrowOffset;
 
             for (let i = 0; i < totalPages; i++) {
                 const isCurrentPagePip = i === currentPage;
                 const pipX = pipsStartX + i * pipSpacing;
 
-                // Pip hitbox (explicit bounded area)
                 const pipBg = k.add([
                     k.rect(16, 16),
                     k.pos(pipX, y),
@@ -547,10 +553,10 @@ export function setupLeaderboardsScene(k) {
                 contentElements.push(pipBg, pipText);
             }
 
-            // Left arrow (created after pips, higher z-index for click priority)
+            // Left arrow (higher z-index to sit on top and take priority)
             const leftArrowBg = k.add([
                 k.rect(30, 30),
-                k.pos(paginationCenterX - 80, y),
+                k.pos(leftArrowX, y),
                 k.anchor('center'),
                 k.color(0, 0, 0),
                 k.opacity(0),
@@ -561,7 +567,7 @@ export function setupLeaderboardsScene(k) {
 
             const leftArrowText = k.add([
                 k.text('<', { size: 24 }),
-                k.pos(paginationCenterX - 80, y),
+                k.pos(leftArrowX, y),
                 k.anchor('center'),
                 k.color(currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80, currentPage > 0 ? 255 : 80),
                 k.fixed(),
@@ -578,10 +584,10 @@ export function setupLeaderboardsScene(k) {
             }
             contentElements.push(leftArrowBg, leftArrowText);
 
-            // Right arrow (created after pips, higher z-index for click priority)
+            // Right arrow (higher z-index to sit on top and take priority)
             const rightArrowBg = k.add([
                 k.rect(30, 30),
-                k.pos(paginationCenterX + 80, y),
+                k.pos(rightArrowX, y),
                 k.anchor('center'),
                 k.color(0, 0, 0),
                 k.opacity(0),
@@ -592,7 +598,7 @@ export function setupLeaderboardsScene(k) {
 
             const rightArrowText = k.add([
                 k.text('>', { size: 24 }),
-                k.pos(paginationCenterX + 80, y),
+                k.pos(rightArrowX, y),
                 k.anchor('center'),
                 k.color(currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80, currentPage < totalPages - 1 ? 255 : 80),
                 k.fixed(),
@@ -715,12 +721,13 @@ export function setupLeaderboardsScene(k) {
             }
         }
 
-        // Back button
+        // Back button (SM size - secondary action)
+        const { SM } = UI_SIZES.BUTTON;
         const backButton = k.add([
-            k.rect(150, 45),
-            k.pos(k.width() / 2, k.height() - 50),
+            k.rect(SM.width, SM.height),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
-            k.color(...UI_COLORS.SECONDARY),
+            k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
@@ -728,10 +735,10 @@ export function setupLeaderboardsScene(k) {
         ]);
 
         k.add([
-            k.text('BACK', { size: UI_TEXT_SIZES.BUTTON }),
-            k.pos(k.width() / 2, k.height() - 50),
+            k.text('BACK', { size: UI_TEXT_SIZES.SMALL }),
+            k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
