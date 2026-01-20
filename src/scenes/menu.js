@@ -284,12 +284,12 @@ export function setupMenuScene(k) {
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
 
-        // XP percentage
+        // XP percentage (centered on top of the bar)
         k.add([
-            k.text(`${Math.round(xpProgress * 100)}%`, { size: 10 }),
-            k.pos(xpBarX + xpBarWidth + 8, xpBarY),
-            k.anchor('left'),
-            k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.text(`${Math.round(xpProgress * 100)}%`, { size: 9 }),
+            k.pos(xpBarX + xpBarWidth / 2, xpBarY),
+            k.anchor('center'),
+            k.color(255, 255, 255),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -601,12 +601,12 @@ export function setupMenuScene(k) {
         });
 
         // ==========================================
-        // DAILY RUN PANEL (Top-right)
+        // DAILY RUN PANEL (Top-right, below credits)
         // ==========================================
         const dailyPanelWidth = LAYOUT.RIGHT_COLUMN_WIDTH;
         const dailyPanelHeight = 120;
         const dailyPanelX = rightColumnX;
-        const dailyRunY = LAYOUT.TOP_MARGIN;
+        const dailyRunY = LAYOUT.TOP_MARGIN + 35; // Move down to avoid overlap with credits
         const dailyInfo = getDailyRunInfo();
         const dailyChar = CHARACTER_UNLOCKS[dailyInfo.character] || CHARACTER_UNLOCKS.survivor;
 

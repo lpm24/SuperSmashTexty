@@ -2,6 +2,7 @@
 
 import { generateRandomName, generateInviteCode } from './nameGenerator.js';
 import { getAchievementReward, getAchievementById } from '../data/achievements.js';
+import { checkPortraitUnlockCondition } from '../data/portraits.js';
 
 const STORAGE_KEY = 'superSmashTexty_save';
 const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
@@ -956,8 +957,9 @@ export function getSelectedPortrait() {
 export function setSelectedPortrait(portraitId) {
     const save = loadSave();
 
-    // Check if portrait is unlocked
-    if (!isPortraitUnlocked(portraitId)) {
+    // Check if portrait is unlocked using condition check (not just unlocks array)
+    // This ensures portraits that meet unlock conditions can be selected
+    if (!checkPortraitUnlockCondition(portraitId, save)) {
         return false;
     }
 

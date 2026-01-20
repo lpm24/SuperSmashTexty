@@ -281,8 +281,8 @@ export function setupProfileScene(k) {
         const infoX = portraitX + 80;
         let infoY = cardY + 20;
 
-        // Player name
-        let playerName = getPlayerName();
+        // Player name (with fallback for null/undefined)
+        let playerName = getPlayerName() || 'Player';
         const nameDisplay = k.add([
             k.text(playerName, { size: UI_TEXT_SIZES.H1 }),
             k.pos(infoX, infoY),
@@ -291,6 +291,83 @@ export function setupProfileScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
+
+        // Edit name button (pencil icon, square) - next to name
+        const editIconSize = 24;
+        const editButtonX = infoX + 150;
+        const editButton = k.add([
+            k.rect(editIconSize, editIconSize),
+            k.pos(editButtonX, infoY),
+            k.anchor('left'),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+        ]);
+
+        k.add([
+            k.text('✏', { size: 14 }),
+            k.pos(editButtonX + editIconSize / 2, infoY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        editButton.onClick(() => {
+            playMenuSelect();
+            showNameEditDialog(k, playerName, (newName) => {
+                setPlayerName(newName);
+                nameDisplay.text = newName;
+                playerName = newName;
+            });
+        });
+
+        editButton.onHoverUpdate(() => {
+            editButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+        });
+        editButton.onHoverEnd(() => {
+            editButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+        });
+
+        // Randomize name button (dice icon, square) - next to edit button
+        const randomButtonX = editButtonX + editIconSize + 8;
+        const randomButton = k.add([
+            k.rect(editIconSize, editIconSize),
+            k.pos(randomButtonX, infoY),
+            k.anchor('left'),
+            k.color(...UI_COLORS.BG_MEDIUM),
+            k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+            k.area(),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+        ]);
+
+        k.add([
+            k.text('🎲', { size: 14 }),
+            k.pos(randomButtonX + editIconSize / 2, infoY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.GOLD),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        randomButton.onClick(() => {
+            playMenuSelect();
+            const newName = generateRandomName();
+            setPlayerName(newName);
+            nameDisplay.text = newName;
+            playerName = newName;
+        });
+
+        randomButton.onHoverUpdate(() => {
+            randomButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+        });
+        randomButton.onHoverEnd(() => {
+            randomButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+        });
+
         infoY += 35;
 
         // Level with stars
@@ -357,87 +434,11 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Edit buttons (below card)
-        const buttonY = cardY + cardHeight + 20;
-
-        // Change Name button
-        const nameButton = k.add([
-            k.rect(140, 32),
-            k.pos(cardX - 80, buttonY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-            k.area(),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_ELEMENTS)
-        ]);
-
-        k.add([
-            k.text('CHANGE NAME', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(cardX - 80, buttonY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        nameButton.onClick(() => {
-            playMenuSelect();
-            showNameEditDialog(k, playerName, (newName) => {
-                setPlayerName(newName);
-                nameDisplay.text = newName;
-                playerName = newName;
-            });
-        });
-
-        nameButton.onHoverUpdate(() => {
-            nameButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
-        });
-        nameButton.onHoverEnd(() => {
-            nameButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
-        });
-
-        // Randomize Name button
-        const randomButton = k.add([
-            k.rect(140, 32),
-            k.pos(cardX + 80, buttonY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-            k.area(),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_ELEMENTS)
-        ]);
-
-        k.add([
-            k.text('RANDOMIZE', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(cardX + 80, buttonY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        randomButton.onClick(() => {
-            playMenuSelect();
-            const newName = generateRandomName();
-            setPlayerName(newName);
-            nameDisplay.text = newName;
-            playerName = newName;
-        });
-
-        randomButton.onHoverUpdate(() => {
-            randomButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
-        });
-        randomButton.onHoverEnd(() => {
-            randomButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
-        });
-
         // ==========================================
-        // PORTRAITS SECTION
+        // PORTRAITS SECTION (directly below card since buttons moved to name)
         // ==========================================
-        const portraitsY = buttonY + 50;
-        const portraitsSectionHeight = 180;
+        const portraitsY = cardY + cardHeight + 10;
+        const portraitsSectionHeight = 160; // Reduced to fit layout better
 
         // Section background
         k.add([
@@ -586,8 +587,8 @@ export function setupProfileScene(k) {
         // ==========================================
         // STATS SECTION
         // ==========================================
-        const statsY = portraitsY + portraitsSectionHeight + 15;
-        const statsHeight = 100;
+        const statsY = portraitsY + portraitsSectionHeight + 10;
+        const statsHeight = 85; // Reduced to fit layout better
 
         // Section background
         k.add([
@@ -648,8 +649,8 @@ export function setupProfileScene(k) {
         const hours = Math.floor(playTime / 3600);
         const minutes = Math.floor((playTime % 3600) / 60);
         k.add([
-            k.text(`Play Time: ${hours}h ${minutes}m`, { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(cardX, statsY + statsHeight - 15),
+            k.text(`Play Time: ${hours}h ${minutes}m`, { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(cardX, statsY + statsHeight - 10),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_DISABLED),
             k.fixed(),

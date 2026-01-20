@@ -245,19 +245,19 @@ export function setupSettingsScene(k) {
 
             if (currentTab === 'audio') {
                 // Master Volume
-                currentY = addVolumeSlider(k, 'Master Volume', settings.audio.masterVolume, currentY, (value) => {
+                currentY = addVolumeSlider(k, 'Master Volume', settings.audio?.masterVolume ?? 1.0, currentY, (value) => {
                     updateSetting('audio', 'masterVolume', value);
                     setMasterVolume(value);
                 });
 
                 // Music Volume
-                currentY = addVolumeSlider(k, 'Music Volume', settings.audio.musicVolume, currentY, (value) => {
+                currentY = addVolumeSlider(k, 'Music Volume', settings.audio?.musicVolume ?? 0.35, currentY, (value) => {
                     updateSetting('audio', 'musicVolume', value);
                     setMusicVolume(value);
                 });
 
                 // SFX Volume
-                currentY = addVolumeSlider(k, 'SFX Volume', settings.audio.sfxVolume, currentY, (value) => {
+                currentY = addVolumeSlider(k, 'SFX Volume', settings.audio?.sfxVolume ?? 1.0, currentY, (value) => {
                     updateSetting('audio', 'sfxVolume', value);
                     setSfxVolume(value);
                     // Play a preview sound when adjusting
@@ -265,64 +265,64 @@ export function setupSettingsScene(k) {
                 });
 
                 // UI Sounds toggle
-                currentY = addToggle(k, 'UI Sounds', settings.audio.uiSounds !== false, currentY, (value) => {
+                currentY = addToggle(k, 'UI Sounds', settings.audio?.uiSounds !== false, currentY, (value) => {
                     updateSetting('audio', 'uiSounds', value);
                     setUiSoundsEnabled(value);
                 });
 
                 // Combat Sounds toggle
-                currentY = addToggle(k, 'Combat Sounds', settings.audio.combatSounds !== false, currentY, (value) => {
+                currentY = addToggle(k, 'Combat Sounds', settings.audio?.combatSounds !== false, currentY, (value) => {
                     updateSetting('audio', 'combatSounds', value);
                     setCombatSoundsEnabled(value);
                 });
 
             } else if (currentTab === 'video') {
                 // Show Particles
-                currentY = addToggle(k, 'Show Particles', settings.visual.showParticles, currentY, (value) => {
+                currentY = addToggle(k, 'Show Particles', settings.visual?.showParticles !== false, currentY, (value) => {
                     updateSetting('visual', 'showParticles', value);
                 });
 
                 // Show Screen Shake
-                currentY = addToggle(k, 'Screen Shake', settings.visual.showScreenShake, currentY, (value) => {
+                currentY = addToggle(k, 'Screen Shake', settings.visual?.showScreenShake !== false, currentY, (value) => {
                     updateSetting('visual', 'showScreenShake', value);
                 });
 
                 // Show Hit Freeze
-                currentY = addToggle(k, 'Hit Freeze', settings.visual.showHitFreeze, currentY, (value) => {
+                currentY = addToggle(k, 'Hit Freeze', settings.visual?.showHitFreeze !== false, currentY, (value) => {
                     updateSetting('visual', 'showHitFreeze', value);
                 });
 
                 // Show Damage Numbers
-                currentY = addToggle(k, 'Damage Numbers', settings.visual.showDamageNumbers, currentY, (value) => {
+                currentY = addToggle(k, 'Damage Numbers', settings.visual?.showDamageNumbers !== false, currentY, (value) => {
                     updateSetting('visual', 'showDamageNumbers', value);
                 });
 
                 // Compact HUD
-                currentY = addToggle(k, 'Compact HUD', settings.visual.compactHUD, currentY, (value) => {
+                currentY = addToggle(k, 'Compact HUD', settings.visual?.compactHUD || false, currentY, (value) => {
                     updateSetting('visual', 'compactHUD', value);
                 });
 
                 // FPS Counter
-                currentY = addToggle(k, 'FPS Counter', settings.visual.showFPS || false, currentY, (value) => {
+                currentY = addToggle(k, 'FPS Counter', settings.visual?.showFPS || false, currentY, (value) => {
                     updateSetting('visual', 'showFPS', value);
                 });
 
                 // Show Timer
-                currentY = addToggle(k, 'Show Timer', settings.visual.showTimer !== false, currentY, (value) => {
+                currentY = addToggle(k, 'Show Timer', settings.visual?.showTimer !== false, currentY, (value) => {
                     updateSetting('visual', 'showTimer', value);
                 });
 
             } else if (currentTab === 'controls') {
                 // Display current key bindings
-                const controls = settings.controls;
+                const controls = settings.controls || {};
                 
                 const controlLabels = [
-                    { label: 'Move Up', key: 'moveUp', value: controls.moveUp },
-                    { label: 'Move Down', key: 'moveDown', value: controls.moveDown },
-                    { label: 'Move Left', key: 'moveLeft', value: controls.moveLeft },
-                    { label: 'Move Right', key: 'moveRight', value: controls.moveRight },
-                    { label: 'Pause', key: 'pause', value: controls.pause },
-                    { label: 'Interact', key: 'interact', value: controls.interact }
+                    { label: 'Move Up', key: 'moveUp', value: controls.moveUp || 'w' },
+                    { label: 'Move Down', key: 'moveDown', value: controls.moveDown || 's' },
+                    { label: 'Move Left', key: 'moveLeft', value: controls.moveLeft || 'a' },
+                    { label: 'Move Right', key: 'moveRight', value: controls.moveRight || 'd' },
+                    { label: 'Pause', key: 'pause', value: controls.pause || 'escape' },
+                    { label: 'Interact', key: 'interact', value: controls.interact || 'space' }
                 ];
                 
                 controlLabels.forEach((control, index) => {
@@ -377,27 +377,27 @@ export function setupSettingsScene(k) {
                 
             } else if (currentTab === 'gameplay') {
                 // Auto-pause on level up
-                currentY = addToggle(k, 'Auto-pause on Level Up', settings.gameplay.autoPause || false, currentY, (value) => {
+                currentY = addToggle(k, 'Auto-pause on Level Up', settings.gameplay?.autoPause || false, currentY, (value) => {
                     updateSetting('gameplay', 'autoPause', value);
                 });
 
                 // Auto-pickup Currency
-                currentY = addToggle(k, 'Auto-pickup Currency', settings.gameplay.autoPickupCurrency || false, currentY, (value) => {
+                currentY = addToggle(k, 'Auto-pickup Currency', settings.gameplay?.autoPickupCurrency || false, currentY, (value) => {
                     updateSetting('gameplay', 'autoPickupCurrency', value);
                 });
 
                 // Auto-pickup XP
-                currentY = addToggle(k, 'Auto-pickup XP', settings.gameplay.autoPickupXP || false, currentY, (value) => {
+                currentY = addToggle(k, 'Auto-pickup XP', settings.gameplay?.autoPickupXP || false, currentY, (value) => {
                     updateSetting('gameplay', 'autoPickupXP', value);
                 });
 
                 // Confirm Before Quit
-                currentY = addToggle(k, 'Confirm Before Quit', settings.gameplay.confirmBeforeQuit !== false, currentY, (value) => {
+                currentY = addToggle(k, 'Confirm Before Quit', settings.gameplay?.confirmBeforeQuit !== false, currentY, (value) => {
                     updateSetting('gameplay', 'confirmBeforeQuit', value);
                 });
 
                 // Skip Intro Animation
-                currentY = addToggle(k, 'Skip Intro Animation', settings.gameplay.skipIntroAnimation || false, currentY, (value) => {
+                currentY = addToggle(k, 'Skip Intro Animation', settings.gameplay?.skipIntroAnimation || false, currentY, (value) => {
                     updateSetting('gameplay', 'skipIntroAnimation', value);
                 });
 
