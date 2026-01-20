@@ -20,11 +20,22 @@ const DREAMLO_PUBLIC_KEY = '696eba6f8f40bb1184b6c60f';
 const DREAMLO_PRIVATE_KEY = 'YRU5IdY0w0uJvRF8cb9S1A21WwOAek3kyr3RcOYHbdYA';
 
 // IMPORTANT: Dreamlo free tier only supports HTTP, not HTTPS.
-// If the game is deployed on HTTPS, browsers will block these requests (mixed content).
-// Solutions: 1) Deploy game on HTTP (not recommended)
-//            2) Upgrade to Dreamlo paid tier for HTTPS support
-//            3) Use a CORS proxy (adds latency and another point of failure)
-const DREAMLO_BASE_URL = 'http://dreamlo.com/lb';
+// Since the game is deployed on HTTPS (GitHub Pages), we need a CORS proxy.
+// The proxy routes: HTTPS (our game) -> Proxy -> HTTP (Dreamlo)
+//
+// Current proxy: corsproxy.io (free, public, browser-only)
+// For production, consider: Cloudflare Workers, Vercel Edge Functions, or Dreamlo paid tier
+const CORS_PROXY = 'https://corsproxy.io/?';
+const DREAMLO_RAW_URL = 'http://dreamlo.com/lb';
+
+/**
+ * Build a proxied URL for Dreamlo API calls
+ * @param {string} path - Path to append (e.g., "/publicKey/json")
+ * @returns {string} - Full proxied URL
+ */
+function buildProxiedUrl(path) {
+    return `${CORS_PROXY}${encodeURIComponent(DREAMLO_RAW_URL + path)}`;
+}
 
 // Cache configuration
 const CACHE_DURATION_MS = 60000; // 1 minute cache
@@ -107,7 +118,8 @@ export async function submitOnlineScore(entry) {
         const text = `${entry.floor || 1}|${entry.character || 'unknown'}|${entry.date || ''}`;
 
         // Dreamlo add URL format: /lb/{privateKey}/add/{name}/{score}/{seconds}/{text}
-        const url = `${DREAMLO_BASE_URL}/${DREAMLO_PRIVATE_KEY}/add/${encodeURIComponent(name)}/${score}/${seconds}/${encodeURIComponent(text)}`;
+        const path = `/${DREAMLO_PRIVATE_KEY}/add/${encodeURIComponent(name)}/${score}/${seconds}/${encodeURIComponent(text)}`;
+        const url = buildProxiedUrl(path);
 
         console.log('[OnlineLeaderboards] Submitting score:', { name, score, floor: entry.floor });
 
@@ -171,7 +183,7 @@ export async function getOnlineLeaderboard(limit = 10) {
         }
 
         // Dreamlo JSON URL: /lb/{publicKey}/json
-        const url = `${DREAMLO_BASE_URL}/${DREAMLO_PUBLIC_KEY}/json`;
+        const url = buildProxiedUrl(`/${DREAMLO_PUBLIC_KEY}/json`);
 
         console.log('[OnlineLeaderboards] Fetching global leaderboard...');
 
