@@ -18,6 +18,17 @@ import {
 } from '../config/uiConfig.js';
 import { createStatBar } from '../config/uiComponents.js';
 
+// Animation constants for character preview
+const CHAR_ANIM = {
+    BREATHE_SPEED: 1.5,
+    BREATHE_AMOUNT: 0.04,
+    BOB_SPEED: 2,
+    BOB_AMOUNT: 3,
+    GLOW_PULSE_SPEED: 2,
+    GLOW_MIN: 0.3,
+    GLOW_MAX: 0.7
+};
+
 // Helper function to get unlock requirement text
 function getUnlockText(char) {
     if (!char.unlockRequirement) return null;
@@ -130,6 +141,7 @@ export function setupCharacterSelectScene(k) {
                 const char = CHARACTER_UNLOCKS[key];
                 const isUnlockedChar = isUnlocked('characters', key) || char.unlockedByDefault;
                 const isViewed = viewedCharacterKey === key;
+                const isConfirmedSelection = confirmedCharacterKey === key;
 
                 const row = Math.floor(pageIndex / cardsPerRow);
                 const col = pageIndex % cardsPerRow;
@@ -145,7 +157,12 @@ export function setupCharacterSelectScene(k) {
                     k.outline(2, isViewed ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
                     k.area(),
                     k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_ELEMENTS)
+                    k.z(UI_Z_LAYERS.UI_ELEMENTS),
+                    {
+                        baseX: cardX,
+                        baseY: cardY,
+                        isHovered: false
+                    }
                 ]);
 
                 // Character visual
@@ -155,7 +172,11 @@ export function setupCharacterSelectScene(k) {
                     k.anchor('center'),
                     k.color(...(isUnlockedChar ? char.color : UI_COLORS.BG_DISABLED)),
                     k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
+                    k.z(UI_Z_LAYERS.UI_TEXT),
+                    {
+                        baseX: cardX + cardWidth / 2,
+                        baseY: cardY + 30
+                    }
                 ]);
 
                 // Character name
@@ -165,8 +186,39 @@ export function setupCharacterSelectScene(k) {
                     k.anchor('center'),
                     k.color(...(isUnlockedChar ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT)
+                    k.z(UI_Z_LAYERS.UI_TEXT),
+                    {
+                        baseX: cardX + cardWidth / 2,
+                        baseY: cardY + 70
+                    }
                 ]);
+
+                // Hover effects for cards
+                cardBg.onHoverUpdate(() => {
+                    if (!cardBg.isHovered && !isViewed) {
+                        cardBg.isHovered = true;
+                        playMenuNav();
+                    }
+                    if (!isViewed) {
+                        // Scale up slightly and brighten
+                        cardBg.scale = k.vec2(1.05, 1.05);
+                        charVisual.scale = k.vec2(1.15, 1.15);
+                        nameText.scale = k.vec2(1.05, 1.05);
+                        cardBg.color = k.rgb(50, 50, 65);
+                        // Add slight bounce to character
+                        const bounce = Math.sin(k.time() * 8) * 2;
+                        charVisual.pos.y = charVisual.baseY + bounce;
+                    }
+                });
+
+                cardBg.onHoverEnd(() => {
+                    cardBg.isHovered = false;
+                    cardBg.scale = k.vec2(1, 1);
+                    charVisual.scale = k.vec2(1, 1);
+                    nameText.scale = k.vec2(1, 1);
+                    cardBg.color = k.rgb(...(isViewed ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK));
+                    charVisual.pos.y = charVisual.baseY;
+                });
 
                 // Locked overlay
                 if (!isUnlockedChar) {
@@ -179,6 +231,27 @@ export function setupCharacterSelectScene(k) {
                         k.z(UI_Z_LAYERS.OVERLAY)
                     ]);
                     characterCards.push(lockText);
+                }
+
+                // Current selection indicator (checkmark badge)
+                if (isConfirmedSelection) {
+                    const checkBadge = k.add([
+                        k.circle(10),
+                        k.pos(cardX + cardWidth - 8, cardY + 8),
+                        k.anchor('center'),
+                        k.color(...UI_COLORS.SUCCESS),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                    ]);
+                    const checkMark = k.add([
+                        k.text('✓', { size: 12 }),
+                        k.pos(cardX + cardWidth - 8, cardY + 8),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 2)
+                    ]);
+                    characterCards.push(checkBadge, checkMark);
                 }
 
                 // Click handler - all cards are clickable for viewing
@@ -313,18 +386,73 @@ export function setupCharacterSelectScene(k) {
             const viewedChar = CHARACTER_UNLOCKS[viewedCharacterKey];
             const isViewedUnlocked = isUnlocked('characters', viewedCharacterKey) || viewedChar.unlockedByDefault;
             let detailY = startY;
-            
-            // Character visual (large)
-            const detailVisual = k.add([
-                k.text(viewedChar.char, { size: 72 }),
-                k.pos(rightPanelX + rightPanelWidth / 2, detailY + 40),
+
+            // Preview panel background for clarity
+            const previewPanelBg = k.add([
+                k.rect(rightPanelWidth - 10, 380),
+                k.pos(rightPanelX + 5, startY - 10),
+                k.anchor('topleft'),
+                k.color(25, 25, 35),
+                k.outline(2, k.rgb(60, 60, 80)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS - 1)
+            ]);
+            detailItems.push(previewPanelBg);
+
+            // Glow effect behind character (pulses)
+            const charGlow = k.add([
+                k.circle(50),
+                k.pos(rightPanelX + rightPanelWidth / 2, detailY + 45),
                 k.anchor('center'),
-                k.color(...(isViewedUnlocked ? viewedChar.color : UI_COLORS.BG_DISABLED)),
+                k.color(...(isViewedUnlocked ? viewedChar.color : [80, 80, 80])),
+                k.opacity(CHAR_ANIM.GLOW_MIN),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
+            detailItems.push(charGlow);
+
+            // Character visual (large) with animation reference
+            const detailVisual = k.add([
+                k.text(viewedChar.char, { size: 72 }),
+                k.pos(rightPanelX + rightPanelWidth / 2, detailY + 45),
+                k.anchor('center'),
+                k.color(...(isViewedUnlocked ? viewedChar.color : UI_COLORS.BG_DISABLED)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS + 1),
+                {
+                    baseY: detailY + 45,
+                    baseScale: 1,
+                    animTime: Math.random() * Math.PI * 2 // Random start phase
+                }
+            ]);
             detailItems.push(detailVisual);
-            detailY += 100;
+
+            // Animate the character and glow
+            const animLoop = k.onUpdate(() => {
+                if (!detailVisual.exists()) return;
+
+                detailVisual.animTime += k.dt();
+
+                // Breathing effect (scale)
+                const breathe = 1 + Math.sin(detailVisual.animTime * CHAR_ANIM.BREATHE_SPEED) * CHAR_ANIM.BREATHE_AMOUNT;
+                detailVisual.scale = k.vec2(breathe, breathe);
+
+                // Bobbing effect (position)
+                const bob = Math.sin(detailVisual.animTime * CHAR_ANIM.BOB_SPEED) * CHAR_ANIM.BOB_AMOUNT;
+                detailVisual.pos.y = detailVisual.baseY + bob;
+
+                // Glow pulse
+                if (charGlow.exists()) {
+                    const glowIntensity = CHAR_ANIM.GLOW_MIN +
+                        (Math.sin(detailVisual.animTime * CHAR_ANIM.GLOW_PULSE_SPEED) * 0.5 + 0.5) *
+                        (CHAR_ANIM.GLOW_MAX - CHAR_ANIM.GLOW_MIN);
+                    charGlow.opacity = glowIntensity;
+                    charGlow.scale = k.vec2(1 + glowIntensity * 0.3, 1 + glowIntensity * 0.3);
+                }
+            });
+            detailItems.push({ exists: () => true, destroy: () => animLoop.cancel() });
+
+            detailY += 110;
 
             // Character name
             const detailName = k.add([
@@ -367,11 +495,11 @@ export function setupCharacterSelectScene(k) {
             const statBarX = rightPanelX + 40;
             const statRowHeight = 24;
 
-            // Health stat bar (max 200 for scale)
+            // Health stat bar (max 175 - characters range 70-150)
             const healthBar = createStatBar(k, {
                 label: UI_TERMS.HEALTH,
                 value: viewedChar.stats.health,
-                maxValue: 200,
+                maxValue: 175,
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
@@ -380,11 +508,11 @@ export function setupCharacterSelectScene(k) {
             detailItems.push(...healthBar.elements);
             detailY += statRowHeight;
 
-            // Speed stat bar (max 300 for scale)
+            // Speed stat bar (max 225 - characters range 100-200)
             const speedBar = createStatBar(k, {
                 label: UI_TERMS.SPEED,
                 value: viewedChar.stats.speed,
-                maxValue: 300,
+                maxValue: 225,
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
@@ -393,11 +521,11 @@ export function setupCharacterSelectScene(k) {
             detailItems.push(...speedBar.elements);
             detailY += statRowHeight;
 
-            // Damage stat bar (max 200 for scale)
+            // Damage stat bar (max 25 - characters range 8-20)
             const damageBar = createStatBar(k, {
                 label: UI_TERMS.DAMAGE,
                 value: viewedChar.stats.damage,
-                maxValue: 200,
+                maxValue: 25,
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
