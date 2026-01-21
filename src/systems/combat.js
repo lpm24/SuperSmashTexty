@@ -17,6 +17,7 @@ import { createProjectile } from '../entities/projectile.js';
 // System imports
 import { decrementPowerupAmmo } from './powerupWeapons.js';
 import { broadcastDamageEvent, broadcastHealEvent, broadcastDodgeEvent, isMultiplayerActive, isHost, registerProjectile } from './multiplayerGame.js';
+import { getAimInput } from './inputSystem.js';
 
 // Configuration imports
 import {
@@ -106,17 +107,29 @@ export function setupCombatSystem(k, player) {
     k.onUpdate(() => {
         if (k.paused) return;
 
-        // Update player rotation based on mouse/aim (always, even when not shooting)
+        // Update player rotation based on gamepad/touch/mouse aim (always, even when not shooting)
         if (!player.isRemote) {
-            const mousePos = k.mousePos();
-            const toMouse = k.vec2(
-                mousePos.x - player.pos.x,
-                mousePos.y - player.pos.y
-            );
-            const distance = toMouse.len();
+            const aimInput = getAimInput();
+            let toTarget;
+            let distance;
+
+            if (aimInput.active && (aimInput.x !== 0 || aimInput.y !== 0)) {
+                // Use gamepad/touch aim direction
+                toTarget = k.vec2(aimInput.x, aimInput.y);
+                distance = 1;
+            } else {
+                // Fall back to mouse position
+                const mousePos = k.mousePos();
+                toTarget = k.vec2(
+                    mousePos.x - player.pos.x,
+                    mousePos.y - player.pos.y
+                );
+                distance = toTarget.len();
+            }
+
             if (distance > 0) {
                 // Convert to degrees for Kaplay's rotate component
-                const aimAngleDeg = Math.atan2(toMouse.y, toMouse.x) * (180 / Math.PI);
+                const aimAngleDeg = Math.atan2(toTarget.y, toTarget.x) * (180 / Math.PI);
                 player.angle = aimAngleDeg;
                 if (player.outline && player.outline.exists()) {
                     player.outline.angle = aimAngleDeg;
@@ -180,20 +193,30 @@ export function setupCombatSystem(k, player) {
                 return; // No aim angle or not shooting
             }
         } else {
-            // Local player: use mouse position
-            const mousePos = k.mousePos();
+            // Local player: check for gamepad/touch aim first, then fall back to mouse
+            const aimInput = getAimInput();
 
-            // Calculate direction to mouse
-            const toMouse = k.vec2(
-                mousePos.x - player.pos.x,
-                mousePos.y - player.pos.y
-            );
-            const distance = toMouse.len();
+            let toTarget;
+            let distance;
 
-            // Track aim angle for multiplayer (angle in degrees from player to mouse)
+            if (aimInput.active && (aimInput.x !== 0 || aimInput.y !== 0)) {
+                // Use gamepad/touch aim direction (already normalized by input system)
+                toTarget = k.vec2(aimInput.x, aimInput.y);
+                distance = 1; // Always has distance when active
+            } else {
+                // Fall back to mouse position
+                const mousePos = k.mousePos();
+                toTarget = k.vec2(
+                    mousePos.x - player.pos.x,
+                    mousePos.y - player.pos.y
+                );
+                distance = toTarget.len();
+            }
+
+            // Track aim angle for multiplayer (angle in degrees from player to target)
             if (distance > 0) {
-                player.aimAngle = Math.atan2(toMouse.y, toMouse.x) * (180 / Math.PI);
-                baseDirection = toMouse.unit();
+                player.aimAngle = Math.atan2(toTarget.y, toTarget.x) * (180 / Math.PI);
+                baseDirection = toTarget.unit();
 
                 // In multiplayer as client, don't spawn projectiles locally
                 // Only the host spawns projectiles for all players
@@ -206,7 +229,7 @@ export function setupCombatSystem(k, player) {
             } else {
                 player.aimAngle = 0;
                 player.isShooting = false;
-                return; // No mouse movement
+                return; // No aim input
             }
 
             // Track shooting state for multiplayer

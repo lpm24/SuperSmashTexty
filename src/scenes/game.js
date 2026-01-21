@@ -50,6 +50,7 @@ import { POWERUP_WEAPONS, rollPowerupDrop, applyPowerupWeapon, getPowerupDisplay
 import { getParty, getPartySize } from '../systems/partySystem.js';
 import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, broadcastObstacles, broadcastHealEvent, broadcastRevivalEvent } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
+import { initInputSystem, initTouchControls } from '../systems/inputSystem.js';
 
 // Data imports
 import { BOSS_TYPES, getBossDefinition } from '../data/bosses.js';
@@ -259,6 +260,13 @@ export function setupGameScene(k) {
         const state = stateManager.getState();
 
         // ==========================================
+        // GAMEPAD & TOUCH CONTROLS
+        // ==========================================
+        // Initialize gamepad polling and touch controls for mobile/controller support
+        initInputSystem(k);
+        initTouchControls(k);
+
+        // ==========================================
         // LEGACY STATE (keeping for now)
         // ==========================================
 
@@ -327,6 +335,11 @@ export function setupGameScene(k) {
 
         // Flag to prevent duplicate door transitions (used in message handler and update loop)
         let doorEntered = false;
+
+        // Room state variables (declared early for use in onMessage callbacks)
+        let roomCompleted = false;
+        const spawnDoors = [];
+        let reviveAllPlayers = null; // Function defined later, but declared early for callbacks
 
         // Initialize spatial grids for performance optimization (see src/systems/spatialGrid.js)
         const spatialGrids = {
@@ -1227,6 +1240,7 @@ export function setupGameScene(k) {
                 k.anchor('center'),
                 k.color(...emoteColor),
                 k.opacity(1),
+                k.scale(1),
                 k.z(1000),
                 'emote'
             ]);
@@ -1358,7 +1372,7 @@ export function setupGameScene(k) {
         // ==========================================
         // MULTIPLAYER: Revival system - revive all dead players on level up
         // ==========================================
-        const reviveAllPlayers = () => {
+        reviveAllPlayers = () => {
             // Only in multiplayer with multiple players
             if (partySize <= 1) return;
 
@@ -1467,6 +1481,7 @@ export function setupGameScene(k) {
         
         // Get room template from floor map (or fallback to weighted generation)
         const currentRoomNode = gameState.floorMap.getCurrentRoom();
+        const isBossRoom = currentRoomNode ? currentRoomNode.isBossRoom : (currentRoom === 3);
         let roomTemplate;
 
         if (partySize > 1 && gameState.roomTemplateKey) {
@@ -3021,9 +3036,7 @@ export function setupGameScene(k) {
         // LEGACY STATE (keeping for now)
         // ==========================================
 
-        // Room state
-        let roomCompleted = false;
-        const isBossRoom = currentRoomNode ? currentRoomNode.isBossRoom : (currentRoom === 3); // Use floor map if available
+        // Room state (roomCompleted declared early for onMessage callbacks)
         let enemiesToSpawn = isBossRoom ? 0 : (24 + (currentFloor - 1) * 6); // No regular enemies in boss rooms (3x multiplier)
         let enemiesSpawned = 0;
         let initialSpawnDelay = 2; // Wait before first spawn
@@ -3074,8 +3087,7 @@ export function setupGameScene(k) {
             return bossMap[floor] || 'gatekeeper';
         }
         
-        // Spawn doors - create at room start for enemy spawning
-        const spawnDoors = [];
+        // Spawn doors - create at room start for enemy spawning (spawnDoors declared early for onMessage callbacks)
         // doorMargin already declared above for player spawn calculation
 
         // Map grid directions to door directions (grid uses up/down/right, doors use north/south/east/west)

@@ -12,6 +12,7 @@
 
 // System imports
 import { getSelectedCharacter, getPermanentUpgradeLevel } from '../systems/metaProgression.js';
+import { getMovementInput, updateGamepadInput } from '../systems/inputSystem.js';
 
 // Data imports
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -346,10 +347,19 @@ export function createPlayer(k, x, y, characterKey = null) {
             return;
         }
 
+        // Update gamepad input polling
+        updateGamepadInput();
+
         // For remote players, use network-provided move input instead of keyboard
         let effectiveMoveDir = moveDir;
         if (player.isRemote && player.move) {
             effectiveMoveDir = k.vec2(player.move.x, player.move.y);
+        } else if (!player.isRemote) {
+            // Check for gamepad/touch input (overrides keyboard if active)
+            const altInput = getMovementInput();
+            if (altInput.x !== 0 || altInput.y !== 0) {
+                effectiveMoveDir = k.vec2(altInput.x, altInput.y);
+            }
         }
 
         if (effectiveMoveDir.len() > 0) {
