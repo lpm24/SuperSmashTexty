@@ -226,7 +226,7 @@ export function setupProfileScene(k) {
         // ==========================================
         const cardY = 80;
         const cardHeight = 140;
-        const cardWidth = 500;
+        const cardWidth = 580;
         const cardX = k.width() / 2;
 
         // Card background
@@ -292,13 +292,16 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Edit name button (pencil icon, square) - next to name
+        // Edit and randomize buttons - right-aligned in card
         const editIconSize = 24;
-        const editButtonX = infoX + 150;
+        const randomButtonX = cardX + cardWidth / 2 - 20;
+        const editButtonX = randomButtonX - editIconSize - 8;
+
+        // Edit name button (pencil icon, square)
         const editButton = k.add([
             k.rect(editIconSize, editIconSize),
             k.pos(editButtonX, infoY),
-            k.anchor('left'),
+            k.anchor('right'),
             k.color(...UI_COLORS.BG_MEDIUM),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
@@ -308,7 +311,7 @@ export function setupProfileScene(k) {
 
         k.add([
             k.text('✏', { size: 14 }),
-            k.pos(editButtonX + editIconSize / 2, infoY),
+            k.pos(editButtonX - editIconSize / 2, infoY),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
             k.fixed(),
@@ -331,12 +334,11 @@ export function setupProfileScene(k) {
             editButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
         });
 
-        // Randomize name button (dice icon, square) - next to edit button
-        const randomButtonX = editButtonX + editIconSize + 8;
+        // Randomize name button (dice icon, square)
         const randomButton = k.add([
             k.rect(editIconSize, editIconSize),
             k.pos(randomButtonX, infoY),
-            k.anchor('left'),
+            k.anchor('right'),
             k.color(...UI_COLORS.BG_MEDIUM),
             k.outline(2, k.rgb(...UI_COLORS.GOLD)),
             k.area(),
@@ -346,7 +348,7 @@ export function setupProfileScene(k) {
 
         k.add([
             k.text('🎲', { size: 14 }),
-            k.pos(randomButtonX + editIconSize / 2, infoY),
+            k.pos(randomButtonX - editIconSize / 2, infoY),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
             k.fixed(),
@@ -438,7 +440,7 @@ export function setupProfileScene(k) {
         // PORTRAITS SECTION (directly below card since buttons moved to name)
         // ==========================================
         const portraitsY = cardY + cardHeight + 10;
-        const portraitsSectionHeight = 160; // Reduced to fit layout better
+        const portraitsSectionHeight = 180;
 
         // Section background
         k.add([
@@ -463,11 +465,11 @@ export function setupProfileScene(k) {
 
         // Portrait grid
         const allPortraits = getAllPortraits();
-        const gridStartX = cardX - cardWidth / 2 + 40;
+        const gridStartX = cardX - cardWidth / 2 + 45;
         const gridY = portraitsY + 45;
         const iconSize = 45;
         const iconSpacing = 55;
-        const maxPerRow = 8;
+        const maxPerRow = 9;
 
         // Selected portrait info display
         let selectedInfoText = null;
@@ -588,7 +590,7 @@ export function setupProfileScene(k) {
         // STATS SECTION
         // ==========================================
         const statsY = portraitsY + portraitsSectionHeight + 10;
-        const statsHeight = 85; // Reduced to fit layout better
+        const statsHeight = 115;
 
         // Section background
         k.add([
@@ -611,19 +613,24 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Stats display
+        // Stats display - Two rows
         const stats = getSaveStats();
-        const statItems = [
-            { label: 'Total Runs', value: stats.totalRuns || 0 },
+        const totalRuns = stats.totalRuns || 0;
+        const avgCurrency = totalRuns > 0 ? Math.round((stats.totalCurrencyEarned || 0) / totalRuns) : 0;
+        const avgFloors = totalRuns > 0 ? ((stats.totalFloorsReached || 0) / totalRuns).toFixed(1) : '0';
+
+        // Row 1: Main stats
+        const row1Stats = [
+            { label: 'Total Runs', value: totalRuns },
             { label: 'Best Floor', value: stats.bestFloor || 1 },
-            { label: 'Enemies', value: (stats.totalEnemiesKilled || 0).toLocaleString() },
-            { label: 'Bosses', value: stats.totalBossesKilled || 0 }
+            { label: 'Best Level', value: stats.bestLevel || 1 },
+            { label: 'Avg Floor', value: avgFloors }
         ];
 
-        const statWidth = cardWidth / statItems.length;
-        statItems.forEach((stat, index) => {
+        const statWidth = cardWidth / row1Stats.length;
+        row1Stats.forEach((stat, index) => {
             const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 50;
+            const y = statsY + 40;
 
             k.add([
                 k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
@@ -635,8 +642,8 @@ export function setupProfileScene(k) {
             ]);
 
             k.add([
-                k.text(String(stat.value), { size: UI_TEXT_SIZES.H2 }),
-                k.pos(x, y + 22),
+                k.text(String(stat.value), { size: UI_TEXT_SIZES.LABEL }),
+                k.pos(x, y + 18),
                 k.anchor('center'),
                 k.color(...UI_COLORS.GOLD),
                 k.fixed(),
@@ -644,13 +651,44 @@ export function setupProfileScene(k) {
             ]);
         });
 
-        // Play time (if tracked)
+        // Row 2: Secondary stats
+        const row2Stats = [
+            { label: 'Enemies', value: (stats.totalEnemiesKilled || 0).toLocaleString() },
+            { label: 'Bosses', value: stats.totalBossesKilled || 0 },
+            { label: 'Avg Money', value: avgCurrency.toLocaleString() },
+            { label: 'Total Money', value: (stats.totalCurrencyEarned || 0).toLocaleString() }
+        ];
+
+        row2Stats.forEach((stat, index) => {
+            const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
+            const y = statsY + 75;
+
+            k.add([
+                k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(x, y),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            k.add([
+                k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(x, y + 15),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        });
+
+        // Play time at bottom
         const playTime = stats.totalPlayTime || 0;
         const hours = Math.floor(playTime / 3600);
         const minutes = Math.floor((playTime % 3600) / 60);
         k.add([
             k.text(`Play Time: ${hours}h ${minutes}m`, { size: UI_TEXT_SIZES.SMALL - 2 }),
-            k.pos(cardX, statsY + statsHeight - 10),
+            k.pos(cardX, statsY + statsHeight - 8),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_DISABLED),
             k.fixed(),
