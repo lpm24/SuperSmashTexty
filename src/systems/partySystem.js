@@ -3,7 +3,7 @@
  * Manages multiplayer party state and joining
  */
 
-import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode, getPermanentUpgradeLevel, getSelectedPortrait } from './metaProgression.js';
+import { getPlayerName, getInviteCode, getSelectedCharacter, setInviteCode, getPermanentUpgradeLevel, getSelectedPortrait, getPlayerLevel, getTotalXP, getSaveStats, getUnlockedAchievements, getUnlockedPortraits } from './metaProgression.js';
 import {
     initNetwork,
     connectToHost,
@@ -13,7 +13,8 @@ import {
     sendToHost,
     sendToPeer,
     getConnectedPeers,
-    getNetworkInfo
+    getNetworkInfo,
+    disconnect
 } from './networkSystem.js';
 import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlayer } from './multiplayerGame.js';
 
@@ -223,6 +224,39 @@ export function setupNetworkHandlers() {
         }
     });
 
+    // Handle profile requests from clients
+    onMessage('profile_request', (payload, fromPeerId) => {
+        const targetSlot = payload.targetSlot;
+        if (targetSlot === 0) {
+            // Client wants host's profile
+            handleProfileRequest(payload, fromPeerId);
+        } else {
+            // Client wants another client's profile - forward the request
+            const targetPeerId = party.slots[targetSlot]?.peerId;
+            if (targetPeerId) {
+                sendToPeer(targetPeerId, 'profile_request', {
+                    requestingSlot: party.peerIdToSlot.get(fromPeerId),
+                    forwardTo: fromPeerId
+                });
+            }
+        }
+    });
+
+    // Handle profile responses from clients
+    onMessage('profile_response', (payload, fromPeerId) => {
+        const slotIndex = party.peerIdToSlot.get(fromPeerId);
+        if (slotIndex !== undefined) {
+            payload.slotIndex = slotIndex;
+            // Check if this is a forwarded response
+            if (payload.forwardTo) {
+                sendToPeer(payload.forwardTo, 'profile_response', payload);
+            } else {
+                // This is for the host
+                handleProfileResponse(payload);
+            }
+        }
+    });
+
     // Handle connection changes
     onConnectionChange((event, peerId) => {
         if (event === 'leave') {
@@ -356,8 +390,7 @@ export async function joinPartyAsClient(hostInviteCode) {
         // If we were initialized as host, disconnect and re-initialize as client
         if (party.networkInitialized && party.isHost) {
             console.log('[PartySystem] Switching from host to client - disconnecting current peer...');
-            const { disconnect: disconnectNetwork } = await import('./networkSystem.js');
-            disconnectNetwork();
+            disconnect();
             party.networkInitialized = false;
             party.isHost = false;
         }
@@ -412,9 +445,7 @@ export async function joinPartyAsClient(hostInviteCode) {
 export function restoreLocalPlayerToSoloParty(playerInfo) {
     // Disconnect network if still trying to connect as client
     if (party.networkInitialized && !party.isHost) {
-        import('./networkSystem.js').then(({ disconnect: disconnectNetwork }) => {
-            disconnectNetwork();
-        });
+        disconnect();
     }
 
     // Reset to host state
@@ -533,6 +564,16 @@ function setupClientHandlers() {
     // Handle party emotes from host
     onMessage('party_emote', (payload) => {
         handlePartyEmote(payload);
+    });
+
+    // Handle profile request (forwarded from host or direct from host)
+    onMessage('profile_request', (payload) => {
+        handleProfileRequest(payload);
+    });
+
+    // Handle profile response
+    onMessage('profile_response', (payload) => {
+        handleProfileResponse(payload);
     });
 
     // Handle host disconnect
@@ -1057,4 +1098,113 @@ export function getActiveEmote(slotIndex, maxAge = 2000) {
  */
 export function clearActiveEmotes() {
     party.activeEmotes.clear();
+}
+
+// ==========================================
+// Profile Request System
+// ==========================================
+
+// Store pending profile request callbacks
+const profileRequestCallbacks = new Map();
+
+/**
+ * Get local player's profile data for sharing
+ * @returns {Object} Profile data object
+ */
+export function getLocalProfileData() {
+    return {
+        playerName: getPlayerName(),
+        selectedPortrait: getSelectedPortrait(),
+        playerLevel: getPlayerLevel(),
+        totalXP: getTotalXP(),
+        stats: getSaveStats(),
+        achievements: getUnlockedAchievements(),
+        unlockedPortraits: getUnlockedPortraits()
+    };
+}
+
+/**
+ * Request another player's profile data
+ * @param {number} slotIndex - The slot index of the player to request
+ * @param {Function} callback - Callback function (profileData) => void
+ */
+export function requestPlayerProfile(slotIndex, callback) {
+    const slot = party.slots[slotIndex];
+    if (!slot || slot.playerId === null) {
+        console.warn('[PartySystem] Cannot request profile for empty slot:', slotIndex);
+        callback(null);
+        return;
+    }
+
+    // If requesting our own profile, return local data
+    if (slot.isLocal) {
+        callback(getLocalProfileData());
+        return;
+    }
+
+    // Store the callback
+    profileRequestCallbacks.set(slotIndex, callback);
+
+    // Send the request
+    if (party.isHost) {
+        // Host sends directly to the peer
+        const peerId = slot.peerId;
+        if (peerId) {
+            sendToPeer(peerId, 'profile_request', { requestingSlot: getLocalPlayerSlot() });
+        } else {
+            console.warn('[PartySystem] No peerId for slot:', slotIndex);
+            callback(null);
+            profileRequestCallbacks.delete(slotIndex);
+        }
+    } else {
+        // Client sends request through host
+        sendToHost('profile_request', { targetSlot: slotIndex });
+    }
+
+    // Timeout after 5 seconds
+    setTimeout(() => {
+        if (profileRequestCallbacks.has(slotIndex)) {
+            console.warn('[PartySystem] Profile request timed out for slot:', slotIndex);
+            const cb = profileRequestCallbacks.get(slotIndex);
+            profileRequestCallbacks.delete(slotIndex);
+            cb(null);
+        }
+    }, 5000);
+}
+
+/**
+ * Handle incoming profile request (called by message handlers)
+ * @param {Object} payload - Request payload
+ * @param {string} fromPeerId - Peer ID of requester (for host)
+ */
+function handleProfileRequest(payload, fromPeerId = null) {
+    const profileData = getLocalProfileData();
+
+    if (party.isHost && fromPeerId) {
+        // Host responding to client request
+        sendToPeer(fromPeerId, 'profile_response', {
+            slotIndex: getLocalPlayerSlot(),
+            profileData
+        });
+    } else {
+        // Client responding to host
+        sendToHost('profile_response', {
+            slotIndex: getLocalPlayerSlot(),
+            profileData
+        });
+    }
+}
+
+/**
+ * Handle incoming profile response
+ * @param {Object} payload - Response payload with slotIndex and profileData
+ */
+function handleProfileResponse(payload) {
+    const { slotIndex, profileData } = payload;
+
+    const callback = profileRequestCallbacks.get(slotIndex);
+    if (callback) {
+        profileRequestCallbacks.delete(slotIndex);
+        callback(profileData);
+    }
 }

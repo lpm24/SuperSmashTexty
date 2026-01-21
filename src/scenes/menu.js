@@ -1,7 +1,7 @@
 // Main menu scene
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency, getPlayerLevel, getXPProgress, getTotalXP, getXPForNextLevel, getSelectedPortrait } from '../systems/metaProgression.js';
 import { PORTRAITS, getPortraitById } from '../data/portraits.js';
-import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady, broadcastPartyEmote, onPartyEmote, offPartyEmote, getActiveEmote } from '../systems/partySystem.js';
+import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady, broadcastPartyEmote, onPartyEmote, offPartyEmote, getActiveEmote, requestPlayerProfile } from '../systems/partySystem.js';
 import { initAudio, resumeAudioContext, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled } from '../systems/sounds.js';
 import { getSettings } from '../systems/settings.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -348,6 +348,9 @@ export function setupMenuScene(k) {
                 const slotY = slotsStartY + (index * (slotHeight + slotSpacing));
                 const elementsForThisSlot = [];
 
+                // Make non-empty, non-local slots clickable to view profile
+                const isClickable = !slot.isEmpty && !slot.isLocal;
+
                 const slotBg = k.add([
                     k.rect(partyPanelWidth - 16, slotHeight),
                     k.pos(partyPanelX + 8, slotY),
@@ -355,9 +358,32 @@ export function setupMenuScene(k) {
                     k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_BACKGROUND + 1),
+                    isClickable ? k.area() : null,
                     'partySlotUI'
-                ]);
+                ].filter(Boolean));
                 elementsForThisSlot.push(slotBg);
+
+                // Click handler to view other player's profile
+                if (isClickable) {
+                    slotBg.onClick(() => {
+                        playMenuSelect();
+                        // Request profile data and navigate to profile scene
+                        requestPlayerProfile(index, (profileData) => {
+                            if (profileData) {
+                                k.go('profile', { externalProfile: profileData });
+                            } else {
+                                console.warn('Failed to load profile for slot', index);
+                            }
+                        });
+                    });
+
+                    slotBg.onHoverUpdate(() => {
+                        slotBg.color = k.rgb(80, 90, 110);
+                    });
+                    slotBg.onHoverEnd(() => {
+                        slotBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                    });
+                }
 
                 // Show portrait emoji for players, slot number for empty slots
                 let slotIcon = `${slot.slotNumber}`;

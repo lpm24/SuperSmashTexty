@@ -201,9 +201,22 @@ function showNameEditDialog(k, currentName, onSave) {
 }
 
 export function setupProfileScene(k) {
-    k.scene('profile', () => {
-        const saveData = loadSave();
-        let selectedPortraitId = getSelectedPortrait();
+    k.scene('profile', (args = {}) => {
+        // Check if viewing another player's profile
+        const externalProfile = args.externalProfile || null;
+        const isViewingOther = externalProfile !== null;
+
+        // Get profile data from external source or local save
+        const saveData = isViewingOther ? externalProfile : loadSave();
+        let selectedPortraitId = isViewingOther ? externalProfile.selectedPortrait : getSelectedPortrait();
+
+        // Extract data based on source
+        const profileStats = isViewingOther ? externalProfile.stats : getSaveStats();
+        const profileLevel = isViewingOther ? externalProfile.playerLevel : getPlayerLevel();
+        const profileXP = isViewingOther ? externalProfile.totalXP : getTotalXP();
+        const profileName = isViewingOther ? externalProfile.playerName : (getPlayerName() || 'Player');
+        const profileAchievements = isViewingOther ? externalProfile.achievements : [];
+        const profileUnlockedPortraits = isViewingOther ? externalProfile.unlockedPortraits : getUnlockedPortraits();
 
         // Background
         k.add([
@@ -218,8 +231,19 @@ export function setupProfileScene(k) {
         // Background particles
         createMenuParticles(k, { patternCount: 8, particleCount: 12 });
 
-        // Title
-        createAnimatedTitle(k, 'PROFILE', k.width() / 2, 35, 8);
+        // Title - show player name when viewing another player
+        if (isViewingOther) {
+            k.add([
+                k.text(`${profileName}'s Profile`, { size: UI_TEXT_SIZES.H1 }),
+                k.pos(k.width() / 2, 35),
+                k.anchor('center'),
+                k.color(...UI_COLORS.GOLD),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        } else {
+            createAnimatedTitle(k, 'PROFILE', k.width() / 2, 35, 8);
+        }
 
         // ==========================================
         // PROFILE CARD SECTION (Top)
@@ -267,9 +291,8 @@ export function setupProfileScene(k) {
         ]);
 
         // Level badge on portrait
-        const playerLevel = getPlayerLevel();
         k.add([
-            k.text(`LV${playerLevel}`, { size: 12 }),
+            k.text(`LV${profileLevel}`, { size: 12 }),
             k.pos(portraitX, portraitY + 28),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
@@ -281,8 +304,8 @@ export function setupProfileScene(k) {
         const infoX = portraitX + 80;
         let infoY = cardY + 20;
 
-        // Player name (with fallback for null/undefined)
-        let playerName = getPlayerName() || 'Player';
+        // Player name
+        let playerName = profileName;
         const nameDisplay = k.add([
             k.text(playerName, { size: UI_TEXT_SIZES.H1 }),
             k.pos(infoX, infoY),
@@ -292,91 +315,93 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Edit and randomize buttons - right-aligned in card
-        const editIconSize = 24;
-        const randomButtonX = cardX + cardWidth / 2 - 20;
-        const editButtonX = randomButtonX - editIconSize - 8;
+        // Edit and randomize buttons - only show for local profile
+        if (!isViewingOther) {
+            const editIconSize = 24;
+            const randomButtonX = cardX + cardWidth / 2 - 20;
+            const editButtonX = randomButtonX - editIconSize - 8;
 
-        // Edit name button (pencil icon, square)
-        const editButton = k.add([
-            k.rect(editIconSize, editIconSize),
-            k.pos(editButtonX, infoY),
-            k.anchor('right'),
-            k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
-            k.area(),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_ELEMENTS)
-        ]);
+            // Edit name button (pencil icon, square)
+            const editButton = k.add([
+                k.rect(editIconSize, editIconSize),
+                k.pos(editButtonX, infoY),
+                k.anchor('right'),
+                k.color(...UI_COLORS.BG_MEDIUM),
+                k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
+            ]);
 
-        k.add([
-            k.text('✏', { size: 14 }),
-            k.pos(editButtonX - editIconSize / 2, infoY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+            k.add([
+                k.text('✏', { size: 14 }),
+                k.pos(editButtonX - editIconSize / 2, infoY),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
 
-        editButton.onClick(() => {
-            playMenuSelect();
-            showNameEditDialog(k, playerName, (newName) => {
+            editButton.onClick(() => {
+                playMenuSelect();
+                showNameEditDialog(k, playerName, (newName) => {
+                    setPlayerName(newName);
+                    nameDisplay.text = newName;
+                    playerName = newName;
+                });
+            });
+
+            editButton.onHoverUpdate(() => {
+                editButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+            });
+            editButton.onHoverEnd(() => {
+                editButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+            });
+
+            // Randomize name button (dice icon, square)
+            const randomButton = k.add([
+                k.rect(editIconSize, editIconSize),
+                k.pos(randomButtonX, infoY),
+                k.anchor('right'),
+                k.color(...UI_COLORS.BG_MEDIUM),
+                k.outline(2, k.rgb(...UI_COLORS.GOLD)),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS)
+            ]);
+
+            k.add([
+                k.text('🎲', { size: 14 }),
+                k.pos(randomButtonX - editIconSize / 2, infoY),
+                k.anchor('center'),
+                k.color(...UI_COLORS.GOLD),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            randomButton.onClick(() => {
+                playMenuSelect();
+                const newName = generateRandomName();
                 setPlayerName(newName);
                 nameDisplay.text = newName;
                 playerName = newName;
             });
-        });
 
-        editButton.onHoverUpdate(() => {
-            editButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
-        });
-        editButton.onHoverEnd(() => {
-            editButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
-        });
-
-        // Randomize name button (dice icon, square)
-        const randomButton = k.add([
-            k.rect(editIconSize, editIconSize),
-            k.pos(randomButtonX, infoY),
-            k.anchor('right'),
-            k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(...UI_COLORS.GOLD)),
-            k.area(),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_ELEMENTS)
-        ]);
-
-        k.add([
-            k.text('🎲', { size: 14 }),
-            k.pos(randomButtonX - editIconSize / 2, infoY),
-            k.anchor('center'),
-            k.color(...UI_COLORS.GOLD),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        randomButton.onClick(() => {
-            playMenuSelect();
-            const newName = generateRandomName();
-            setPlayerName(newName);
-            nameDisplay.text = newName;
-            playerName = newName;
-        });
-
-        randomButton.onHoverUpdate(() => {
-            randomButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
-        });
-        randomButton.onHoverEnd(() => {
-            randomButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
-        });
+            randomButton.onHoverUpdate(() => {
+                randomButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+            });
+            randomButton.onHoverEnd(() => {
+                randomButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+            });
+        }
 
         infoY += 35;
 
         // Level with stars
-        const stars = Math.min(5, Math.floor(playerLevel / 10));
+        const stars = Math.min(5, Math.floor(profileLevel / 10));
         const starDisplay = '★'.repeat(stars) + '☆'.repeat(5 - stars);
         k.add([
-            k.text(`Level ${playerLevel}  ${starDisplay}`, { size: UI_TEXT_SIZES.LABEL }),
+            k.text(`Level ${profileLevel}  ${starDisplay}`, { size: UI_TEXT_SIZES.LABEL }),
             k.pos(infoX, infoY),
             k.anchor('left'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -388,10 +413,10 @@ export function setupProfileScene(k) {
         // XP Progress bar
         const barWidth = 250;
         const barHeight = 16;
-        const xpProgress = getXPProgress();
-        const currentXP = getTotalXP();
-        const nextLevelXP = getXPForNextLevel();
-        const currentLevelXP = getXPRequiredForLevel(playerLevel);
+        const xpProgress = isViewingOther ? 0 : getXPProgress();
+        const currentXP = profileXP;
+        const nextLevelXP = isViewingOther ? profileXP : getXPForNextLevel();
+        const currentLevelXP = getXPRequiredForLevel(profileLevel);
 
         // Bar background
         k.add([
@@ -490,7 +515,10 @@ export function setupProfileScene(k) {
             const x = gridStartX + col * iconSpacing;
             const y = gridY + row * (iconSpacing + 5);
 
-            const isUnlocked = checkPortraitUnlockCondition(portrait.id, saveData);
+            // Check if unlocked - use external data when viewing another player
+            const isUnlocked = isViewingOther
+                ? profileUnlockedPortraits.includes(portrait.id)
+                : checkPortraitUnlockCondition(portrait.id, saveData);
             const isSelected = portrait.id === selectedPortraitId;
 
             // Portrait box
@@ -507,10 +535,10 @@ export function setupProfileScene(k) {
                 k.anchor('center'),
                 k.color(...boxColor),
                 k.outline(isSelected ? 3 : 2, k.rgb(...borderColor)),
-                k.area(),
+                isViewingOther ? null : k.area(), // Only clickable for own profile
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
-            ]);
+            ].filter(Boolean));
 
             // Portrait icon or lock
             const displayIcon = isUnlocked ? portrait.icon : '🔒';
@@ -535,36 +563,38 @@ export function setupProfileScene(k) {
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
 
-            // Click handler
-            portraitBox.onClick(() => {
-                if (isUnlocked) {
-                    playMenuSelect();
-                    setSelectedPortrait(portrait.id);
-                    selectedPortraitId = portrait.id;
-                    // Update UI - would need to refresh scene
-                    updateSelectedInfo(portrait);
-                    k.go('profile'); // Refresh scene to show new selection
-                } else {
-                    playMenuNav();
-                    // Show unlock requirement
-                    const desc = getPortraitUnlockDescription(portrait.id);
-                    if (selectedDescText && selectedDescText.exists()) {
-                        selectedDescText.text = `Locked: ${desc}`;
-                        selectedDescText.color = k.rgb(...UI_COLORS.DANGER);
+            // Click handler - only for own profile
+            if (!isViewingOther) {
+                portraitBox.onClick(() => {
+                    if (isUnlocked) {
+                        playMenuSelect();
+                        setSelectedPortrait(portrait.id);
+                        selectedPortraitId = portrait.id;
+                        // Update UI - would need to refresh scene
+                        updateSelectedInfo(portrait);
+                        k.go('profile'); // Refresh scene to show new selection
+                    } else {
+                        playMenuNav();
+                        // Show unlock requirement
+                        const desc = getPortraitUnlockDescription(portrait.id);
+                        if (selectedDescText && selectedDescText.exists()) {
+                            selectedDescText.text = `Locked: ${desc}`;
+                            selectedDescText.color = k.rgb(...UI_COLORS.DANGER);
+                        }
                     }
-                }
-            });
+                });
 
-            portraitBox.onHoverUpdate(() => {
-                if (!isSelected) {
-                    portraitBox.color = k.rgb(...(isUnlocked ? [100, 120, 160] : [50, 50, 60]));
-                }
-            });
-            portraitBox.onHoverEnd(() => {
-                if (!isSelected) {
-                    portraitBox.color = k.rgb(...boxColor);
-                }
-            });
+                portraitBox.onHoverUpdate(() => {
+                    if (!isSelected) {
+                        portraitBox.color = k.rgb(...(isUnlocked ? [100, 120, 160] : [50, 50, 60]));
+                    }
+                });
+                portraitBox.onHoverEnd(() => {
+                    if (!isSelected) {
+                        portraitBox.color = k.rgb(...boxColor);
+                    }
+                });
+            }
         });
 
         // Selected portrait info
@@ -613,8 +643,8 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
 
-        // Stats display - Two rows
-        const stats = getSaveStats();
+        // Stats display - Two rows (use profileStats for both local and external)
+        const stats = profileStats;
         const totalRuns = stats.totalRuns || 0;
         const avgCurrency = totalRuns > 0 ? Math.round((stats.totalCurrencyEarned || 0) / totalRuns) : 0;
         const avgFloors = totalRuns > 0 ? ((stats.totalFloorsReached || 0) / totalRuns).toFixed(1) : '0';
