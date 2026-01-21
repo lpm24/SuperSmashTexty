@@ -4607,29 +4607,13 @@ export function setupGameScene(k) {
             const gridDirection = doorToGridDirection[direction];
 
             if (gameState.floorMap) {
-
-                if (gridDirection) {
-                    // Try to move in the floor map
-                    const moved = gameState.floorMap.moveToRoom(gridDirection);
-                    if (!moved) {
-                        console.error('[Game] Failed to move in floor map - should not happen!');
-                        // Fallback to old room increment
-                        currentRoom++;
-                    } else {
-                        // Successfully moved - check if we entered the boss room
-                        const newRoom = gameState.floorMap.getCurrentRoom();
-                        // Update current room count for legacy systems
-                        currentRoom = gameState.floorMap.getVisitedCount();
-                    }
-                } else {
-                    console.warn('[Game] Invalid door direction:', direction);
-                    currentRoom++;
-                }
-
                 // Check if we need to advance to next floor (boss defeated)
-                // In the new system, we advance floors after defeating boss
+                // This must be checked BEFORE trying to move, since boss room north door
+                // is used for floor advancement and doesn't have a floor map connection
                 const isFloorAdvancement = currentRoomNode && currentRoomNode.isBossRoom && currentRoomNode.cleared;
+
                 if (isFloorAdvancement) {
+                    // Floor advancement - going through north door after defeating boss
                     currentFloor++;
 
                     // Check for character unlocks based on floor completion
@@ -4656,7 +4640,24 @@ export function setupGameScene(k) {
                     // Update new state system for floor transition
                     state.nextFloor();
                 } else {
-                    // Just advancing to next room
+                    // Normal room movement within the floor
+                    if (gridDirection) {
+                        // Try to move in the floor map
+                        const moved = gameState.floorMap.moveToRoom(gridDirection);
+                        if (!moved) {
+                            console.error('[Game] Failed to move in floor map - should not happen!');
+                            // Fallback to old room increment
+                            currentRoom++;
+                        } else {
+                            // Successfully moved
+                            currentRoom = gameState.floorMap.getVisitedCount();
+                        }
+                    } else {
+                        console.warn('[Game] Invalid door direction:', direction);
+                        currentRoom++;
+                    }
+
+                    // Update new state system for room transition
                     state.nextRoom();
                 }
             } else {
