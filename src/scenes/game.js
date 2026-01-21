@@ -4633,21 +4633,20 @@ export function setupGameScene(k) {
                     currentFloor++;
 
                     // Check for character unlocks based on floor completion
-                    checkFloorUnlocks(currentFloor - 1).then(unlocked => {
-                        if (unlocked) {
-                            // Show unlock notification (could be enhanced later)
-                            const unlockText = k.add([
-                                k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
-                                k.pos(k.width() / 2, k.height() / 2 - 50),
-                                k.anchor('center'),
-                                k.color(100, 255, 100),
-                                k.z(300)
-                            ]);
-                            k.wait(3, () => {
-                                if (unlockText.exists()) k.destroy(unlockText);
-                            });
-                        }
-                    });
+                    const unlocked = checkFloorUnlocks(currentFloor - 1);
+                    if (unlocked) {
+                        // Show unlock notification (could be enhanced later)
+                        const unlockText = k.add([
+                            k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
+                            k.pos(k.width() / 2, k.height() / 2 - 50),
+                            k.anchor('center'),
+                            k.color(100, 255, 100),
+                            k.z(300)
+                        ]);
+                        k.wait(3, () => {
+                            if (unlockText.exists()) k.destroy(unlockText);
+                        });
+                    }
 
                     // Reset floor map and room counter for new floor
                     gameState.floorMap = null;
@@ -4671,21 +4670,20 @@ export function setupGameScene(k) {
                     currentFloor++;
 
                     // Check for character unlocks based on floor completion
-                    checkFloorUnlocks(currentFloor - 1).then(unlocked => {
-                        if (unlocked) {
-                            // Show unlock notification (could be enhanced later)
-                            const unlockText = k.add([
-                                k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
-                                k.pos(k.width() / 2, k.height() / 2 - 50),
-                                k.anchor('center'),
-                                k.color(100, 255, 100),
-                                k.z(300)
-                            ]);
-                            k.wait(3, () => {
-                                if (unlockText.exists()) k.destroy(unlockText);
-                            });
-                        }
-                    });
+                    const unlocked = checkFloorUnlocks(currentFloor - 1);
+                    if (unlocked) {
+                        // Show unlock notification (could be enhanced later)
+                        const unlockText = k.add([
+                            k.text('NEW CHARACTER UNLOCKED!', { size: 24 }),
+                            k.pos(k.width() / 2, k.height() / 2 - 50),
+                            k.anchor('center'),
+                            k.color(100, 255, 100),
+                            k.z(300)
+                        ]);
+                        k.wait(3, () => {
+                            if (unlockText.exists()) k.destroy(unlockText);
+                        });
+                    }
                     currentRoom = 1;
                     // Reset entry direction when starting new floor (player enters from center on floor start)
                     gameState.entryDirection = null;
