@@ -219,7 +219,7 @@ export function setupProfileScene(k) {
         createMenuParticles(k, { patternCount: 8, particleCount: 12 });
 
         // Title
-        createAnimatedTitle(k, 'PLAYER PROFILE', k.width() / 2, 35, 6);
+        createAnimatedTitle(k, 'PROFILE', k.width() / 2, 35, 8);
 
         // ==========================================
         // PROFILE CARD SECTION (Top)
