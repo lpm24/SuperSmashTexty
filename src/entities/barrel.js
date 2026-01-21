@@ -241,6 +241,7 @@ function createExplosionEffect(k, x, y, radius) {
         k.pos(x, y),
         k.anchor('center'),
         k.color(255, 255, 255),
+        k.opacity(1),
         k.scale(1),
         k.z(102),
         'explosionEffect'
