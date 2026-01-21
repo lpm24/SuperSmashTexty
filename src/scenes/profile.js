@@ -465,7 +465,7 @@ export function setupProfileScene(k) {
         // PORTRAITS SECTION (directly below card since buttons moved to name)
         // ==========================================
         const portraitsY = cardY + cardHeight + 10;
-        const portraitsSectionHeight = 155;
+        const portraitsSectionHeight = 165;
 
         // Section background
         k.add([
@@ -478,13 +478,13 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
 
-        // Portrait grid (no header, 2 rows max with 12 per row = 24 portraits)
+        // Portrait grid (no header, 2 rows max with 13 per row = 26 portraits)
         const allPortraits = getAllPortraits();
-        const gridStartX = cardX - cardWidth / 2 + 35;
-        const gridY = portraitsY + 18;
-        const iconSize = 42;
-        const iconSpacing = 52;
-        const maxPerRow = 12;
+        const gridStartX = cardX - cardWidth / 2 + 30;
+        const gridY = portraitsY + 20;
+        const iconSize = 40;
+        const iconSpacing = 50;
+        const maxPerRow = 13;
 
         // Selected portrait info display
         let selectedInfoText = null;
