@@ -129,7 +129,7 @@ export function showAchievementModal(k, achievement, onClose = null) {
     // Description
     const descText = k.add([
         k.text(achievement.description, { size: UI_TEXT_SIZES.BODY, width: modalWidth - 40 }),
-        k.pos(centerX, centerY - 20),
+        k.pos(centerX, centerY - 25),
         k.anchor('center'),
         k.color(...UI_COLORS.TEXT_SECONDARY),
         k.fixed(),
@@ -138,11 +138,55 @@ export function showAchievementModal(k, achievement, onClose = null) {
     ]);
     modalState.elements.push(descText);
 
+    // Build unlocks summary for display
+    const characterUnlocks = getCharactersUnlockedByAchievement(achievement.id);
+    const hasShopUnlocks = achievement.unlocks && achievement.unlocks.length > 0;
+    const hasCharacterUnlocks = characterUnlocks.length > 0;
+
+    // Show what this achievement unlocks (repurposed from hint)
+    if (hasCharacterUnlocks || hasShopUnlocks) {
+        const unlockParts = [];
+
+        // Add character names
+        characterUnlocks.forEach(char => {
+            unlockParts.push(`${char.char} ${char.name}`);
+        });
+
+        // Add shop item names
+        if (hasShopUnlocks) {
+            achievement.unlocks.forEach(unlockKey => {
+                const weapon = WEAPON_UNLOCKS[unlockKey];
+                const cosmetic = COSMETIC_UNLOCKS[unlockKey];
+                if (weapon) {
+                    unlockParts.push(weapon.name);
+                } else if (cosmetic) {
+                    unlockParts.push(cosmetic.name);
+                }
+            });
+        }
+
+        if (unlockParts.length > 0) {
+            const unlocksText = k.add([
+                k.text(`Unlocks: ${unlockParts.join(', ')}`, { size: UI_TEXT_SIZES.SMALL, width: modalWidth - 40 }),
+                k.pos(centerX, centerY + 5),
+                k.anchor('center'),
+                k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.GOLD)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 1),
+                'achievementModal'
+            ]);
+            modalState.elements.push(unlocksText);
+        }
+    }
+
     // Progress bar (if applicable)
+    const hasUnlocks = hasCharacterUnlocks || hasShopUnlocks;
+    const progressBaseY = hasUnlocks ? centerY + 35 : centerY + 25;
+
     if (progress && !isUnlocked) {
         const progressBarWidth = 280;
         const progressBarHeight = 20;
-        const progressY = centerY + 25;
+        const progressY = progressBaseY;
 
         // Progress bar background
         const progressBg = k.add([
@@ -186,7 +230,7 @@ export function showAchievementModal(k, achievement, onClose = null) {
         // Show "UNLOCKED" status
         const unlockedText = k.add([
             k.text('UNLOCKED', { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(centerX, centerY + 25),
+            k.pos(centerX, progressBaseY),
             k.anchor('center'),
             k.color(...UI_COLORS.SUCCESS),
             k.fixed(),
@@ -196,20 +240,15 @@ export function showAchievementModal(k, achievement, onClose = null) {
         modalState.elements.push(unlockedText);
     }
 
-    // Reward section - show what this achievement gives
-    const characterUnlocks = getCharactersUnlockedByAchievement(achievement.id);
-    const hasShopUnlocks = achievement.unlocks && achievement.unlocks.length > 0;
-    const hasCharacterUnlocks = characterUnlocks.length > 0;
+    // Credit reward section (simplified - unlocks now shown above)
     const creditReward = getAchievementReward(achievement);
-    const hasReward = creditReward > 0 || hasShopUnlocks || hasCharacterUnlocks;
 
-    if (hasReward) {
-        const rewardY = centerY + (isUnlocked ? 65 : (progress ? 70 : 50));
-        let currentY = rewardY;
+    if (creditReward > 0) {
+        const rewardY = progressBaseY + (isUnlocked ? 35 : (progress ? 55 : 35));
 
         const rewardLabel = k.add([
             k.text('-- REWARD --', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(centerX, currentY),
+            k.pos(centerX, rewardY),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
             k.fixed(),
@@ -217,83 +256,18 @@ export function showAchievementModal(k, achievement, onClose = null) {
             'achievementModal'
         ]);
         modalState.elements.push(rewardLabel);
-        currentY += 22;
 
-        // Show character unlocks
-        characterUnlocks.forEach((char) => {
-            const charText = k.add([
-                k.text(`${char.char} ${char.name} (Character)`, { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(centerX, currentY),
-                k.anchor('center'),
-                k.color(...(isUnlocked ? char.color : UI_COLORS.TEXT_TERTIARY)),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.MODAL + 1),
-                'achievementModal'
-            ]);
-            modalState.elements.push(charText);
-            currentY += 20;
-        });
-
-        // Show shop unlocks (weapons and cosmetics)
-        if (hasShopUnlocks) {
-            achievement.unlocks.forEach((unlockKey) => {
-                // Check if it's a weapon or cosmetic
-                const weapon = WEAPON_UNLOCKS[unlockKey];
-                const cosmetic = COSMETIC_UNLOCKS[unlockKey];
-
-                let icon, displayName, category;
-                if (weapon) {
-                    icon = '~';
-                    displayName = weapon.name;
-                    category = 'Weapon';
-                } else if (cosmetic) {
-                    // Determine cosmetic icon based on category
-                    if (cosmetic.category === 'trail') {
-                        icon = '~';
-                    } else if (cosmetic.category === 'death') {
-                        icon = '*';
-                    } else if (cosmetic.category === 'glow') {
-                        icon = 'o';
-                    } else {
-                        icon = '+';
-                    }
-                    displayName = cosmetic.name;
-                    category = 'Cosmetic';
-                } else {
-                    // Fallback for unknown unlock types
-                    icon = '?';
-                    displayName = unlockKey.replace(/([A-Z])/g, ' $1').replace(/^./, str => str.toUpperCase());
-                    category = 'Unlock';
-                }
-
-                const unlockText = k.add([
-                    k.text(`${icon} ${displayName} (${category})`, { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(centerX, currentY),
-                    k.anchor('center'),
-                    k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_TERTIARY)),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.MODAL + 1),
-                    'achievementModal'
-                ]);
-                modalState.elements.push(unlockText);
-                currentY += 20;
-            });
-        }
-
-        // Show credit reward (if no unlocks)
-        if (creditReward > 0) {
-            const currencyName = getCurrencyName();
-            const rewardText = k.add([
-                k.text(`${currencyName}${creditReward}`, { size: UI_TEXT_SIZES.H2 }),
-                k.pos(centerX, currentY + 5),
-                k.anchor('center'),
-                k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.GOLD)),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.MODAL + 1),
-                'achievementModal'
-            ]);
-            modalState.elements.push(rewardText);
-        }
+        const currencyName = getCurrencyName();
+        const rewardText = k.add([
+            k.text(`${currencyName}${creditReward}`, { size: UI_TEXT_SIZES.H2 }),
+            k.pos(centerX, rewardY + 25),
+            k.anchor('center'),
+            k.color(...(isUnlocked ? UI_COLORS.SUCCESS : UI_COLORS.GOLD)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL + 1),
+            'achievementModal'
+        ]);
+        modalState.elements.push(rewardText);
     }
 
     // Difficulty badge - positioned near bottom of modal
