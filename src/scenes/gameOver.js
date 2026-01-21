@@ -45,9 +45,9 @@ const CURRENCY_ICONS = ['$', '¢', '£', '¥', '€'];
 
 // Award definitions
 const AWARDS = [
-    { id: 'slayer', title: 'Slayer', icon: '⚔', check: (stats) => stats.kills || 0, color: [255, 100, 100] },
-    { id: 'collector', title: 'Hoarder', icon: '💰', check: (stats) => stats.creditsPickedUp || 0, color: [255, 215, 0] },
-    { id: 'bossBuster', title: 'Boss Buster', icon: '👑', check: (stats) => stats.bossesKilled || 0, color: [255, 150, 50] }
+    { id: 'slayer', title: 'Slayer', icon: '⚔', desc: 'Most enemy kills', check: (stats) => stats.kills || 0, color: [255, 100, 100] },
+    { id: 'collector', title: 'Hoarder', icon: '💰', desc: 'Most credits collected', check: (stats) => stats.creditsPickedUp || 0, color: [255, 215, 0] },
+    { id: 'bossBuster', title: 'Boss Buster', icon: '👑', desc: 'Most bosses defeated', check: (stats) => stats.bossesKilled || 0, color: [255, 150, 50] }
 ];
 
 export function setupGameOverScene(k) {
@@ -294,8 +294,8 @@ export function setupGameOverScene(k) {
             });
         }
 
-        // Table layout constants - leave room for kill panel on right (160px)
-        const killPanelReservedWidth = 170; // 140px panel + 30px gap
+        // Table layout constants - leave room for kill panel on right
+        const killPanelReservedWidth = 210; // 180px panel + 30px gap
         const tableWidth = Math.min(k.width() - killPanelReservedWidth - 30, 500);
         const tableX = 20;
         const colWidth = (tableWidth - 80) / numPlayers; // 80px for label column
@@ -396,20 +396,128 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL + 1)
         ]);
 
+        // Helper to show award info modal
+        let activeAwardModal = null;
+        function showAwardModal(award, player) {
+            // Remove any existing modal
+            if (activeAwardModal) {
+                activeAwardModal.forEach(e => { if (e.exists()) k.destroy(e); });
+            }
+
+            const modalWidth = 220;
+            const modalHeight = 100;
+            const modalX = k.width() / 2;
+            const modalY = k.height() / 2;
+
+            const elements = [];
+
+            // Modal background
+            elements.push(k.add([
+                k.rect(modalWidth, modalHeight),
+                k.pos(modalX, modalY),
+                k.anchor('center'),
+                k.color(30, 25, 40),
+                k.outline(3, k.rgb(...award.color)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 100)
+            ]));
+
+            // Award icon
+            elements.push(k.add([
+                k.text(award.icon, { size: 28 }),
+                k.pos(modalX, modalY - 28),
+                k.anchor('center'),
+                k.color(...award.color),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 101)
+            ]));
+
+            // Award title
+            elements.push(k.add([
+                k.text(award.title, { size: 16 }),
+                k.pos(modalX, modalY),
+                k.anchor('center'),
+                k.color(255, 255, 255),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 101)
+            ]));
+
+            // Award description
+            elements.push(k.add([
+                k.text(award.desc, { size: 11 }),
+                k.pos(modalX, modalY + 18),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 101)
+            ]));
+
+            // Player who earned it (if applicable)
+            const earnedText = numPlayers > 1 ? `Earned by ${player.name}` : 'Earned this run';
+            elements.push(k.add([
+                k.text(earnedText, { size: 10 }),
+                k.pos(modalX, modalY + 34),
+                k.anchor('center'),
+                k.color(150, 150, 180),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 101)
+            ]));
+
+            activeAwardModal = elements;
+
+            // Close on click anywhere after a short delay
+            k.wait(0.1, () => {
+                const closeHandler = k.onClick(() => {
+                    closeHandler.cancel();
+                    if (activeAwardModal) {
+                        activeAwardModal.forEach(e => { if (e.exists()) k.destroy(e); });
+                        activeAwardModal = null;
+                    }
+                });
+            });
+        }
+
         playersToShow.forEach((player, idx) => {
             const colX = tableX + labelColWidth + idx * colWidth + colWidth / 2;
             const playerAwards = awardWinners[player.name] || [];
 
             if (playerAwards.length > 0) {
-                const awardIcons = playerAwards.map(a => a.icon).join(' ');
-                k.add([
-                    k.text(awardIcons, { size: 14 }),
-                    k.pos(colX, currentY),
-                    k.anchor('center'),
-                    k.color(255, 220, 100),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.MODAL + 1)
-                ]);
+                // Create individual clickable award icons
+                const iconSize = 22;
+                const iconSpacing = 4;
+                const totalWidth = playerAwards.length * iconSize + (playerAwards.length - 1) * iconSpacing;
+                const startX = colX - totalWidth / 2 + iconSize / 2;
+
+                playerAwards.forEach((award, awardIdx) => {
+                    const awardX = startX + awardIdx * (iconSize + iconSpacing);
+
+                    // Award icon box (clickable)
+                    const awardBox = k.add([
+                        k.rect(iconSize, iconSize),
+                        k.pos(awardX, currentY),
+                        k.anchor('center'),
+                        k.color(40, 35, 50),
+                        k.outline(2, k.rgb(...award.color)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.MODAL + 1)
+                    ]);
+
+                    k.add([
+                        k.text(award.icon, { size: 12 }),
+                        k.pos(awardX, currentY),
+                        k.anchor('center'),
+                        k.color(255, 220, 100),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.MODAL + 2)
+                    ]);
+
+                    awardBox.onClick(() => {
+                        playMenuNav();
+                        showAwardModal(award, player);
+                    });
+                    awardBox.cursor = 'pointer';
+                });
             } else {
                 k.add([
                     k.text('-', { size: 14 }),
@@ -512,13 +620,15 @@ export function setupGameOverScene(k) {
         // ==========================================
         const bucketSectionY = tableStartY + tableHeight + 15;
         // Calculate bucket width based on available space and player count
-        const maxBucketWidth = numPlayers === 1 ? 180 : (numPlayers === 2 ? 160 : (numPlayers === 3 ? 120 : 100));
-        const bucketSpacing = 8;
+        // Solo play gets a larger, more prominent bucket
+        const maxBucketWidth = numPlayers === 1 ? 240 : (numPlayers === 2 ? 180 : (numPlayers === 3 ? 140 : 110));
+        const bucketSpacing = 10;
         // Ensure buckets fit within table width
         const availableWidth = tableWidth - 20; // 10px padding on each side
         const calculatedBucketWidth = (availableWidth - (numPlayers - 1) * bucketSpacing) / numPlayers;
         const bucketWidth = Math.min(maxBucketWidth, calculatedBucketWidth);
-        const bucketHeight = 80;
+        // Taller bucket for solo play
+        const bucketHeight = numPlayers === 1 ? 100 : 80;
         const totalBucketsWidth = numPlayers * bucketWidth + (numPlayers - 1) * bucketSpacing;
         const bucketStartX = tableX + (tableWidth - totalBucketsWidth) / 2 + bucketWidth / 2;
 
@@ -540,10 +650,11 @@ export function setupGameOverScene(k) {
                 k.z(UI_Z_LAYERS.MODAL)
             ]);
 
-            // Currency label below bucket
+            // Currency label below bucket - larger for solo play
+            const labelSize = numPlayers === 1 ? 20 : 16;
             const currencyLabel = k.add([
-                k.text(`0 ${currencyName}`, { size: 16 }),
-                k.pos(bucketX, bucketSectionY + bucketHeight + 14),
+                k.text(`0 ${currencyName}`, { size: labelSize }),
+                k.pos(bucketX, bucketSectionY + bucketHeight + 16),
                 k.anchor('center'),
                 k.color(...UI_COLORS.GOLD),
                 k.fixed(),
@@ -564,7 +675,8 @@ export function setupGameOverScene(k) {
         });
 
         // Currency drop animation
-        const maxParticlesPerPlayer = 35;
+        // Solo play gets more particles for a more impressive display
+        const maxParticlesPerPlayer = numPlayers === 1 ? 50 : 35;
         const particleSpawnDelay = 0.06;
         const particleFallSpeed = 280;
         let animationTimer = 0;
@@ -632,9 +744,9 @@ export function setupGameOverScene(k) {
         // ==========================================
         // KILL BREAKDOWN - Right side panel
         // ==========================================
-        const killPanelX = k.width() - 160;
+        const killPanelX = k.width() - 110;
         const killPanelY = tableStartY;
-        const killPanelWidth = 140;
+        const killPanelWidth = 180;
         const killPanelHeight = tableHeight + bucketHeight + 30;
 
         // Kill panel background
@@ -703,19 +815,19 @@ export function setupGameOverScene(k) {
                 // Enemy icon
                 k.add([
                     k.text(char, { size: 14 }),
-                    k.pos(killPanelX - 50, killY),
+                    k.pos(killPanelX - 70, killY),
                     k.anchor('center'),
                     k.color(...color),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.MODAL + 1)
                 ]);
 
-                // Short name
+                // Enemy name - wider panel allows more characters
                 const name = getEnemyName(type);
-                const shortName = name.length > 8 ? name.substring(0, 6) + '..' : name;
+                const shortName = name.length > 14 ? name.substring(0, 12) + '..' : name;
                 k.add([
                     k.text(shortName, { size: 10 }),
-                    k.pos(killPanelX - 35, killY),
+                    k.pos(killPanelX - 50, killY),
                     k.anchor('left'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
                     k.fixed(),
@@ -725,7 +837,7 @@ export function setupGameOverScene(k) {
                 // Count
                 k.add([
                     k.text(`x${count}`, { size: 11 }),
-                    k.pos(killPanelX + 55, killY),
+                    k.pos(killPanelX + 70, killY),
                     k.anchor('right'),
                     k.color(...UI_COLORS.DANGER),
                     k.fixed(),
@@ -830,18 +942,29 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Buttons
+        // Buttons - centered with proper spacing
         const isHostPlayer = isHost();
         const buttonY = k.height() - 30;
-        const { LG, SM } = UI_SIZES.BUTTON;
+        const { MD, SM } = UI_SIZES.BUTTON;
+        const buttonGap = 20;
 
         const playAgainEnabled = !inMultiplayer || isHostPlayer;
         const playAgainText = inMultiplayer && !isHostPlayer ? 'Waiting...' : 'PLAY AGAIN';
 
+        // Use MD size for play again (more reasonable) and SM for menu
+        const playAgainWidth = MD.width;
+        const playAgainHeight = MD.height;
+        const menuWidth = SM.width;
+        const menuHeight = SM.height;
+
+        // Center both buttons together
+        const totalButtonWidth = playAgainWidth + buttonGap + menuWidth;
+        const buttonsStartX = k.width() / 2 - totalButtonWidth / 2;
+
         // Play Again button
         const playAgainBg = k.add([
-            k.rect(LG.width, LG.height),
-            k.pos(k.width() / 2 - 80, buttonY),
+            k.rect(playAgainWidth, playAgainHeight),
+            k.pos(buttonsStartX + playAgainWidth / 2, buttonY),
             k.anchor('center'),
             k.color(...(playAgainEnabled ? UI_COLORS.SUCCESS : UI_COLORS.BG_DISABLED)),
             k.outline(2, k.rgb(...(playAgainEnabled ? UI_COLORS.BORDER : UI_COLORS.BG_DARK))),
@@ -853,7 +976,7 @@ export function setupGameOverScene(k) {
 
         const playAgainLabel = k.add([
             k.text(playAgainText, { size: UI_TEXT_SIZES.H2 }),
-            k.pos(k.width() / 2 - 80, buttonY),
+            k.pos(buttonsStartX + playAgainWidth / 2, buttonY),
             k.anchor('center'),
             k.color(...(playAgainEnabled ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
@@ -863,8 +986,8 @@ export function setupGameOverScene(k) {
 
         // Menu button
         const menuBg = k.add([
-            k.rect(SM.width, SM.height),
-            k.pos(k.width() / 2 + 100, buttonY),
+            k.rect(menuWidth, menuHeight),
+            k.pos(buttonsStartX + playAgainWidth + buttonGap + menuWidth / 2, buttonY),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -876,7 +999,7 @@ export function setupGameOverScene(k) {
 
         const menuLabel = k.add([
             k.text('MENU', { size: UI_TEXT_SIZES.SMALL }),
-            k.pos(k.width() / 2 + 100, buttonY),
+            k.pos(buttonsStartX + playAgainWidth + buttonGap + menuWidth / 2, buttonY),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
