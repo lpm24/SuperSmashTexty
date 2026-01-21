@@ -61,6 +61,24 @@ export const PORTRAITS = {
         unlockCondition: { type: 'level', value: 50 },
         description: 'A living legend whose name echoes through the halls.'
     },
+    champion: {
+        id: 'champion',
+        name: 'Champion',
+        icon: '🏆',
+        color: [255, 215, 0],
+        category: PORTRAIT_CATEGORIES.LEVEL,
+        unlockCondition: { type: 'level', value: 75 },
+        description: 'A true champion who has conquered all challenges.'
+    },
+    immortal: {
+        id: 'immortal',
+        name: 'Immortal',
+        icon: '🔱',
+        color: [200, 255, 255],
+        category: PORTRAIT_CATEGORIES.LEVEL,
+        unlockCondition: { type: 'level', value: 100 },
+        description: 'Transcended mortality. A god among players.'
+    },
 
     // ============ CHARACTER-BASED ============
     survivor: {
@@ -172,6 +190,78 @@ export const PORTRAITS = {
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
         unlockCondition: { type: 'stat', stat: 'totalEnemiesKilled', value: 10000 },
         description: 'Has eliminated 10,000 enemies.'
+    },
+    explorer: {
+        id: 'explorer',
+        name: 'Explorer',
+        icon: '🧭',
+        color: [100, 180, 100],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'bestFloor', value: 5 },
+        description: 'Reached floor 5. The journey begins.'
+    },
+    delver: {
+        id: 'delver',
+        name: 'Delver',
+        icon: '⛏️',
+        color: [180, 140, 100],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'bestFloor', value: 10 },
+        description: 'Reached floor 10. Deep into the unknown.'
+    },
+    abyssal: {
+        id: 'abyssal',
+        name: 'Abyssal',
+        icon: '🌀',
+        color: [80, 50, 150],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'bestFloor', value: 20 },
+        description: 'Reached floor 20. Touched the abyss.'
+    },
+    slayer: {
+        id: 'slayer',
+        name: 'Slayer',
+        icon: '⚔️',
+        color: [200, 80, 80],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'totalBossesKilled', value: 25 },
+        description: 'Has slain 25 bosses.'
+    },
+    warrior: {
+        id: 'warrior',
+        name: 'Warrior',
+        icon: '🗡️',
+        color: [150, 150, 200],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'totalEnemiesKilled', value: 1000 },
+        description: 'Has defeated 1,000 enemies.'
+    },
+    rich: {
+        id: 'rich',
+        name: 'Wealthy',
+        icon: '💎',
+        color: [100, 200, 255],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'totalCurrencyEarned', value: 50000 },
+        description: 'Has earned 50,000 credits. Living large.'
+    },
+    dedicated: {
+        id: 'dedicated',
+        name: 'Dedicated',
+        icon: '🎮',
+        color: [150, 100, 200],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'totalRuns', value: 50 },
+        description: 'Has completed 50 runs. Committed to the grind.'
+    },
+    marathoner: {
+        id: 'marathoner',
+        name: 'Marathoner',
+        icon: '🏃',
+        color: [100, 200, 150],
+        category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
+        unlockCondition: { type: 'stat', stat: 'totalRoomsCleared', value: 500 },
+        description: 'Has cleared 500 rooms. Endurance personified.'
     }
 };
 

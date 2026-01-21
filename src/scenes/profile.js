@@ -250,7 +250,7 @@ export function setupProfileScene(k) {
         // ==========================================
         const cardY = 80;
         const cardHeight = 140;
-        const cardWidth = 580;
+        const cardWidth = 720;
         const cardX = k.width() / 2;
 
         // Card background
@@ -465,7 +465,7 @@ export function setupProfileScene(k) {
         // PORTRAITS SECTION (directly below card since buttons moved to name)
         // ==========================================
         const portraitsY = cardY + cardHeight + 10;
-        const portraitsSectionHeight = 180;
+        const portraitsSectionHeight = 155;
 
         // Section background
         k.add([
@@ -478,23 +478,13 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
 
-        // Section title
-        k.add([
-            k.text('PORTRAITS', { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(cardX, portraitsY + 15),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        // Portrait grid
+        // Portrait grid (no header, 2 rows max with 12 per row = 24 portraits)
         const allPortraits = getAllPortraits();
-        const gridStartX = cardX - cardWidth / 2 + 45;
-        const gridY = portraitsY + 45;
-        const iconSize = 45;
-        const iconSpacing = 55;
-        const maxPerRow = 9;
+        const gridStartX = cardX - cardWidth / 2 + 35;
+        const gridY = portraitsY + 18;
+        const iconSize = 42;
+        const iconSpacing = 52;
+        const maxPerRow = 12;
 
         // Selected portrait info display
         let selectedInfoText = null;
@@ -620,7 +610,7 @@ export function setupProfileScene(k) {
         // STATS SECTION
         // ==========================================
         const statsY = portraitsY + portraitsSectionHeight + 10;
-        const statsHeight = 115;
+        const statsHeight = 120;
 
         // Section background
         k.add([
@@ -633,34 +623,32 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
 
-        // Section title
-        k.add([
-            k.text('STATS SUMMARY', { size: UI_TEXT_SIZES.LABEL }),
-            k.pos(cardX, statsY + 15),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_PRIMARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
-
-        // Stats display - Two rows (use profileStats for both local and external)
+        // Stats display - Three rows (use profileStats for both local and external)
         const stats = profileStats;
         const totalRuns = stats.totalRuns || 0;
         const avgCurrency = totalRuns > 0 ? Math.round((stats.totalCurrencyEarned || 0) / totalRuns) : 0;
         const avgFloors = totalRuns > 0 ? ((stats.totalFloorsReached || 0) / totalRuns).toFixed(1) : '0';
+        const avgRooms = totalRuns > 0 ? ((stats.totalRoomsCleared || 0) / totalRuns).toFixed(1) : '0';
 
-        // Row 1: Main stats
+        // Format fastest run time
+        const fastestTime = stats.fastestRunTime || 0;
+        const fastestMin = Math.floor(fastestTime / 60);
+        const fastestSec = Math.floor(fastestTime % 60);
+        const fastestDisplay = fastestTime > 0 ? `${fastestMin}:${fastestSec.toString().padStart(2, '0')}` : '--:--';
+
+        // Row 1: Main stats (5 columns)
         const row1Stats = [
             { label: 'Total Runs', value: totalRuns },
             { label: 'Best Floor', value: stats.bestFloor || 1 },
             { label: 'Best Level', value: stats.bestLevel || 1 },
-            { label: 'Avg Floor', value: avgFloors }
+            { label: 'Best Room', value: stats.bestRoom || 1 },
+            { label: 'Fastest Run', value: fastestDisplay }
         ];
 
         const statWidth = cardWidth / row1Stats.length;
         row1Stats.forEach((stat, index) => {
             const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 40;
+            const y = statsY + 15;
 
             k.add([
                 k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
@@ -673,7 +661,7 @@ export function setupProfileScene(k) {
 
             k.add([
                 k.text(String(stat.value), { size: UI_TEXT_SIZES.LABEL }),
-                k.pos(x, y + 18),
+                k.pos(x, y + 16),
                 k.anchor('center'),
                 k.color(...UI_COLORS.GOLD),
                 k.fixed(),
@@ -681,17 +669,18 @@ export function setupProfileScene(k) {
             ]);
         });
 
-        // Row 2: Secondary stats
+        // Row 2: Combat stats (5 columns)
         const row2Stats = [
             { label: 'Enemies', value: (stats.totalEnemiesKilled || 0).toLocaleString() },
             { label: 'Bosses', value: stats.totalBossesKilled || 0 },
-            { label: 'Avg Money', value: avgCurrency.toLocaleString() },
-            { label: 'Total Money', value: (stats.totalCurrencyEarned || 0).toLocaleString() }
+            { label: 'Rooms', value: (stats.totalRoomsCleared || 0).toLocaleString() },
+            { label: 'Avg Floor', value: avgFloors },
+            { label: 'Avg Rooms', value: avgRooms }
         ];
 
         row2Stats.forEach((stat, index) => {
             const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 75;
+            const y = statsY + 50;
 
             k.add([
                 k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
@@ -704,7 +693,7 @@ export function setupProfileScene(k) {
 
             k.add([
                 k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(x, y + 15),
+                k.pos(x, y + 14),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
                 k.fixed(),
@@ -712,18 +701,42 @@ export function setupProfileScene(k) {
             ]);
         });
 
-        // Play time at bottom
-        const playTime = stats.totalPlayTime || 0;
-        const hours = Math.floor(playTime / 3600);
-        const minutes = Math.floor((playTime % 3600) / 60);
-        k.add([
-            k.text(`Play Time: ${hours}h ${minutes}m`, { size: UI_TEXT_SIZES.SMALL - 2 }),
-            k.pos(cardX, statsY + statsHeight - 8),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_DISABLED),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
+        // Row 3: Currency stats (5 columns)
+        const row3Stats = [
+            { label: 'Total Money', value: (stats.totalCurrencyEarned || 0).toLocaleString() },
+            { label: 'Spent', value: (stats.totalCurrencySpent || 0).toLocaleString() },
+            { label: 'Avg Money', value: avgCurrency.toLocaleString() },
+            { label: 'Floors', value: (stats.totalFloorsReached || 0).toLocaleString() },
+            { label: 'Play Time', value: (() => {
+                const playTime = stats.totalPlayTime || 0;
+                const hours = Math.floor(playTime / 3600);
+                const minutes = Math.floor((playTime % 3600) / 60);
+                return `${hours}h ${minutes}m`;
+            })() }
+        ];
+
+        row3Stats.forEach((stat, index) => {
+            const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
+            const y = statsY + 85;
+
+            k.add([
+                k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(x, y),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+
+            k.add([
+                k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(x, y + 14),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_PRIMARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        });
 
         // ==========================================
         // BACK BUTTON
