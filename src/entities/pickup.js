@@ -10,6 +10,7 @@ export function createXPPickup(k, x, y, value) {
         k.anchor('center'),
         k.color(...PICKUP_CONFIG.XP_COLOR),
         k.area(),
+        k.scale(1),
         'xpPickup'
     ]);
 
@@ -144,6 +145,8 @@ export function createCurrencyPickup(k, x, y, value, icon = null) {
         k.anchor('center'),
         k.color(...PICKUP_CONFIG.CURRENCY_COLOR),
         k.area(),
+        k.scale(1),
+        k.opacity(1),
         'currencyPickup'
     ]);
 
@@ -287,6 +290,7 @@ export function createPowerupWeaponPickup(k, x, y, powerupKey) {
         k.anchor('center'),
         k.color(...powerup.color),
         k.area(),
+        k.scale(1),
         'powerupWeaponPickup'
     ]);
 

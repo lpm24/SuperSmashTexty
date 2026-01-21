@@ -77,6 +77,7 @@ export function createButton(k, options = {}) {
         k.outline(2, k.rgb(...UI_COLORS.BORDER)),
         k.area(),
         k.fixed(),
+        k.scale(1),
         k.z(UI_Z_LAYERS.UI_ELEMENTS),
         'uiButton'
     ]);
@@ -88,6 +89,7 @@ export function createButton(k, options = {}) {
         k.anchor('center'),
         k.color(...(disabled ? UI_COLORS.TEXT_DISABLED : UI_COLORS.TEXT_PRIMARY)),
         k.fixed(),
+        k.scale(1),
         k.z(UI_Z_LAYERS.UI_TEXT),
         'uiButtonText'
     ]);

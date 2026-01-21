@@ -4,7 +4,7 @@ import { getSaveStats, unlockAchievement, isAchievementUnlocked, getUnlockedAchi
 import { ACHIEVEMENTS } from '../data/achievements.js';
 import { playAchievement } from './sounds.js';
 import { showAchievementToast, initToastSystem } from './toastNotifications.js';
-import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
+import { CHARACTER_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
 import { isMultiplayerActive, getLocalPlayerSlot, broadcastAchievementUnlocked } from './multiplayerGame.js';
 
 // Track achievements unlocked during the current run
@@ -204,18 +204,15 @@ export function checkMaxUpgrade() {
     const saveData = getSaveData();
     const upgradeLevels = saveData.permanentUpgradeLevels || {};
 
-    // Import PERMANENT_UPGRADE_UNLOCKS to check max levels
-    import('../data/unlocks.js').then(({ PERMANENT_UPGRADE_UNLOCKS }) => {
-        for (const [key, upgrade] of Object.entries(PERMANENT_UPGRADE_UNLOCKS)) {
-            const currentLevel = upgradeLevels[key] || 0;
-            const maxLevel = upgrade.maxLevel || 1;
+    for (const [key, upgrade] of Object.entries(PERMANENT_UPGRADE_UNLOCKS)) {
+        const currentLevel = upgradeLevels[key] || 0;
+        const maxLevel = upgrade.maxLevel || 1;
 
-            if (currentLevel >= maxLevel) {
-                unlockAndNotify('maxUpgrade');
-                break;
-            }
+        if (currentLevel >= maxLevel) {
+            unlockAndNotify('maxUpgrade');
+            break;
         }
-    });
+    }
 }
 
 // Check all achievements based on current stats

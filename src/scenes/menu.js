@@ -43,6 +43,7 @@ function createMenuButton(k, text, x, y, width = UI_BUTTON.WIDTH, height = UI_BU
         k.outline(2, k.rgb(...borderColor)),
         k.area(),
         k.fixed(),
+        k.scale(1),
         k.z(UI_Z_LAYERS.UI_ELEMENTS),
         'menuButton'
     ]);
@@ -54,6 +55,7 @@ function createMenuButton(k, text, x, y, width = UI_BUTTON.WIDTH, height = UI_BU
         k.anchor('center'),
         k.color(...textColor),
         k.fixed(),
+        k.scale(1),
         k.z(UI_Z_LAYERS.UI_TEXT),
         'menuButtonText'
     ]);
@@ -1071,6 +1073,7 @@ export function setupMenuScene(k) {
                 k.pos(Math.random() * k.width(), Math.random() * k.height()),
                 k.color(...UI_COLORS.BG_LIGHT),
                 k.opacity(0.1),
+                k.scale(1),
                 k.z(UI_Z_LAYERS.PARTICLES)
             ]);
 
@@ -1112,6 +1115,7 @@ export function setupMenuScene(k) {
                     k.color(...UI_COLORS.GOLD),
                     k.area({ scale: 2.5 }),
                     k.anchor('center'),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.PARTICLES + 1),
                     'goldenEnemy'
                 ]);
@@ -1130,6 +1134,7 @@ export function setupMenuScene(k) {
                             k.text(['$', '¢'][Math.floor(Math.random() * 2)], { size: 12 }),
                             k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                             k.color(...UI_COLORS.GOLD),
+                            k.opacity(1),
                             k.z(UI_Z_LAYERS.PARTICLES + 2)
                         ]);
 
@@ -1150,6 +1155,7 @@ export function setupMenuScene(k) {
                         k.pos(goldenEnemy.pos.x, goldenEnemy.pos.y),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
+                        k.opacity(1),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
 

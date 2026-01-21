@@ -2,6 +2,7 @@
 
 import { generateRandomName, generateInviteCode } from './nameGenerator.js';
 import { getAchievementReward, getAchievementById } from '../data/achievements.js';
+import { CHARACTER_UNLOCKS, getUnlockInfo } from '../data/unlocks.js';
 
 const STORAGE_KEY = 'superSmashTexty_save';
 const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
@@ -131,10 +132,7 @@ export function unlockItem(category, item) {
 }
 
 // Check and unlock characters based on floor completion
-// Note: This function is async to avoid circular dependency issues
-export async function checkFloorUnlocks(floorCompleted) {
-    // Dynamic import to avoid circular dependency
-    const { CHARACTER_UNLOCKS } = await import('../data/unlocks.js');
+export function checkFloorUnlocks(floorCompleted) {
     const save = loadSave();
     let unlocked = false;
 
@@ -154,9 +152,7 @@ export async function checkFloorUnlocks(floorCompleted) {
 
 // Check and unlock characters based on achievement completion
 // Call this after unlocking an achievement
-export async function checkAchievementUnlocks(achievementId) {
-    // Dynamic import to avoid circular dependency
-    const { CHARACTER_UNLOCKS } = await import('../data/unlocks.js');
+export function checkAchievementUnlocks(achievementId) {
     let unlocked = [];
 
     for (const [key, char] of Object.entries(CHARACTER_UNLOCKS)) {
@@ -712,8 +708,7 @@ export function getRunHistory() {
  * @param {string} itemKey - Key of the item to check
  * @returns {boolean} True if achievement requirement is met (or no requirement exists)
  */
-export async function isShopItemAchievementUnlocked(category, itemKey) {
-    const { getUnlockInfo } = await import('../data/unlocks.js');
+export function isShopItemAchievementUnlocked(category, itemKey) {
     const unlockInfo = getUnlockInfo(category, itemKey);
 
     if (!unlockInfo || !unlockInfo.requiredAchievement) {
@@ -729,10 +724,7 @@ export async function isShopItemAchievementUnlocked(category, itemKey) {
  * @param {string} itemKey - Key of the item
  * @returns {Object|null} Achievement info or null if no requirement
  */
-export async function getRequiredAchievementForItem(category, itemKey) {
-    const { getUnlockInfo } = await import('../data/unlocks.js');
-    const { getAchievementById } = await import('../data/achievements.js');
-
+export function getRequiredAchievementForItem(category, itemKey) {
     const unlockInfo = getUnlockInfo(category, itemKey);
 
     if (!unlockInfo || !unlockInfo.requiredAchievement) {

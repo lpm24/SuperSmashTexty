@@ -734,6 +734,7 @@ export function setupStatisticsScene(k) {
                         k.anchor('center'),
                         k.color(isComplete ? 255 : 150, isComplete ? 215 : 150, isComplete ? 0 : 150),
                         k.fixed(),
+                        k.scale(1),
                         k.z(1002)
                     ]);
                     contentItems.push(trophyIcon);
@@ -828,6 +829,7 @@ export function setupStatisticsScene(k) {
                         k.anchor('center'),
                         k.color(...(isComplete ? [255, 215, 0] : [150, 150, 180])),
                         k.fixed(),
+                        k.opacity(1),
                         k.z(1002)
                     ]);
                     contentItems.push(statusLabel);

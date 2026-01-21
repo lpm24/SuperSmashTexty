@@ -10,6 +10,11 @@ import { createBoss } from '../entities/boss.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
 import { SeededRandom, createSeed } from '../utils/seededRandom.js';
 import { initConnectionQuality } from './connectionQuality.js';
+import { applyUpgrade, recalculateAllUpgrades } from './upgrades.js';
+import { createProjectile } from '../entities/projectile.js';
+import { getPermanentUpgradeLevel, addCurrency } from './metaProgression.js';
+import { ACHIEVEMENTS } from '../data/achievements.js';
+import { showMultiplayerAchievementToast, initToastSystem } from './toastNotifications.js';
 
 // Debug flag - set to true to enable verbose multiplayer logging
 const MP_DEBUG = false;
@@ -223,17 +228,14 @@ function setupHostHandlers() {
         // Apply upgrade to the player on host side
         const player = mpGame.players.get(payload.slotIndex);
         if (player && player.exists()) {
-            // Import applyUpgrade dynamically to avoid circular dependency
-            import('../systems/upgrades.js').then(({ applyUpgrade, recalculateAllUpgrades }) => {
-                applyUpgrade(player, payload.upgradeKey);
-                // Track the upgrade in upgradeStacks for proper persistence
-                if (!player.upgradeStacks) player.upgradeStacks = {};
-                player.upgradeStacks[payload.upgradeKey] = (player.upgradeStacks[payload.upgradeKey] || 0) + 1;
-                // Track in selectedUpgrades for synergy detection
-                if (!player.selectedUpgrades) player.selectedUpgrades = new Set();
-                player.selectedUpgrades.add(payload.upgradeKey);
-                recalculateAllUpgrades(player);
-            });
+            applyUpgrade(player, payload.upgradeKey);
+            // Track the upgrade in upgradeStacks for proper persistence
+            if (!player.upgradeStacks) player.upgradeStacks = {};
+            player.upgradeStacks[payload.upgradeKey] = (player.upgradeStacks[payload.upgradeKey] || 0) + 1;
+            // Track in selectedUpgrades for synergy detection
+            if (!player.selectedUpgrades) player.selectedUpgrades = new Set();
+            player.selectedUpgrades.add(payload.upgradeKey);
+            recalculateAllUpgrades(player);
         }
 
         // Broadcast to ALL clients (including back to sender) so everyone can apply the upgrade
@@ -587,39 +589,34 @@ function setupClientHandlers() {
     onMessage('spawn_projectile', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
 
-        // Import createProjectile dynamically to avoid circular dependency
-        import('../entities/projectile.js').then(({ createProjectile }) => {
-            // Reconstruct direction vector
-            const direction = mpGame.k.vec2(payload.directionX, payload.directionY);
+        // Reconstruct direction vector
+        const direction = mpGame.k.vec2(payload.directionX, payload.directionY);
 
-            // Create the projectile with all parameters
-            const projectile = createProjectile(
-                mpGame.k,
-                payload.x,
-                payload.y,
-                direction,
-                payload.speed,
-                payload.damage,
-                payload.piercing,
-                payload.obstaclePiercing,
-                payload.isCrit,
-                payload.maxRange
-            );
+        // Create the projectile with all parameters
+        const projectile = createProjectile(
+            mpGame.k,
+            payload.x,
+            payload.y,
+            direction,
+            payload.speed,
+            payload.damage,
+            payload.piercing,
+            payload.obstaclePiercing,
+            payload.isCrit,
+            payload.maxRange
+        );
 
-            // Apply visual customization if provided
-            if (payload.char || payload.color) {
-                projectile.text = payload.char;
-                if (payload.color) {
-                    projectile.color = mpGame.k.rgb(...payload.color);
-                }
+        // Apply visual customization if provided
+        if (payload.char || payload.color) {
+            projectile.text = payload.char;
+            if (payload.color) {
+                projectile.color = mpGame.k.rgb(...payload.color);
             }
+        }
 
-            // Assign network ID and track
-            projectile.mpEntityId = payload.id;
-            mpGame.projectiles.set(payload.id, projectile);
-
-            // Removed console.log for performance
-        });
+        // Assign network ID and track
+        projectile.mpEntityId = payload.id;
+        mpGame.projectiles.set(payload.id, projectile);
     });
 
     // Handle damage events
@@ -707,11 +704,10 @@ function setupClientHandlers() {
     });
 
     // Handle player revival events
-    onMessage('players_revived', async (payload) => {
+    onMessage('players_revived', (payload) => {
         if (!mpGame.k) return; // Need kaplay instance
 
         // Get Second Wind level for revive health bonus
-        const { getPermanentUpgradeLevel } = await import('../systems/metaProgression.js');
         const secondWindLevel = getPermanentUpgradeLevel('secondWind');
         const revivePercent = 0.05 + (secondWindLevel * 0.05);
 
@@ -813,11 +809,7 @@ function setupClientHandlers() {
     // Receive currency gain from host
     onMessage('currency_gain', (payload) => {
         if (MP_DEBUG) console.log('[Multiplayer] Received currency gain from host:', payload.value);
-
-        // Import addCurrency dynamically to avoid circular dependency
-        import('../systems/metaProgression.js').then(({ addCurrency }) => {
-            addCurrency(payload.value);
-        });
+        addCurrency(payload.value);
     });
 
     // Receive enemy split events from host
@@ -888,24 +880,16 @@ function setupClientHandlers() {
     });
 
     // Receive achievement unlock notification from other players
-    onMessage('achievement_unlocked', async (payload) => {
+    onMessage('achievement_unlocked', (payload) => {
         // Only show toast if it's not from the local player
         if (payload.playerSlotIndex !== mpGame.localPlayerSlot) {
             if (MP_DEBUG) console.log('[Multiplayer] Achievement unlocked by player:', payload.playerName, 'achievement:', payload.achievementId);
 
-            try {
-                // Import achievement data and toast system
-                const { ACHIEVEMENTS } = await import('../data/achievements.js');
-                const { showMultiplayerAchievementToast, initToastSystem } = await import('./toastNotifications.js');
-
-                const achievement = ACHIEVEMENTS[payload.achievementId];
-                if (achievement && mpGame.k) {
-                    // Make sure toast system is initialized
-                    initToastSystem(mpGame.k);
-                    showMultiplayerAchievementToast(payload.playerName, achievement);
-                }
-            } catch (e) {
-                console.warn('[Multiplayer] Failed to show achievement toast:', e);
+            const achievement = ACHIEVEMENTS[payload.achievementId];
+            if (achievement && mpGame.k) {
+                // Make sure toast system is initialized
+                initToastSystem(mpGame.k);
+                showMultiplayerAchievementToast(payload.playerName, achievement);
             }
         }
     });

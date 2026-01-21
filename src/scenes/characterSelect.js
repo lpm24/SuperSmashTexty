@@ -157,6 +157,7 @@ export function setupCharacterSelectScene(k) {
                     k.outline(2, isViewed ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
                     k.area(),
                     k.fixed(),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.UI_ELEMENTS),
                     {
                         baseX: cardX,
@@ -172,6 +173,7 @@ export function setupCharacterSelectScene(k) {
                     k.anchor('center'),
                     k.color(...(isUnlockedChar ? char.color : UI_COLORS.BG_DISABLED)),
                     k.fixed(),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     {
                         baseX: cardX + cardWidth / 2,
@@ -186,6 +188,7 @@ export function setupCharacterSelectScene(k) {
                     k.anchor('center'),
                     k.color(...(isUnlockedChar ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     {
                         baseX: cardX + cardWidth / 2,
@@ -406,6 +409,7 @@ export function setupCharacterSelectScene(k) {
                 k.anchor('center'),
                 k.color(...(isViewedUnlocked ? viewedChar.color : [80, 80, 80])),
                 k.opacity(CHAR_ANIM.GLOW_MIN),
+                k.scale(1),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
@@ -418,6 +422,7 @@ export function setupCharacterSelectScene(k) {
                 k.anchor('center'),
                 k.color(...(isViewedUnlocked ? viewedChar.color : UI_COLORS.BG_DISABLED)),
                 k.fixed(),
+                k.scale(1),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS + 1),
                 {
                     baseY: detailY + 45,

@@ -30,7 +30,15 @@
       "Bash(node:*)",
       "Bash(wc:*)",
       "Bash(npx eslint:*)",
-      "Bash(git fetch:*)"
+      "Bash(git fetch:*)",
+      "Bash(git ls-tree:*)",
+      "Bash(git pull:*)",
+      "Bash(git rebase:*)",
+      "Bash(git stash:*)",
+      "Bash(grep:*)",
+      "Bash(npx vite:*)",
+      "Bash(git worktree:*)",
+      "Bash(ls:*)"
     ],
     "deny": [],
     "ask": []

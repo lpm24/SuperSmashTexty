@@ -281,6 +281,7 @@ export function createMenuParticles(k, options = {}) {
             k.pos(Math.random() * k.width(), Math.random() * k.height()),
             k.color(...UI_COLORS.BG_LIGHT),
             k.opacity(0.15),
+            k.scale(1),
             k.z(UI_Z_LAYERS.PARTICLES)
         ]);
 

@@ -847,6 +847,7 @@ export function setupGameOverScene(k) {
             k.outline(2, k.rgb(...(playAgainEnabled ? UI_COLORS.BORDER : UI_COLORS.BG_DARK))),
             k.area(),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
@@ -856,6 +857,7 @@ export function setupGameOverScene(k) {
             k.anchor('center'),
             k.color(...(playAgainEnabled ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.MODAL + 1)
         ]);
 
@@ -868,6 +870,7 @@ export function setupGameOverScene(k) {
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
@@ -877,6 +880,7 @@ export function setupGameOverScene(k) {
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.MODAL + 1)
         ]);
 
