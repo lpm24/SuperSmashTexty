@@ -218,6 +218,7 @@ function createExplosionEffect(k, x, y, radius) {
         k.anchor('center'),
         k.color(255, 150, 50),
         k.opacity(0.8),
+        k.scale(1),
         k.z(100),
         'explosionEffect'
     ]);
@@ -229,6 +230,7 @@ function createExplosionEffect(k, x, y, radius) {
         k.anchor('center'),
         k.color(255, 255, 150),
         k.opacity(0.9),
+        k.scale(1),
         k.z(101),
         'explosionEffect'
     ]);
@@ -239,6 +241,7 @@ function createExplosionEffect(k, x, y, radius) {
         k.pos(x, y),
         k.anchor('center'),
         k.color(255, 255, 255),
+        k.scale(1),
         k.z(102),
         'explosionEffect'
     ]);
