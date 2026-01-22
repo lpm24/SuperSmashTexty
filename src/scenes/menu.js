@@ -2,6 +2,7 @@
 import { getCurrency, getCurrencyName, getPlayerName, getSelectedCharacter, isUnlocked, addCurrency, getPlayerLevel, getXPProgress, getTotalXP, getXPForNextLevel, getSelectedPortrait } from '../systems/metaProgression.js';
 import { PORTRAITS, getPortraitById } from '../data/portraits.js';
 import { initParty, getPartyDisplayInfo, isMultiplayerAvailable, broadcastGameStart, getPartySize, getDisplayInviteCode, getParty, toggleReady, isLocalPlayerReady, getCountdownState, areAllPlayersReady, broadcastPartyEmote, onPartyEmote, offPartyEmote, getActiveEmote, requestPlayerProfile } from '../systems/partySystem.js';
+import { startMatchmaking, stopMatchmaking, isMatchmaking, isFirebaseConfigured, setupGlobalMatchHandler } from '../systems/matchmakingSystem.js';
 import { initAudio, resumeAudioContext, playMenuSelect, playMenuNav, playMenuMusic, setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled } from '../systems/sounds.js';
 import { getSettings } from '../systems/settings.js';
 import { CHARACTER_UNLOCKS } from '../data/unlocks.js';
@@ -327,7 +328,7 @@ export function setupMenuScene(k) {
         const slotHeight = 24;
         const slotSpacing = 3;
         const titlePadding = 8;
-        const partyPanelHeight = titlePadding + (slotHeight * 4) + (slotSpacing * 3) + 55;
+        const partyPanelHeight = titlePadding + (slotHeight * 4) + (slotSpacing * 3) + 87;
 
         // Party panel background
         k.add([
@@ -416,7 +417,7 @@ export function setupMenuScene(k) {
                     const levelBadge = k.add([
                         k.text(`${slot.playerLevel}`, { size: 8 }),
                         k.pos(partyPanelX + 9, slotY + slotHeight / 2 + 6),
-                        k.anchor('bottomleft'),
+                        k.anchor('botleft'),
                         k.color(...UI_COLORS.GOLD),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT + 1),
@@ -558,8 +559,81 @@ export function setupMenuScene(k) {
             k.go('joinParty');
         });
 
+        // Find Match button
+        const findMatchY = joinButtonY + 32;
+        let findMatchButton = null;
+        let findMatchLabel = null;
+        let isSearchingForMatch = false;
+
+        // Set up global match handler for scene navigation
+        setupGlobalMatchHandler(k);
+
+        function updateFindMatchButton() {
+            // Clean up existing button
+            if (findMatchButton && findMatchButton.exists()) k.destroy(findMatchButton);
+            if (findMatchLabel && findMatchLabel.exists()) k.destroy(findMatchLabel);
+
+            const searching = isMatchmaking();
+            const buttonText = searching ? 'SEARCHING...' : 'FIND MATCH';
+            const buttonColor = searching ? [150, 120, 50] : [60, 80, 120];
+            const outlineColor = searching ? [200, 180, 80] : [80, 120, 180];
+
+            findMatchButton = k.add([
+                k.rect(partyPanelWidth - 20, 28),
+                k.pos(partyPanelX + partyPanelWidth / 2, findMatchY),
+                k.anchor('center'),
+                k.color(...buttonColor),
+                k.outline(2, k.rgb(...outlineColor)),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_ELEMENTS),
+                'findMatchButton'
+            ]);
+
+            findMatchLabel = k.add([
+                k.text(buttonText, { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(partyPanelX + partyPanelWidth / 2, findMatchY),
+                k.anchor('center'),
+                k.color(...(searching ? UI_COLORS.GOLD : UI_COLORS.WHITE)),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT),
+                'findMatchButton'
+            ]);
+
+            findMatchButton.onClick(() => {
+                playMenuSelect();
+                if (isMatchmaking()) {
+                    stopMatchmaking();
+                    updateFindMatchButton();
+                } else {
+                    startMatchmaking({
+                        onSearchStart: () => {
+                            updateFindMatchButton();
+                        },
+                        onMatchFound: (hostCode) => {
+                            console.log('[Menu] Match found!', hostCode ? `Joined ${hostCode}` : 'We are host');
+                            updateFindMatchButton();
+                            updatePartySlots();
+                        },
+                        onError: (err) => {
+                            console.error('[Menu] Matchmaking error:', err);
+                            updateFindMatchButton();
+                        },
+                        onSearchEnd: () => {
+                            updateFindMatchButton();
+                        }
+                    });
+                }
+            });
+        }
+
+        // Only show Find Match if Firebase is configured
+        if (isFirebaseConfigured()) {
+            updateFindMatchButton();
+        }
+
         // Ready button (only visible in party)
-        const readyButtonY = joinButtonY + 30;
+        const readyButtonY = findMatchY + 32;
         let readyButtonElements = [];
         let countdownDisplay = null;
         // Track state to avoid unnecessary UI rebuilds

@@ -36,7 +36,7 @@ import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey, getBarrelPositions } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, trackCharacterPlay, trackDailyChallengeAttempt, trackDailyChallengeCompletion, getSelectedCharacter } from '../systems/metaProgression.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, getSelectedCharacter } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
 import { checkAchievements, initAchievementChecker } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
@@ -298,13 +298,7 @@ export function setupGameScene(k) {
 
             if (gameState.isDailyRun) {
                 console.log('[DailyRun] Starting daily run with character:', gameState.dailyCharacter, 'seed:', gameState.dailySeed);
-                // Track daily challenge attempt for achievements
-                trackDailyChallengeAttempt();
             }
-
-            // Track character play for achievements
-            const characterToTrack = gameState.isDailyRun ? gameState.dailyCharacter : getSelectedCharacter();
-            trackCharacterPlay(characterToTrack);
 
             // Reset run statistics
             runStats = {

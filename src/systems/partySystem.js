@@ -17,7 +17,6 @@ import {
     disconnect
 } from './networkSystem.js';
 import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlayer } from './multiplayerGame.js';
-import { onPlayerJoinedParty } from './matchmakingSystem.js';
 
 // Party state
 const party = {
@@ -188,9 +187,6 @@ export function setupNetworkHandlers() {
 
             // Broadcast updated party to all other clients
             broadcastPartyUpdate();
-
-            // Notify matchmaking system that a player joined (host removes self from queue)
-            onPlayerJoinedParty();
         } else {
             // Party full - send rejection
             sendToPeer(fromPeerId, 'join_rejected', { reason: 'Party full' });
