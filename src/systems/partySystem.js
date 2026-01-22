@@ -21,10 +21,10 @@ import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlay
 // Party state
 const party = {
     slots: [
-        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: true, peerId: null, isReady: false }, // Slot 1: Local player
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }, // Slot 2: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }, // Slot 3: Empty
-        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, isLocal: false, peerId: null, isReady: false }  // Slot 4: Empty
+        { playerId: 'local', playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, playerLevel: 1, isLocal: true, peerId: null, isReady: false }, // Slot 1: Local player
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, playerLevel: 1, isLocal: false, peerId: null, isReady: false }, // Slot 2: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, playerLevel: 1, isLocal: false, peerId: null, isReady: false }, // Slot 3: Empty
+        { playerId: null, playerName: null, inviteCode: null, selectedCharacter: null, selectedPortrait: null, playerLevel: 1, isLocal: false, peerId: null, isReady: false }  // Slot 4: Empty
     ],
     isHost: true, // Local player is always the host for now
     maxSlots: 4,
@@ -71,6 +71,7 @@ export async function initParty(k = null) {
         party.slots[0].inviteCode = inviteCode || '000000'; // Fallback if code not set
         party.slots[0].selectedCharacter = selectedCharacter || 'survivor'; // Fallback if character not set
         party.slots[0].selectedPortrait = selectedPortrait || 'default'; // Fallback if portrait not set
+        party.slots[0].playerLevel = getPlayerLevel();
         party.slots[0].isLocal = true;
         party.slots[0].permanentUpgradeLevels = {
             startingHealth: getPermanentUpgradeLevel('startingHealth'),
@@ -148,7 +149,8 @@ export function setupNetworkHandlers() {
             payload.selectedCharacter || 'survivor',
             payload.selectedPortrait || 'default',
             fromPeerId,
-            payload.permanentUpgradeLevels || null
+            payload.permanentUpgradeLevels || null,
+            payload.playerLevel || 1
         );
 
         if (slotIndex !== null) {
@@ -160,6 +162,7 @@ export function setupNetworkHandlers() {
                     inviteCode: slot.inviteCode,
                     selectedCharacter: slot.selectedCharacter,
                     selectedPortrait: slot.selectedPortrait,
+                    playerLevel: slot.playerLevel,
                     permanentUpgradeLevels: slot.permanentUpgradeLevels,
                     isLocal: false // All remote for the client
                 })),
@@ -353,7 +356,7 @@ export function addPlayerToParty(playerName, inviteCode) {
  * @param {string} peerId - Peer ID of the joining player
  * @returns {number|null} Slot index if successful, null if party full
  */
-function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, selectedPortrait, peerId, permanentUpgradeLevels = null) {
+function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, selectedPortrait, peerId, permanentUpgradeLevels = null, playerLevel = 1) {
     // Find first empty slot
     for (let i = 1; i < party.slots.length; i++) {
         if (party.slots[i].playerId === null) {
@@ -362,6 +365,7 @@ function addPlayerToPartyFromNetwork(playerName, inviteCode, selectedCharacter, 
             party.slots[i].inviteCode = inviteCode;
             party.slots[i].selectedCharacter = selectedCharacter;
             party.slots[i].selectedPortrait = selectedPortrait;
+            party.slots[i].playerLevel = playerLevel;
             party.slots[i].peerId = peerId;
             party.slots[i].permanentUpgradeLevels = permanentUpgradeLevels;
             party.peerIdToSlot.set(peerId, i);
@@ -394,6 +398,7 @@ export async function joinPartyAsClient(hostInviteCode) {
                 inviteCode: null,
                 selectedCharacter: null,
                 selectedPortrait: null,
+                playerLevel: 1,
                 isLocal: false,
                 peerId: null
             };
@@ -432,6 +437,7 @@ export async function joinPartyAsClient(hostInviteCode) {
             inviteCode: savedLocalPlayer.inviteCode,
             selectedCharacter: savedLocalPlayer.selectedCharacter,
             selectedPortrait: getSelectedPortrait() || 'default',
+            playerLevel: getPlayerLevel(),
             permanentUpgradeLevels: {
                 startingHealth: getPermanentUpgradeLevel('startingHealth'),
                 startingDamage: getPermanentUpgradeLevel('startingDamage'),
@@ -479,6 +485,8 @@ export function restoreLocalPlayerToSoloParty(playerInfo) {
             playerName: null,
             inviteCode: null,
             selectedCharacter: null,
+            selectedPortrait: null,
+            playerLevel: 1,
             isLocal: false,
             peerId: null
         };
@@ -490,6 +498,8 @@ export function restoreLocalPlayerToSoloParty(playerInfo) {
         playerName: playerInfo.playerName || getPlayerName(),
         inviteCode: playerInfo.inviteCode || getInviteCode(),
         selectedCharacter: playerInfo.selectedCharacter || getSelectedCharacter(),
+        selectedPortrait: getSelectedPortrait() || 'default',
+        playerLevel: getPlayerLevel(),
         isLocal: true,
         peerId: null
     };
@@ -795,6 +805,8 @@ function removePlayerFromPartyAndShift(slotIndex) {
         playerName: null,
         inviteCode: null,
         selectedCharacter: null,
+        selectedPortrait: null,
+        playerLevel: 1,
         isLocal: false,
         peerId: null
     };
@@ -820,6 +832,8 @@ export function removePlayerFromParty(slotIndex) {
             playerName: null,
             inviteCode: null,
             selectedCharacter: null,
+            selectedPortrait: null,
+            playerLevel: 1,
             isLocal: false,
             peerId: null,
             isReady: false
@@ -859,6 +873,7 @@ export function getPartyDisplayInfo() {
         inviteCode: slot.inviteCode,
         selectedCharacter: slot.selectedCharacter || 'survivor',
         selectedPortrait: slot.selectedPortrait || 'default',
+        playerLevel: slot.playerLevel || 1,
         isReady: slot.isReady || false,
         isDisconnected: slot.isDisconnected || false
     }));

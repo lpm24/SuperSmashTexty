@@ -411,6 +411,20 @@ export function setupMenuScene(k) {
                 ]);
                 elementsForThisSlot.push(slotIconEl);
 
+                // Level badge on portrait (bottom-left of icon area)
+                if (!slot.isEmpty) {
+                    const levelBadge = k.add([
+                        k.text(`${slot.playerLevel}`, { size: 8 }),
+                        k.pos(partyPanelX + 9, slotY + slotHeight / 2 + 6),
+                        k.anchor('bottomleft'),
+                        k.color(...UI_COLORS.GOLD),
+                        k.fixed(),
+                        k.z(UI_Z_LAYERS.UI_TEXT + 1),
+                        'partySlotUI'
+                    ]);
+                    elementsForThisSlot.push(levelBadge);
+                }
+
                 if (!slot.isEmpty) {
                     const charData = CHARACTER_UNLOCKS[slot.selectedCharacter] || CHARACTER_UNLOCKS['survivor'];
                     const charIcon = k.add([
