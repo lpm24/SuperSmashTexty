@@ -42,7 +42,8 @@
       "Bash(diff:*)",
       "Bash(dir:*)",
       "Bash(npx gh-pages -d dist --no-history)",
-      "Bash(git status:*)"
+      "Bash(git status:*)",
+      "Bash(cd:*)"
     ],
     "deny": [],
     "ask": []

@@ -480,11 +480,13 @@ export function setupProfileScene(k) {
 
         // Portrait grid (no header, 2 rows max with 13 per row = 26 portraits)
         const allPortraits = getAllPortraits();
-        const gridStartX = cardX - cardWidth / 2 + 30;
-        const gridY = portraitsY + 20;
         const iconSize = 40;
         const iconSpacing = 50;
         const maxPerRow = 13;
+        // Center the grid: total width = (maxPerRow - 1) * iconSpacing
+        const gridWidth = (maxPerRow - 1) * iconSpacing;
+        const gridStartX = cardX - gridWidth / 2;
+        const gridY = portraitsY + 28;
 
         // Selected portrait info display
         let selectedInfoText = null;
@@ -530,11 +532,10 @@ export function setupProfileScene(k) {
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ].filter(Boolean));
 
-            // Portrait icon or lock
-            const displayIcon = isUnlocked ? portrait.icon : '🔒';
-            const displayColor = isUnlocked ? portrait.color : [100, 100, 100];
+            // Portrait icon (show icon even when locked, grayed out communicates lock)
+            const displayColor = isUnlocked ? portrait.color : [80, 80, 80];
             const iconText = k.add([
-                k.text(displayIcon, { size: isUnlocked ? 24 : 16 }),
+                k.text(portrait.icon, { size: 24 }),
                 k.pos(x, y - 3),
                 k.anchor('center'),
                 k.color(...displayColor),
