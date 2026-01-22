@@ -273,6 +273,9 @@ export function setupGameScene(k) {
         // Clear barrels from previous room/run
         clearAllBarrels();
 
+        // Always ensure game starts unpaused (fixes freeze when quitting from pause menu)
+        k.paused = false;
+
         // Reset game state on new game (when coming from menu)
         if (args?.resetState) {
             gameState.currentFloor = 1;
