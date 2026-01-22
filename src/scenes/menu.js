@@ -542,8 +542,28 @@ export function setupMenuScene(k) {
         const readyButtonY = joinButtonY + 30;
         let readyButtonElements = [];
         let countdownDisplay = null;
+        // Track state to avoid unnecessary UI rebuilds
+        let lastReadyState = { partySize: 0, isReady: false, countdownActive: false, countdownSeconds: 0 };
 
-        function updateReadyButton() {
+        function updateReadyButton(forceUpdate = false) {
+            const partySize = getPartySize();
+            const countdown = getCountdownState();
+            const isReady = isLocalPlayerReady();
+            const countdownSeconds = countdown.active ? Math.ceil(countdown.timeRemaining / 1000) : 0;
+
+            // Only rebuild UI if state actually changed (performance optimization)
+            if (!forceUpdate &&
+                lastReadyState.partySize === partySize &&
+                lastReadyState.isReady === isReady &&
+                lastReadyState.countdownActive === countdown.active &&
+                lastReadyState.countdownSeconds === countdownSeconds) {
+                return; // No change, skip UI rebuild
+            }
+
+            // Update tracked state
+            lastReadyState = { partySize, isReady, countdownActive: countdown.active, countdownSeconds };
+
+            // Clean up existing elements
             readyButtonElements.forEach(el => {
                 if (el.exists()) k.destroy(el);
             });
@@ -553,12 +573,7 @@ export function setupMenuScene(k) {
                 countdownDisplay = null;
             }
 
-            const partySize = getPartySize();
-            const countdown = getCountdownState();
-
             if (partySize >= 2) {
-                const isReady = isLocalPlayerReady();
-
                 const readyBg = k.add([
                     k.rect(partyPanelWidth - 20, 24),
                     k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY),
@@ -586,14 +601,13 @@ export function setupMenuScene(k) {
                 readyBg.onClick(() => {
                     playMenuSelect();
                     toggleReady();
-                    updateReadyButton();
+                    updateReadyButton(true); // Force update after click
                     updatePartySlots();
                 });
 
                 if (countdown.active) {
-                    const secondsLeft = Math.ceil(countdown.timeRemaining / 1000);
                     countdownDisplay = k.add([
-                        k.text(`Starting in ${secondsLeft}...`, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                        k.text(`Starting in ${countdownSeconds}...`, { size: UI_TEXT_SIZES.SMALL - 2 }),
                         k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY + 20),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
@@ -605,7 +619,7 @@ export function setupMenuScene(k) {
             }
         }
 
-        updateReadyButton();
+        updateReadyButton(true); // Initial render
 
         let lastCountdownCheck = 0;
         k.onUpdate(() => {
@@ -616,6 +630,7 @@ export function setupMenuScene(k) {
             const countdown = getCountdownState();
             const partySize = getPartySize();
 
+            // Only call updateReadyButton when in party - it will check if rebuild is needed
             if (partySize >= 2) {
                 updateReadyButton();
             }

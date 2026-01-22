@@ -44,6 +44,10 @@ const party = {
     emoteCallbacks: [] // Callbacks to notify when emotes are received
 };
 
+// Flags to prevent duplicate handler registration (memory leak/freeze prevention)
+let partyHostHandlersRegistered = false;
+let partyClientHandlersRegistered = false;
+
 /**
  * Initialize party system
  * @param {Object} k - Kaplay instance (optional, used for client game start)
@@ -117,6 +121,12 @@ export async function initParty(k = null) {
  * Set up network message handlers (for host)
  */
 export function setupNetworkHandlers() {
+    // Prevent duplicate handler registration (causes memory leaks and freezes)
+    if (partyHostHandlersRegistered) {
+        return;
+    }
+    partyHostHandlersRegistered = true;
+
     // Handle join requests from clients
     onMessage('join_request', (payload, fromPeerId) => {
         console.log('[PartySystem] Join request from:', fromPeerId);
@@ -395,6 +405,9 @@ export async function joinPartyAsClient(hostInviteCode) {
             disconnect();
             party.networkInitialized = false;
             party.isHost = false;
+            // Reset handler flags to allow client handler registration
+            partyHostHandlersRegistered = false;
+            partyClientHandlersRegistered = false;
         }
 
         // Initialize network as client
@@ -455,6 +468,10 @@ export function restoreLocalPlayerToSoloParty(playerInfo) {
     party.hostInviteCode = null;
     party.networkInitialized = false;
 
+    // Reset handler registration flags to allow re-registration
+    partyHostHandlersRegistered = false;
+    partyClientHandlersRegistered = false;
+
     // Clear all slots
     for (let i = 0; i < party.slots.length; i++) {
         party.slots[i] = {
@@ -487,6 +504,12 @@ export function restoreLocalPlayerToSoloParty(playerInfo) {
  * Set up network message handlers for client
  */
 function setupClientHandlers() {
+    // Prevent duplicate handler registration (causes memory leaks and freezes)
+    if (partyClientHandlersRegistered) {
+        return;
+    }
+    partyClientHandlersRegistered = true;
+
     // Receive party state from host
     onMessage('party_sync', (payload) => {
         console.log('[PartySystem] Received party sync:', {
@@ -1109,6 +1132,9 @@ export function clearActiveEmotes() {
 export function clearPartyCallbacks() {
     party.emoteCallbacks = [];
     party.activeEmotes.clear();
+    // Reset handler registration flags to allow re-registration on next session
+    partyHostHandlersRegistered = false;
+    partyClientHandlersRegistered = false;
 }
 
 // ==========================================
