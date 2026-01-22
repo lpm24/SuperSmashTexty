@@ -2,7 +2,7 @@
 import { getCurrency, getCurrencyName, isUnlocked, purchaseUnlock, purchasePermanentUpgrade, getPermanentUpgradeLevel, getTotalRefundableCredits, refundAllPermanentUpgrades, refundSinglePermanentUpgrade, isItemAchievementUnlockedSync, isAchievementUnlocked, purchaseBooster, getActiveBoostersCount, getEquippedCosmetic, setEquippedCosmetic, getSaveStats } from '../systems/metaProgression.js';
 import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS, COSMETIC_UNLOCKS, RUN_BOOSTER_UNLOCKS } from '../data/unlocks.js';
 import { getAchievementById, getAchievementProgress } from '../data/achievements.js';
-import { showAchievementModal } from '../components/achievementModal.js';
+import { showAchievementModal, isAchievementModalOpen } from '../components/achievementModal.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
 import {
     UI_TEXT_SIZES,
@@ -228,9 +228,13 @@ export function setupShopScene(k) {
                 const itemX = 45 + column * (cardWidth + 15);
                 const itemY = startY + row * itemSpacing;
 
-                // Check achievement requirement
-                const isAchievementLocked = !isItemAchievementUnlockedSync(unlock);
-                const requiredAchievement = unlock.requiredAchievement ? getAchievementById(unlock.requiredAchievement) : null;
+                // Check achievement requirement - handle both formats:
+                // 1. requiredAchievement: 'achievementId' (cosmetics, weapons)
+                // 2. unlockRequirement: { type: 'achievement', value: 'achievementId' } (characters)
+                const achievementId = unlock.requiredAchievement ||
+                    (unlock.unlockRequirement?.type === 'achievement' ? unlock.unlockRequirement.value : null);
+                const isAchievementLocked = achievementId ? !isAchievementUnlocked(achievementId) : false;
+                const requiredAchievement = achievementId ? getAchievementById(achievementId) : null;
 
                 // Determine item status for styling
                 const isUnlockedChar = currentCategory === 'characters' && isUnlocked('characters', key);
@@ -1125,6 +1129,8 @@ export function setupShopScene(k) {
         });
         
         k.onKeyPress('escape', () => {
+            // Don't navigate away if achievement modal is open (it handles its own escape)
+            if (isAchievementModalOpen()) return;
             k.go('menu');
         });
     });

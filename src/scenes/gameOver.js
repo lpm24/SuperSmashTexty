@@ -8,7 +8,7 @@ import { MINIBOSS_TYPES } from '../data/minibosses.js';
 import { BOSS_TYPES } from '../data/bosses.js';
 import { ACHIEVEMENTS, ACHIEVEMENT_COLORS } from '../data/achievements.js';
 import { getRunUnlockedAchievements } from '../systems/achievementChecker.js';
-import { showAchievementModal } from '../components/achievementModal.js';
+import { showAchievementModal, isAchievementModalOpen } from '../components/achievementModal.js';
 import { calculateScore, submitScore, formatScore } from '../systems/leaderboards.js';
 import { getGlobalRank, submitOnlineScore, submitDailyScore } from '../systems/onlineLeaderboards.js';
 import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
@@ -96,28 +96,26 @@ export function setupGameOverScene(k) {
             date: runDate
         });
 
-        // Submit to global online leaderboards (only host in multiplayer, or single player)
+        // Submit to global online leaderboards (all players submit their own scores)
         const playerName = getPlayerName() || 'Anonymous';
         const inMultiplayer = isMultiplayerActive();
-        const shouldSubmitOnline = !inMultiplayer || isHost();
 
-        if (shouldSubmitOnline) {
-            const onlineScoreEntry = {
-                name: playerName,
-                score: score,
-                floor: runStats.floorsReached || 1,
-                character: character,
-                time: duration,
-                date: runDate
-            };
+        // All players submit to online leaderboards - each player's score matters
+        const onlineScoreEntry = {
+            name: playerName,
+            score: score,
+            floor: runStats.floorsReached || 1,
+            character: character,
+            time: duration,
+            date: runDate
+        };
 
-            // Always submit to global all-time board
-            submitOnlineScore(onlineScoreEntry, 'allTime');
+        // Always submit to global all-time board
+        submitOnlineScore(onlineScoreEntry, 'allTime');
 
-            // Also submit to daily board if this is a daily run
-            if (isDailyRun) {
-                submitDailyScore(onlineScoreEntry);
-            }
+        // Also submit to daily board if this is a daily run
+        if (isDailyRun) {
+            submitDailyScore(onlineScoreEntry);
         }
 
         // Mark daily as completed if it was a daily run
@@ -1071,6 +1069,8 @@ export function setupGameOverScene(k) {
         });
 
         k.onKeyPress('escape', () => {
+            // Don't navigate away if achievement modal is open (it handles its own escape)
+            if (isAchievementModalOpen()) return;
             playMenuNav();
             if (inMultiplayer && !isHostPlayer) {
                 offMessage('game_restart');
