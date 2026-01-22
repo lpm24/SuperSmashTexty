@@ -90,6 +90,39 @@ The `.github/workflows/ci.yml` file automatically:
 - ✅ Builds the project
 - ✅ Verifies build succeeds
 
+## 🔢 Automatic Version Numbering
+
+**CRITICAL: DO NOT MODIFY OR REMOVE THIS SYSTEM**
+
+The game version is automatically generated based on git commit count. This system has been implemented twice and must not be removed or modified.
+
+### How It Works
+
+1. **vite.config.js** defines a global `__APP_VERSION__` variable:
+   ```javascript
+   define: {
+     __APP_VERSION__: JSON.stringify(`v0.1.${commitCount}`)
+   }
+   ```
+   - Uses `git rev-list --count HEAD` to get total commit count
+   - Version format: `v0.1.<commit_count>` (e.g., `v0.1.151`)
+
+2. **src/scenes/menu.js** displays the version:
+   ```javascript
+   k.text(__APP_VERSION__, { size: UI_TEXT_SIZES.MICRO })
+   ```
+   - Bottom-right corner of the main menu
+   - Uses `UI_COLORS.TEXT_DISABLED` color
+
+### Files Involved (DO NOT REMOVE/MODIFY VERSION CODE)
+- `vite.config.js` - Lines 4-11 (getGitCommitCount function) and line 22 (define block)
+- `src/scenes/menu.js` - Line ~1095 (version display in menu)
+
+### Why This Exists
+- Automatically increments with each commit (no manual version bumping)
+- Allows easy identification of which build a user is running
+- Helps with bug reports and debugging
+
 ## 📝 Commit Message Guidelines
 
 Use the template format (automatically loaded):

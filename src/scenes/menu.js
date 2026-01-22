@@ -1090,6 +1090,8 @@ export function setupMenuScene(k) {
 
         // ==========================================
         // Version number (Micro text, bottom-right)
+        // DO NOT REMOVE: Auto-version from vite.config.js
+        // See GIT_WORKFLOW.md "Automatic Version Numbering"
         // ==========================================
         k.add([
             k.text(__APP_VERSION__, { size: UI_TEXT_SIZES.MICRO }),

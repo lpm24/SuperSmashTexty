@@ -3,8 +3,8 @@
  * Handles game state synchronization for multiplayer
  */
 
-import { getParty, getPartySize, getLocalPlayer } from './partySystem.js';
-import { broadcast, sendToHost, sendToPeer, onMessage, getNetworkInfo } from './networkSystem.js';
+import { getParty, getPartySize, getLocalPlayer, clearPartyCallbacks } from './partySystem.js';
+import { broadcast, sendToHost, sendToPeer, onMessage, offMessage, getNetworkInfo } from './networkSystem.js';
 import { createEnemy } from '../entities/enemy.js';
 import { createBoss } from '../entities/boss.js';
 import { createXPPickup, createCurrencyPickup, getRandomCurrencyIcon } from '../entities/pickup.js';
@@ -108,6 +108,9 @@ function setupHostHandlers() {
 
     // Handle player input from clients
     onMessage('player_input', (payload, fromPeerId) => {
+        // Validate payload structure
+        if (!payload || typeof payload !== 'object') return;
+
         // Store input to be processed in game loop
         // Find which player slot this peer belongs to
         const party = getParty();
@@ -118,15 +121,26 @@ function setupHostHandlers() {
         if (slotIndex !== -1 && mpGame.players.has(slotIndex)) {
             const player = mpGame.players.get(slotIndex);
 
-            // Apply input to player
-            if (payload.move) {
-                player.move = payload.move;
+            // Check if player entity still exists (might be destroyed during scene transition)
+            if (!player || !player.exists()) {
+                if (MP_DEBUG) console.warn('[Multiplayer] Player entity destroyed for slot:', slotIndex);
+                return;
             }
-            if (payload.shoot) {
-                player.isShooting = payload.shoot;
+
+            // Apply input to player with validation
+            if (payload.move && typeof payload.move === 'object') {
+                // Clamp movement values to valid range [-1, 1]
+                const moveX = Math.max(-1, Math.min(1, Number(payload.move.x) || 0));
+                const moveY = Math.max(-1, Math.min(1, Number(payload.move.y) || 0));
+                player.move = { x: moveX, y: moveY };
+            }
+            if (payload.shoot !== undefined) {
+                player.isShooting = Boolean(payload.shoot);
             }
             if (payload.aimAngle !== undefined) {
-                player.aimAngle = payload.aimAngle;
+                // Clamp aimAngle to valid range [-360, 360]
+                const aimAngle = Number(payload.aimAngle) || 0;
+                player.aimAngle = Math.max(-360, Math.min(360, aimAngle));
             }
             if (MP_DEBUG) console.log('[Multiplayer] Applied input to player at slot', slotIndex);
         } else {
@@ -368,6 +382,16 @@ function setupClientHandlers() {
                         if (playerState.speed !== undefined) player.speed = playerState.speed;
                         if (playerState.damage !== undefined) player.damage = playerState.damage;
                         if (playerState.pickupRadius !== undefined) player.pickupRadius = playerState.pickupRadius;
+
+                        // Sync per-player run stats for game over screen
+                        if (playerState.runStats) {
+                            if (!player.runStats) {
+                                player.runStats = { kills: 0, creditsPickedUp: 0, bossesKilled: 0 };
+                            }
+                            player.runStats.kills = playerState.runStats.kills;
+                            player.runStats.creditsPickedUp = playerState.runStats.creditsPickedUp;
+                            player.runStats.bossesKilled = playerState.runStats.bossesKilled;
+                        }
                     }
                 } else {
                     // Update local player's HP from host (damage is host-authoritative)
@@ -410,6 +434,16 @@ function setupClientHandlers() {
                                     localPlayer.outline.opacity = 1;
                                 }
                             }
+                        }
+
+                        // Sync per-player run stats from host (host tracks all kills/credits)
+                        if (playerState.runStats) {
+                            if (!localPlayer.runStats) {
+                                localPlayer.runStats = { kills: 0, creditsPickedUp: 0, bossesKilled: 0 };
+                            }
+                            localPlayer.runStats.kills = playerState.runStats.kills;
+                            localPlayer.runStats.creditsPickedUp = playerState.runStats.creditsPickedUp;
+                            localPlayer.runStats.bossesKilled = playerState.runStats.bossesKilled;
                         }
                     }
                 }
@@ -506,7 +540,14 @@ function setupClientHandlers() {
                             const targetPlayer = mpGame.players.get(pickupState.targetPlayerSlot);
                             if (targetPlayer && targetPlayer.exists()) {
                                 existing.targetPlayer = targetPlayer;
+                            } else {
+                                // Target player disconnected or invalid - stop magnetizing
+                                existing.magnetizing = false;
+                                existing.targetPlayer = null;
                             }
+                        } else if (!pickupState.magnetizing) {
+                            // Stopped magnetizing - clear target
+                            existing.targetPlayer = null;
                         }
                     }
 
@@ -638,6 +679,7 @@ function setupClientHandlers() {
 
         // Animate damage number rising and fading
         damageText.onUpdate(() => {
+            if (!damageText.exists()) return; // Prevent crash on scene exit
             damageText.pos.y -= 50 * mpGame.k.dt();
             damageText.opacity -= 1.25 * mpGame.k.dt();
         });
@@ -739,6 +781,7 @@ function setupClientHandlers() {
 
                 // Animate rising and fading
                 reviveEffect.onUpdate(() => {
+                    if (!reviveEffect.exists()) return; // Prevent crash on scene exit
                     reviveEffect.pos.y -= 30 * mpGame.k.dt();
                     reviveEffect.opacity -= 0.5 * mpGame.k.dt();
                 });
@@ -1101,7 +1144,13 @@ function collectGameState() {
                 pickupRadius: Number(player.pickupRadius || 0),
                 // Visual state for color sync
                 invulnerable: Boolean(player.invulnerable || false),
-                invulnerableTime: Number(player.invulnerableTime || 0)
+                invulnerableTime: Number(player.invulnerableTime || 0),
+                // Per-player run stats for game over screen
+                runStats: player.runStats ? {
+                    kills: Number(player.runStats.kills || 0),
+                    creditsPickedUp: Number(player.runStats.creditsPickedUp || 0),
+                    bossesKilled: Number(player.runStats.bossesKilled || 0)
+                } : null
             });
         }
     });
@@ -1312,6 +1361,38 @@ export function cleanupMultiplayer() {
 
     // Reset entity ID counter
     mpGame.nextEntityId = 1;
+
+    // Actually remove message handlers to prevent memory leaks
+    // Host handlers
+    offMessage('player_input');
+    offMessage('pause_request');
+    offMessage('player_death');
+    offMessage('enemy_death');
+    offMessage('resync_request');
+    offMessage('level_up_queued');
+    offMessage('player_emote');
+    offMessage('upgrade_selected');
+    offMessage('synergy_activated');
+    offMessage('achievement_unlocked');
+
+    // Client handlers
+    offMessage('game_state');
+    offMessage('spawn_entity');
+    offMessage('spawn_projectile');
+    offMessage('damage_dealt');
+    offMessage('entity_destroyed');
+    offMessage('boss_enrage');
+    offMessage('players_revived');
+    offMessage('game_seed');
+    offMessage('pause_state');
+    offMessage('xp_gain');
+    offMessage('currency_gain');
+    offMessage('enemy_split');
+    offMessage('player_disconnected');
+    offMessage('host_quit');
+
+    // Clear party callbacks to prevent memory leaks
+    clearPartyCallbacks();
 
     // Reset handler registration flags (allows re-registration on reconnect)
     multiplayerClientHandlersRegistered = false;

@@ -38,7 +38,9 @@
       "Bash(grep:*)",
       "Bash(npx vite:*)",
       "Bash(git worktree:*)",
-      "Bash(ls:*)"
+      "Bash(ls:*)",
+      "Bash(diff:*)",
+      "Bash(dir:*)"
     ],
     "deny": [],
     "ask": []

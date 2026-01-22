@@ -314,6 +314,14 @@ export const COSMETIC_UNLOCKS = {
         category: 'death',
         requiredAchievement: 'multikill'
     },
+    deathFireworks: {
+        name: 'Fireworks',
+        description: 'Enemies burst like fireworks',
+        cost: 0,
+        unlockedByDefault: false,
+        category: 'death',
+        requiredAchievement: 'floor10'
+    },
 
     // === Player Glow ===
     glowNone: {

@@ -166,9 +166,11 @@ export function setupNetworkHandlers() {
 
             // Send immediate game state if in-game (don't wait for next broadcast cycle)
             // This helps clients joining mid-game see entities immediately
+            // Use a slightly longer delay to ensure client has processed party_sync
+            // and initialized their game scene handlers
             setTimeout(() => {
                 sendInitialGameState(fromPeerId);
-            }, 100); // Small delay to ensure client is ready to receive
+            }, 250); // Increased delay for slower connections
 
             // Broadcast updated party to all other clients
             broadcastPartyUpdate();
@@ -1097,6 +1099,15 @@ export function getActiveEmote(slotIndex, maxAge = 2000) {
  * Clear all active emotes
  */
 export function clearActiveEmotes() {
+    party.activeEmotes.clear();
+}
+
+/**
+ * Clear all party callbacks to prevent memory leaks
+ * Call this when cleaning up multiplayer session
+ */
+export function clearPartyCallbacks() {
+    party.emoteCallbacks = [];
     party.activeEmotes.clear();
 }
 

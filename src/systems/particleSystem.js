@@ -165,21 +165,21 @@ export function spawnBloodSplatter(k, x, y, options = {}) {
  */
 export function spawnDeathExplosion(k, x, y, options = {}) {
     const {
-        count = 12,
+        count = 8,
         color = [255, 100, 100],
-        speed = 3,
+        speed = 2.5,
         isBoss = false,
         isMiniboss = false
     } = options;
 
-    const chars = ['*', '+', 'x', 'X', '#'];
+    const chars = ['*', '+', '·'];
     const actualCount = isBoss ? count * 2 : (isMiniboss ? count * 1.5 : count);
     const actualSpeed = isBoss ? speed * 1.5 : (isMiniboss ? speed * 1.2 : speed);
 
-    // Outer explosion ring
+    // Simple burst of particles
     for (let i = 0; i < actualCount; i++) {
-        const angle = (Math.PI * 2 * i) / actualCount;
-        const speedMult = 0.7 + Math.random() * 0.6;
+        const angle = (Math.PI * 2 * i) / actualCount + (Math.random() - 0.5) * 0.3;
+        const speedMult = 0.6 + Math.random() * 0.4;
         const velocity = {
             x: Math.cos(angle) * actualSpeed * speedMult,
             y: Math.sin(angle) * actualSpeed * speedMult
@@ -187,35 +187,13 @@ export function spawnDeathExplosion(k, x, y, options = {}) {
 
         createParticle(k, x, y, {
             char: chars[Math.floor(Math.random() * chars.length)],
-            size: 12 + Math.random() * 8,
+            size: 10 + Math.random() * 6,
             color,
             velocity,
             gravity: 0.1,
-            lifetime: 0.8 + Math.random() * 0.4,
-            fadeStart: 0.3,
-            friction: 0.94
-        });
-    }
-
-    // Inner explosion core
-    const coreCount = Math.floor(actualCount / 2);
-    for (let i = 0; i < coreCount; i++) {
-        const angle = Math.random() * Math.PI * 2;
-        const speedMult = 0.3 + Math.random() * 0.4;
-        const velocity = {
-            x: Math.cos(angle) * actualSpeed * speedMult * 0.5,
-            y: Math.sin(angle) * actualSpeed * speedMult * 0.5
-        };
-
-        createParticle(k, x, y, {
-            char: chars[Math.floor(Math.random() * chars.length)],
-            size: 16 + Math.random() * 8,
-            color: [255, 200, 100], // Brighter core
-            velocity,
-            gravity: 0.05,
-            lifetime: 0.6 + Math.random() * 0.3,
+            lifetime: 0.5 + Math.random() * 0.3,
             fadeStart: 0.2,
-            friction: 0.9
+            friction: 0.92
         });
     }
 }
@@ -508,6 +486,9 @@ export function spawnCosmeticDeath(k, x, y, deathType, enemyColor = [255, 100, 1
         case 'deathPixelate':
             spawnPixelateDeath(k, x, y, enemyColor);
             break;
+        case 'deathFireworks':
+            spawnFireworksDeath(k, x, y, enemyColor);
+            break;
         default:
             // Standard death - use existing spawnDeathExplosion
             spawnDeathExplosion(k, x, y, { color: enemyColor });
@@ -651,5 +632,57 @@ function spawnPixelateDeath(k, x, y, color) {
                 friction: 0.94
             });
         }
+    }
+}
+
+/**
+ * Fireworks death - colorful ring burst with bright core
+ */
+function spawnFireworksDeath(k, x, y, color) {
+    const chars = ['*', '+', 'x', 'X', '#'];
+    const count = 12;
+    const speed = 3;
+
+    // Outer explosion ring
+    for (let i = 0; i < count; i++) {
+        const angle = (Math.PI * 2 * i) / count;
+        const speedMult = 0.7 + Math.random() * 0.6;
+        const velocity = {
+            x: Math.cos(angle) * speed * speedMult,
+            y: Math.sin(angle) * speed * speedMult
+        };
+
+        createParticle(k, x, y, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 12 + Math.random() * 8,
+            color,
+            velocity,
+            gravity: 0.1,
+            lifetime: 0.8 + Math.random() * 0.4,
+            fadeStart: 0.3,
+            friction: 0.94
+        });
+    }
+
+    // Inner explosion core with bright color
+    const coreCount = Math.floor(count / 2);
+    for (let i = 0; i < coreCount; i++) {
+        const angle = Math.random() * Math.PI * 2;
+        const speedMult = 0.3 + Math.random() * 0.4;
+        const velocity = {
+            x: Math.cos(angle) * speed * speedMult * 0.5,
+            y: Math.sin(angle) * speed * speedMult * 0.5
+        };
+
+        createParticle(k, x, y, {
+            char: chars[Math.floor(Math.random() * chars.length)],
+            size: 16 + Math.random() * 8,
+            color: [255, 200, 100],
+            velocity,
+            gravity: 0.05,
+            lifetime: 0.6 + Math.random() * 0.3,
+            fadeStart: 0.2,
+            friction: 0.9
+        });
     }
 }

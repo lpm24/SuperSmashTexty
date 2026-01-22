@@ -253,6 +253,7 @@ export function connectToHost(hostInviteCode) {
         conn.on('open', () => {
             isResolved = true;
             clearTimeout(connectionTimeout);
+            connectionTimeout = null; // Clear reference
             network.hostConnection = conn;
             network.hostId = hostPeerId;
 
@@ -265,6 +266,12 @@ export function connectToHost(hostInviteCode) {
         });
 
         conn.on('close', () => {
+            // Clear timeout to prevent race conditions
+            if (connectionTimeout) {
+                clearTimeout(connectionTimeout);
+                connectionTimeout = null;
+            }
+
             network.hostConnection = null;
             network.hostId = null;
 
@@ -275,6 +282,7 @@ export function connectToHost(hostInviteCode) {
         conn.on('error', (err) => {
             isResolved = true;
             clearTimeout(connectionTimeout);
+            connectionTimeout = null; // Clear reference
             console.error('[NetworkSystem] Connection error:', err);
             console.error('[NetworkSystem] Error type:', err.type || 'unknown');
             reject(err);
