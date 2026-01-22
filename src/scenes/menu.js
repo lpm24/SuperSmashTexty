@@ -124,6 +124,12 @@ function hslToRgb(h, s, l) {
     ];
 }
 
+// Get contrasting text color for a given hue (dark version of same hue)
+function getContrastingTextColor(hue) {
+    // Use same hue but much darker (lightness 15%) and high saturation
+    return hslToRgb(hue, 80, 15);
+}
+
 export function setupMenuScene(k) {
     k.scene('menu', () => {
         initAudio();
@@ -1000,9 +1006,14 @@ export function setupMenuScene(k) {
                 if (!button.exists() || button.isHovered) return;
                 const hue = (buttonColorTime * 60 + index * 50) % 360;
                 const color = hslToRgb(hue, 70, 50);
+                const textColor = getContrastingTextColor(hue);
                 try {
                     button.color = k.rgb(color[0], color[1], color[2]);
                     button.originalColor = color;
+                    // Update label text color for contrast
+                    if (button.label && button.label.exists()) {
+                        button.label.color = k.rgb(textColor[0], textColor[1], textColor[2]);
+                    }
                 } catch (e) {}
             });
         });
