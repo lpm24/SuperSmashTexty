@@ -87,6 +87,75 @@ export function setupCharacterSelectScene(k) {
         // Helper to strip "The " prefix from names for display
         const formatName = (name) => name.replace(/^The\s+/i, '');
 
+        // Helper to render description with highlighted stats
+        // Returns array of text elements
+        const renderHighlightedDescription = (description, x, y, maxWidth) => {
+            const elements = [];
+            // Regex to match stat patterns like "+10% XP", "-20% health", "+2 orbital", etc.
+            const statPattern = /([+-]?\d+%?\s*(?:XP|health|HP|speed|damage|crit|dodge|reduction|lifesteal|blast radius|drones?|orbital))/gi;
+
+            // Split description by stat patterns
+            const parts = description.split(statPattern);
+            const matches = description.match(statPattern) || [];
+
+            // Build text segments
+            let currentText = '';
+            const segments = [];
+
+            let matchIndex = 0;
+            parts.forEach((part, i) => {
+                if (i % 2 === 0) {
+                    // Regular text
+                    if (part) segments.push({ text: part, highlight: false });
+                } else {
+                    // Stat text (matched pattern)
+                    segments.push({ text: part, highlight: true });
+                }
+            });
+
+            // Render as a single line with color markup using Kaplay's text formatting
+            // Since Kaplay doesn't support inline color changes easily, we'll render separate elements
+            // For simplicity, we'll render the full text in secondary color and overlay highlighted parts
+
+            // Full description in secondary color
+            const baseText = k.add([
+                k.text(description, { size: UI_TEXT_SIZES.SMALL, width: maxWidth }),
+                k.pos(x, y),
+                k.anchor('center'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+            elements.push(baseText);
+
+            // Create highlighted overlay for stat values
+            // We need to extract positions - this is complex, so let's use a simpler approach:
+            // Re-render just the highlighted parts in a brighter color on top
+            // Since we can't get precise character positions, we'll use a different approach:
+            // Render the description with stat values in a highlight color (gold/yellow)
+
+            // Alternative approach: Use different formatting
+            // Actually, let's format the description by replacing stat values with colored versions
+            // Since we can't do inline colors, let's just make the whole description look different
+            // by adding a separate line for the key stat highlights
+
+            // Find all stat mentions and create a summary line
+            if (matches.length > 0) {
+                const statSummary = matches.join(' | ');
+                const highlightText = k.add([
+                    k.text(statSummary, { size: UI_TEXT_SIZES.TINY }),
+                    k.pos(x, y + 28),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.GOLD),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                ]);
+                elements.push(highlightText);
+            }
+
+            return elements;
+        };
+
         // Pagination state
         const totalPages = Math.ceil(characterKeys.length / charactersPerPage);
         let currentPage = 0;
@@ -170,31 +239,31 @@ export function setupCharacterSelectScene(k) {
 
                 // Character visual
                 const charVisual = k.add([
-                    k.text(char.char, { size: UI_TEXT_SIZES.TITLE }),
-                    k.pos(cardX + cardWidth / 2, cardY + 30),
+                    k.text(char.char, { size: UI_TEXT_SIZES.HEADER }),
+                    k.pos(cardX + 28, cardY + cardHeight / 2),
                     k.anchor('center'),
                     k.color(...(isUnlockedChar ? char.color : UI_COLORS.BG_DISABLED)),
                     k.fixed(),
                     k.scale(1),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     {
-                        baseX: cardX + cardWidth / 2,
-                        baseY: cardY + 30
+                        baseX: cardX + 28,
+                        baseY: cardY + cardHeight / 2
                     }
                 ]);
 
-                // Character name
+                // Character name (stripped of "The " prefix)
                 const nameText = k.add([
-                    k.text(char.name, { size: UI_TEXT_SIZES.SMALL }),
-                    k.pos(cardX + cardWidth / 2, cardY + 70),
-                    k.anchor('center'),
+                    k.text(formatName(char.name), { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(cardX + 60, cardY + cardHeight / 2),
+                    k.anchor('left'),
                     k.color(...(isUnlockedChar ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
                     k.scale(1),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     {
-                        baseX: cardX + cardWidth / 2,
-                        baseY: cardY + 70
+                        baseX: cardX + 60,
+                        baseY: cardY + cardHeight / 2
                     }
                 ]);
 
@@ -228,8 +297,8 @@ export function setupCharacterSelectScene(k) {
                 // Locked overlay
                 if (!isUnlockedChar) {
                     const lockText = k.add([
-                        k.text('🔒', { size: UI_TEXT_SIZES.BUTTON }),
-                        k.pos(cardX + cardWidth / 2, cardY + cardHeight / 2),
+                        k.text('🔒', { size: UI_TEXT_SIZES.SMALL }),
+                        k.pos(cardX + cardWidth - 18, cardY + cardHeight / 2),
                         k.anchor('center'),
                         k.color(...UI_COLORS.DANGER),
                         k.fixed(),
@@ -241,16 +310,16 @@ export function setupCharacterSelectScene(k) {
                 // Current selection indicator (checkmark badge)
                 if (isConfirmedSelection) {
                     const checkBadge = k.add([
-                        k.circle(10),
-                        k.pos(cardX + cardWidth - 8, cardY + 8),
+                        k.circle(8),
+                        k.pos(cardX + cardWidth - 10, cardY + 12),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT + 1)
                     ]);
                     const checkMark = k.add([
-                        k.text('✓', { size: 12 }),
-                        k.pos(cardX + cardWidth - 8, cardY + 8),
+                        k.text('✓', { size: 10 }),
+                        k.pos(cardX + cardWidth - 10, cardY + 12),
                         k.anchor('center'),
                         k.color(255, 255, 255),
                         k.fixed(),
@@ -461,9 +530,9 @@ export function setupCharacterSelectScene(k) {
 
             detailY += 110;
 
-            // Character name
+            // Character name (stripped of "The " prefix)
             const detailName = k.add([
-                k.text(viewedChar.name, { size: UI_TEXT_SIZES.HEADER }),
+                k.text(formatName(viewedChar.name), { size: UI_TEXT_SIZES.HEADER }),
                 k.pos(rightPanelX + rightPanelWidth / 2, detailY),
                 k.anchor('center'),
                 k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -471,19 +540,17 @@ export function setupCharacterSelectScene(k) {
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             detailItems.push(detailName);
-            detailY += 40;
+            detailY += 35;
 
-            // Description
-            const detailDesc = k.add([
-                k.text(viewedChar.description, { size: UI_TEXT_SIZES.SMALL, width: rightPanelWidth - 40 }),
-                k.pos(rightPanelX + rightPanelWidth / 2, detailY),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_SECONDARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-            detailItems.push(detailDesc);
-            detailY += 60;
+            // Description with highlighted stats
+            const descElements = renderHighlightedDescription(
+                viewedChar.description,
+                rightPanelX + rightPanelWidth / 2,
+                detailY,
+                rightPanelWidth - 40
+            );
+            detailItems.push(...descElements);
+            detailY += 55;
 
             // Stats with visual bars
             const statsLabel = k.add([
@@ -502,7 +569,7 @@ export function setupCharacterSelectScene(k) {
             const statBarX = rightPanelX + 40;
             const statRowHeight = 24;
 
-            // Health stat bar (max 175 - characters range 70-150)
+            // Health stat bar (max 175 - characters range 60-150)
             const healthBar = createStatBar(k, {
                 label: UI_TERMS.HEALTH,
                 value: viewedChar.stats.health,
@@ -510,7 +577,7 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                color: UI_COLORS.SUCCESS
+                usePercentageColor: true
             });
             detailItems.push(...healthBar.elements);
             detailY += statRowHeight;
@@ -523,7 +590,7 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                color: UI_COLORS.PRIMARY
+                usePercentageColor: true
             });
             detailItems.push(...speedBar.elements);
             detailY += statRowHeight;
@@ -536,10 +603,10 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                color: UI_COLORS.DANGER
+                usePercentageColor: true
             });
             detailItems.push(...damageBar.elements);
-            detailY += 35;
+            detailY += 30;
 
             // Currently selected indicator (show if viewing the confirmed selection)
             if (viewedCharacterKey === confirmedCharacterKey) {
@@ -679,15 +746,6 @@ export function setupCharacterSelectScene(k) {
             updateConfirmButton();
         };
 
-        // Instructions
-        k.add([
-            k.text('Click a character to preview | Confirm to select', { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 80),
-            k.anchor('center'),
-            k.color(...UI_COLORS.TEXT_TERTIARY),
-            k.fixed(),
-            k.z(UI_Z_LAYERS.UI_TEXT)
-        ]);
 
         // Controls
         k.onKeyPress('escape', () => {
