@@ -82,7 +82,6 @@ export function setupStatisticsScene(k) {
 
         const tabs = [
             { key: 'achievements', label: 'Achievements' },
-            { key: 'stats', label: 'Statistics' },
             { key: 'history', label: 'History' }
         ];
 
@@ -188,50 +187,7 @@ export function setupStatisticsScene(k) {
             });
             categoryTabItems = [];
 
-            if (currentTab === 'stats') {
-                // Display statistics
-                const statsY = contentY + 20;
-                const statsSpacing = 30;
-
-                const statLabels = [
-                    { label: 'Total Runs', value: stats.totalRuns || 0 },
-                    { label: 'Best Floor', value: stats.bestFloor || 1 },
-                    { label: 'Best Room', value: stats.bestRoom || 1 },
-                    { label: 'Best Level', value: stats.bestLevel || 1 },
-                    { label: 'Total Enemies Killed', value: stats.totalEnemiesKilled || 0 },
-                    { label: 'Total Bosses Killed', value: stats.totalBossesKilled || 0 },
-                    { label: 'Total Rooms Cleared', value: stats.totalRoomsCleared || 0 },
-                    { label: 'Total Floors Reached', value: stats.totalFloorsReached || 0 },
-                    { label: `Total ${currencyName} Earned`, value: stats.totalCurrencyEarned || 0 }
-                ];
-
-                statLabels.forEach((stat, index) => {
-                    const y = statsY + index * statsSpacing;
-
-                    // Label
-                    const labelText = k.add([
-                        k.text(stat.label + ':', { size: 18 }),
-                        k.pos(200, y),
-                        k.anchor('left'),
-                        k.color(200, 200, 200),
-                        k.fixed(),
-                        k.z(1000)
-                    ]);
-
-                    // Value
-                    const valueText = k.add([
-                        k.text(stat.value.toString(), { size: 18 }),
-                        k.pos(500, y),
-                        k.anchor('left'),
-                        k.color(255, 255, 255),
-                        k.fixed(),
-                        k.z(1000)
-                    ]);
-
-                    contentItems.push(labelText, valueText);
-                });
-
-            } else if (currentTab === 'achievements') {
+            if (currentTab === 'achievements') {
                 try {
                     // ========================================================
                     // SPLIT PANEL LAYOUT: Grid on left, Detail panel on right
