@@ -33,13 +33,14 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
     }
 
     // Save current minimap mode (accessed from k.gameData if available)
-    // Note: We update the minimap BEFORE creating UI to avoid visual artifacts
+    // Note: We just save the mode here - actual update happens AFTER overlay is created
+    // to hide any visual artifacts from the minimap redrawing
+    let minimapNeedsUpdate = false;
     if (k.gameData && k.gameData.minimap) {
         k.gameData.minimapSavedMode = k.gameData.minimap.mode;
-        // Set minimap to maximized for better visibility during upgrade selection
+        // Mark that we need to update minimap after overlay is created
         if (k.gameData.minimap.mode !== 'maximized') {
-            k.gameData.minimap.mode = 'maximized';
-            k.gameData.minimap.update();
+            minimapNeedsUpdate = true;
         }
     }
 
@@ -82,6 +83,12 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         k.z(UI_Z_LAYERS.MODAL),
         'upgradeOverlay'
     ]);
+
+    // Now update the minimap (after overlay is created to hide visual artifacts)
+    if (minimapNeedsUpdate && k.gameData && k.gameData.minimap) {
+        k.gameData.minimap.mode = 'maximized';
+        k.gameData.minimap.update();
+    }
 
     // Fade overlay to target opacity after a brief moment (allows clean UI creation)
     k.wait(0.05, () => {
