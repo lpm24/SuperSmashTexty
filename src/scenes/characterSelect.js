@@ -75,15 +75,17 @@ export function setupCharacterSelectScene(k) {
         const leftPanelWidth = 360;
         const rightPanelX = leftPanelWidth + 20;
         const rightPanelWidth = k.width() - rightPanelX - 20;
-        const startY = 120;
-        // Use standardized Half card size from UI_SIZES
-        const { HALF: cardSize } = UI_SIZES.CARD;
-        const cardWidth = cardSize.width;
-        const cardHeight = cardSize.height;
-        const cardSpacing = 12;
+        const startY = 110;
+        // Custom smaller card size to fit more characters
+        const cardWidth = 165;
+        const cardHeight = 70;
+        const cardSpacing = 8;
         const cardsPerRow = 2;
-        const rowsPerPage = 3;
+        const rowsPerPage = 5;
         const charactersPerPage = cardsPerRow * rowsPerPage;
+
+        // Helper to strip "The " prefix from names for display
+        const formatName = (name) => name.replace(/^The\s+/i, '');
 
         // Pagination state
         const totalPages = Math.ceil(characterKeys.length / charactersPerPage);

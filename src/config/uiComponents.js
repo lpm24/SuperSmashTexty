@@ -473,6 +473,26 @@ export function createModal(k, options = {}) {
 // =============================================================================
 
 /**
+ * Get color based on percentage (red at 0%, yellow at 50%, green at 100%)
+ * @param {number} percent - Value from 0 to 1
+ * @returns {Array} RGB color array
+ */
+function getPercentageColor(percent) {
+    // Clamp to 0-1
+    percent = Math.max(0, Math.min(1, percent));
+
+    if (percent < 0.5) {
+        // Red to Yellow (0% to 50%)
+        const t = percent * 2; // 0 to 1
+        return [255, Math.round(200 * t), 50];
+    } else {
+        // Yellow to Green (50% to 100%)
+        const t = (percent - 0.5) * 2; // 0 to 1
+        return [Math.round(255 * (1 - t)), 200 + Math.round(55 * t), 50 + Math.round(100 * t)];
+    }
+}
+
+/**
  * Create a labeled stat bar
  * @param {Object} k - Kaplay instance
  * @param {Object} options - Configuration options
@@ -482,7 +502,8 @@ export function createModal(k, options = {}) {
  * @param {number} options.x - X position
  * @param {number} options.y - Y position
  * @param {number} options.width - Bar width
- * @param {Array} options.color - Fill color
+ * @param {Array} options.color - Fill color (ignored if usePercentageColor is true)
+ * @param {boolean} options.usePercentageColor - If true, color bar based on fill % (red=low, green=high)
  * @returns {Object} - Object with elements and update method
  */
 export function createStatBar(k, options = {}) {
@@ -493,11 +514,16 @@ export function createStatBar(k, options = {}) {
         x = 0,
         y = 0,
         width = 80,
-        color = UI_COLORS.PRIMARY
+        color = UI_COLORS.PRIMARY,
+        usePercentageColor = false
     } = options;
 
     const elements = [];
     const barHeight = 6;
+
+    // Calculate fill color
+    const percent = value / maxValue;
+    const fillColor = usePercentageColor ? getPercentageColor(percent) : color;
 
     // Label
     const labelEl = k.add([
@@ -523,12 +549,12 @@ export function createStatBar(k, options = {}) {
     elements.push(barBg);
 
     // Bar fill
-    const fillWidth = Math.max(0, (width - 2) * (value / maxValue));
+    const fillWidth = Math.max(0, (width - 2) * percent);
     const barFill = k.add([
         k.rect(fillWidth, barHeight - 2),
         k.pos(x + 1, y + 15),
         k.anchor('topleft'),
-        k.color(...color),
+        k.color(...fillColor),
         k.fixed(),
         k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
     ]);
@@ -547,8 +573,13 @@ export function createStatBar(k, options = {}) {
 
     const updateValue = (newValue) => {
         const clampedValue = Math.max(0, Math.min(maxValue, newValue));
-        barFill.width = Math.max(0, (width - 2) * (clampedValue / maxValue));
+        const newPercent = clampedValue / maxValue;
+        barFill.width = Math.max(0, (width - 2) * newPercent);
         valueEl.text = `${clampedValue}`;
+        if (usePercentageColor) {
+            const newColor = getPercentageColor(newPercent);
+            barFill.color = k.rgb(...newColor);
+        }
     };
 
     const destroy = () => {

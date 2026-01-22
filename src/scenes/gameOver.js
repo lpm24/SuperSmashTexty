@@ -335,7 +335,7 @@ export function setupGameOverScene(k) {
             ]);
 
             // Player name (below icon)
-            const maxNameLen = numPlayers <= 2 ? 12 : (numPlayers === 3 ? 8 : 6);
+            const maxNameLen = numPlayers <= 2 ? 16 : (numPlayers === 3 ? 12 : 10);
             const displayName = (player.name || `P${idx + 1}`).substring(0, maxNameLen);
             k.add([
                 k.text(displayName, { size: 11 }),

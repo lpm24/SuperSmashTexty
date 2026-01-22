@@ -236,7 +236,7 @@ export function setupMenuScene(k) {
 
         // Player name (with fallback for null/undefined)
         const playerName = getPlayerName() || 'Player';
-        const displayName = playerName.length > 12 ? playerName.substring(0, 12) + '..' : playerName;
+        const displayName = playerName.length > 16 ? playerName.substring(0, 16) + '..' : playerName;
         const infoX = portraitX + portraitSize / 2 + 10;
         k.add([
             k.text(displayName, { size: UI_TEXT_SIZES.SMALL }),
@@ -420,7 +420,7 @@ export function setupMenuScene(k) {
                 }
 
                 const nameText = k.add([
-                    k.text(slot.playerName.substring(0, 15), { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.text(slot.playerName.substring(0, 16), { size: UI_TEXT_SIZES.SMALL - 2 }),
                     k.pos(partyPanelX + (slot.isEmpty ? 32 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
                     k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),

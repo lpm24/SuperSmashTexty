@@ -5,7 +5,7 @@
  */
 
 const ADJECTIVES = [
-    // Original - Power & Speed
+    // Original - Power & Speed (all 8 chars or less)
     'Swift', 'Mighty', 'Bold', 'Silent', 'Fierce',
     'Brave', 'Quick', 'Sharp', 'Dark', 'Bright',
     'Wild', 'Cool', 'Hot', 'Frozen', 'Burning',
@@ -15,32 +15,30 @@ const ADJECTIVES = [
     'Phantom', 'Shadow', 'Storm', 'Thunder', 'Frost',
     'Blaze', 'Venom', 'Razor', 'Nitro', 'Turbo',
     'Alpha', 'Omega', 'Prime', 'Elite', 'Epic',
-    'Legendary', 'Royal', 'Noble', 'Rogue', 'Savage',
+    'Royal', 'Noble', 'Rogue', 'Savage',
 
-    // Game Show / Competition
-    'Reigning', 'Undefeated', 'Defending', 'Returning', 'Rising',
-    'Rookie', 'Veteran', 'Seasoned', 'Underdog', 'Favored',
-    'Viral', 'Trending', 'Famous', 'Infamous', 'Notorious',
-    'Ultimate', 'Supreme', 'Grand', 'Major', 'Premier',
-    'Star', 'Main', 'Top', 'Peak', 'Apex',
+    // Game Show / Competition (8 chars or less)
+    'Reigning', 'Rising', 'Rookie', 'Veteran', 'Seasoned',
+    'Underdog', 'Favored', 'Viral', 'Trending', 'Famous',
+    'Infamous', 'Ultimate', 'Supreme', 'Grand', 'Major',
+    'Premier', 'Star', 'Main', 'Top', 'Peak', 'Apex',
 
-    // Fighting / Combat
-    'Brutal', 'Ruthless', 'Relentless', 'Merciless', 'Vicious',
-    'Crushing', 'Devastating', 'Punishing', 'Rampaging', 'Raging',
+    // Fighting / Combat (8 chars or less)
+    'Brutal', 'Ruthless', 'Vicious', 'Crushing', 'Raging',
     'Furious', 'Frenzied', 'Berserk', 'Mad', 'Crazy',
     'Lethal', 'Deadly', 'Fatal', 'Killer', 'Murder',
-    'Unstoppable', 'Unbreakable', 'Invincible', 'Immortal', 'Eternal',
-    'Heavy', 'Hard', 'Tough', 'Gritty', 'Scrappy',
-    'Mean', 'Nasty', 'Dirty', 'Raw', 'Primal',
+    'Immortal', 'Eternal', 'Heavy', 'Hard', 'Tough',
+    'Gritty', 'Scrappy', 'Mean', 'Nasty', 'Dirty',
+    'Raw', 'Primal',
 
-    // Dramatic / Showmanship
-    'Spectacular', 'Sensational', 'Incredible', 'Amazing', 'Awesome',
-    'Dazzling', 'Stunning', 'Shocking', 'Explosive', 'Dynamic',
-    'Radical', 'Extreme', 'Intense', 'Hyper', 'Ultra',
-    'Mega', 'Super', 'Power', 'Atomic', 'Nuclear',
-    'Chaos', 'Havoc', 'Mayhem', 'Rampage', 'Carnage',
+    // Dramatic / Showmanship (8 chars or less)
+    'Amazing', 'Awesome', 'Dazzling', 'Stunning', 'Shocking',
+    'Dynamic', 'Radical', 'Extreme', 'Intense', 'Hyper',
+    'Ultra', 'Mega', 'Super', 'Power', 'Atomic',
+    'Nuclear', 'Chaos', 'Havoc', 'Mayhem', 'Rampage',
+    'Carnage',
 
-    // Attitude / Personality
+    // Attitude / Personality (8 chars or less)
     'Cocky', 'Sneaky', 'Tricky', 'Sly', 'Cunning',
     'Wicked', 'Evil', 'Sinister', 'Twisted', 'Crooked',
     'Lucky', 'Unlucky', 'Cursed', 'Blessed', 'Chosen',
@@ -48,7 +46,7 @@ const ADJECTIVES = [
 ];
 
 const NOUNS = [
-    // Original - Animals & Warriors
+    // Original - Animals & Warriors (8 chars or less)
     'Wolf', 'Eagle', 'Tiger', 'Dragon', 'Phoenix',
     'Hawk', 'Lion', 'Bear', 'Falcon', 'Raven',
     'Viper', 'Cobra', 'Panther', 'Shark', 'Raptor',
@@ -60,46 +58,43 @@ const NOUNS = [
     'Storm', 'Flame', 'Wave', 'Wind', 'Quake',
     'Slayer', 'Reaper', 'Wraith', 'Ghost', 'Specter',
 
-    // Game Show / Competition
-    'Contender', 'Finalist', 'Victor', 'Winner', 'Champ',
-    'Competitor', 'Challenger', 'Qualifier', 'Hopeful', 'Prospect',
-    'Wildcard', 'Darkhorse', 'Underdog', 'Favorite', 'Prodigy',
+    // Game Show / Competition (8 chars or less)
+    'Finalist', 'Victor', 'Winner', 'Champ', 'Hopeful',
+    'Prospect', 'Wildcard', 'Underdog', 'Favorite', 'Prodigy',
     'Rookie', 'Veteran', 'Pro', 'Amateur', 'Phenom',
-    'Showman', 'Entertainer', 'Performer', 'Celebrity', 'Icon',
+    'Showman', 'Icon',
 
-    // Fighting / Brawling
+    // Fighting / Brawling (8 chars or less)
     'Brawler', 'Bruiser', 'Slugger', 'Puncher', 'Boxer',
-    'Fighter', 'Scrapper', 'Battler', 'Combatant', 'Duelist',
-    'Crusher', 'Smasher', 'Basher', 'Masher', 'Thrasher',
-    'Pummeler', 'Pounder', 'Hammer', 'Mauler', 'Mangler',
-    'Knockout', 'Haymaker', 'Uppercut', 'Jab', 'Hook',
-    'Gladiator', 'Centurion', 'Spartan', 'Viking', 'Berserker',
+    'Fighter', 'Scrapper', 'Battler', 'Duelist', 'Crusher',
+    'Smasher', 'Basher', 'Masher', 'Thrasher', 'Pummeler',
+    'Pounder', 'Hammer', 'Mauler', 'Mangler', 'Knockout',
+    'Haymaker', 'Uppercut', 'Jab', 'Hook', 'Spartan',
+    'Viking',
 
-    // Destruction / Chaos
-    'Destroyer', 'Annihilator', 'Eliminator', 'Terminator', 'Obliterator',
-    'Devastator', 'Dominator', 'Decimator', 'Eradicator', 'Executioner',
-    'Wrecking', 'Bulldozer', 'Juggernaut', 'Rampage', 'Onslaught',
-    'Havoc', 'Mayhem', 'Chaos', 'Carnage', 'Fury',
-    'Menace', 'Terror', 'Nightmare', 'Horror', 'Dread',
+    // Destruction / Chaos (8 chars or less)
+    'Wrecking', 'Rampage', 'Havoc', 'Mayhem', 'Chaos',
+    'Carnage', 'Fury', 'Menace', 'Terror', 'Horror',
+    'Dread',
 
-    // Weaponry / Tools
+    // Weaponry / Tools (8 chars or less)
     'Fist', 'Knuckle', 'Claw', 'Talon', 'Spike',
     'Axe', 'Hammer', 'Mace', 'Flail', 'Club',
     'Cannon', 'Mortar', 'Missile', 'Bomb', 'Grenade',
-    'Shiv', 'Switchblade', 'Machete', 'Cleaver', 'Hatchet',
+    'Shiv', 'Machete', 'Cleaver', 'Hatchet',
 
-    // Animals - More Aggressive
-    'Gorilla', 'Rhino', 'Bull', 'Boar', 'Wolverine',
-    'Pitbull', 'Rottweiler', 'Doberman', 'Mastiff', 'Bulldog',
-    'Scorpion', 'Mantis', 'Hornet', 'Wasp', 'Spider',
-    'Croc', 'Gator', 'Barracuda', 'Piranha', 'Orca',
-    'Hyena', 'Jackal', 'Badger', 'Warthog', 'Mongoose',
+    // Animals - More Aggressive (8 chars or less)
+    'Gorilla', 'Rhino', 'Bull', 'Boar', 'Pitbull',
+    'Doberman', 'Mastiff', 'Bulldog', 'Scorpion', 'Mantis',
+    'Hornet', 'Wasp', 'Spider', 'Croc', 'Gator',
+    'Piranha', 'Orca', 'Hyena', 'Jackal', 'Badger',
+    'Warthog', 'Mongoose',
 
-    // Personas / Archetypes
+    // Personas / Archetypes (8 chars or less)
     'Outlaw', 'Bandit', 'Thug', 'Goon', 'Hooligan',
-    'Punk', 'Rebel', 'Maverick', 'Renegade', 'Vigilante',
-    'Assassin', 'Mercenary', 'Bounty', 'Hitman', 'Enforcer',
-    'Boss', 'Kingpin', 'Warlord', 'Overlord', 'Tyrant'
+    'Punk', 'Rebel', 'Maverick', 'Renegade', 'Assassin',
+    'Bounty', 'Hitman', 'Enforcer', 'Boss', 'Kingpin',
+    'Warlord', 'Overlord', 'Tyrant'
 ];
 
 /**
