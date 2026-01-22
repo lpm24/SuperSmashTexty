@@ -33,6 +33,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
     }
 
     // Save current minimap mode (accessed from k.gameData if available)
+    // Note: We update the minimap BEFORE creating UI to avoid visual artifacts
     if (k.gameData && k.gameData.minimap) {
         k.gameData.minimapSavedMode = k.gameData.minimap.mode;
         // Set minimap to maximized for better visibility during upgrade selection
@@ -69,17 +70,25 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
 
     let upgrades = generateUpgrades();
 
-    // Create overlay background
+    // Create overlay background FIRST with full opacity to immediately cover everything
+    // This prevents visual artifacts from minimap updates or other UI changes showing through
     const overlay = k.add([
         k.rect(k.width(), k.height()),
         k.pos(0, 0),
         k.anchor('topleft'),
         k.color(...UI_COLORS.BG_DARK),
-        k.opacity(0.9),
+        k.opacity(1.0), // Start fully opaque to hide any visual artifacts
         k.fixed(),
         k.z(UI_Z_LAYERS.MODAL),
         'upgradeOverlay'
     ]);
+
+    // Fade overlay to target opacity after a brief moment (allows clean UI creation)
+    k.wait(0.05, () => {
+        if (overlay.exists()) {
+            overlay.opacity = 0.9;
+        }
+    });
 
     // Title - show player name in multiplayer
     const titleText = inMultiplayer && playerName

@@ -69,6 +69,7 @@ export class Minimap {
         this.mode = MINIMAP_MODE.MINIMIZED;
         this.elements = [];
         this.isHovered = false;
+        this.destroyed = false;
 
         // Only render if floorMap is valid
         if (this.floorMap && typeof this.floorMap.getGridForMinimap === 'function') {
@@ -94,6 +95,8 @@ export class Minimap {
      * Cycle through minimap modes: minimized → open → maximized → minimized
      */
     toggle() {
+        if (this.destroyed) return;
+
         try {
             playMenuNav();
         } catch (e) {
@@ -108,15 +111,14 @@ export class Minimap {
             this.mode = MINIMAP_MODE.MINIMIZED;
         }
 
-        this.k.wait(0, () => {
-            this.update();
-        });
+        this.update();
     }
 
     /**
      * Update minimap display
      */
     update() {
+        if (this.destroyed) return;
         this.clear();
         this.render();
     }
@@ -126,8 +128,12 @@ export class Minimap {
      */
     clear() {
         this.elements.forEach(el => {
-            if (el.exists()) {
-                this.k.destroy(el);
+            try {
+                if (el && el.exists()) {
+                    this.k.destroy(el);
+                }
+            } catch (e) {
+                // Element may have been destroyed by scene transition
             }
         });
         this.elements = [];
@@ -137,6 +143,8 @@ export class Minimap {
      * Render minimap based on current mode
      */
     render() {
+        if (this.destroyed) return;
+
         if (this.mode === MINIMAP_MODE.MINIMIZED) {
             this.renderMinimized();
         } else if (this.mode === MINIMAP_MODE.OPEN) {
@@ -468,6 +476,7 @@ export class Minimap {
      * Cleanup - destroy all minimap elements
      */
     destroy() {
+        this.destroyed = true;
         this.clear();
     }
 }

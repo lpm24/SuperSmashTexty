@@ -41,7 +41,8 @@
       "Bash(ls:*)",
       "Bash(diff:*)",
       "Bash(dir:*)",
-      "Bash(npx gh-pages -d dist --no-history)"
+      "Bash(npx gh-pages -d dist --no-history)",
+      "Bash(git status:*)"
     ],
     "deny": [],
     "ask": []
