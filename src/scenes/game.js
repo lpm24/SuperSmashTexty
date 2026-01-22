@@ -36,7 +36,7 @@ import { SeededRandom } from '../utils/seededRandom.js';
 import { getWeightedRoomTemplate, getFloorColors, constrainObstacleToRoom, resetRoomTemplateHistory, getRoomTemplateByKey, getBarrelPositions } from '../systems/roomGeneration.js';
 import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../systems/synergies.js';
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
-import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics } from '../systems/metaProgression.js';
+import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, trackCharacterPlay, trackDailyChallengeAttempt, trackDailyChallengeCompletion, getSelectedCharacter } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
 import { checkAchievements, initAchievementChecker } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
@@ -298,7 +298,13 @@ export function setupGameScene(k) {
 
             if (gameState.isDailyRun) {
                 console.log('[DailyRun] Starting daily run with character:', gameState.dailyCharacter, 'seed:', gameState.dailySeed);
+                // Track daily challenge attempt for achievements
+                trackDailyChallengeAttempt();
             }
+
+            // Track character play for achievements
+            const characterToTrack = gameState.isDailyRun ? gameState.dailyCharacter : getSelectedCharacter();
+            trackCharacterPlay(characterToTrack);
 
             // Reset run statistics
             runStats = {
@@ -2363,8 +2369,8 @@ export function setupGameScene(k) {
         eventHandlers.updates.push(k.onUpdate(() => {
             const dt = k.dt();
 
-            // Update run timer
-            if (runTimerText && runTimerText.exists()) {
+            // Update run timer (only when not paused)
+            if (runTimerText && runTimerText.exists() && !k.paused) {
                 runElapsedTime += dt;
                 const minutes = Math.floor(runElapsedTime / 60);
                 const seconds = Math.floor(runElapsedTime % 60);
@@ -5187,18 +5193,32 @@ export function setupGameScene(k) {
                         'confirmDialog'
                     ]);
 
-                    yesButton.onClick(() => {
+                    // Keyboard handler cleanup list
+                    const dialogKeyHandlers = [];
+
+                    const confirmYes = () => {
+                        dialogKeyHandlers.forEach(h => h.cancel());
                         k.get('confirmDialog').forEach(e => k.destroy(e));
                         cleanupMultiplayer();
                         gameState.currentFloor = 1;
                         gameState.currentRoom = 1;
                         gameState.playerStats = null;
                         k.go('menu');
-                    });
+                    };
 
-                    noButton.onClick(() => {
+                    const confirmNo = () => {
+                        dialogKeyHandlers.forEach(h => h.cancel());
                         k.get('confirmDialog').forEach(e => k.destroy(e));
-                    });
+                    };
+
+                    yesButton.onClick(confirmYes);
+                    noButton.onClick(confirmNo);
+
+                    // Keyboard support: Y/Enter to confirm, N/Escape to cancel
+                    dialogKeyHandlers.push(k.onKeyPress('y', confirmYes));
+                    dialogKeyHandlers.push(k.onKeyPress('enter', confirmYes));
+                    dialogKeyHandlers.push(k.onKeyPress('n', confirmNo));
+                    dialogKeyHandlers.push(k.onKeyPress('escape', confirmNo));
                 }
             } else {
                 // Single player: check if confirmation is required
@@ -5270,17 +5290,31 @@ export function setupGameScene(k) {
                         'confirmDialog'
                     ]);
 
-                    yesButton.onClick(() => {
+                    // Keyboard handler cleanup list
+                    const dialogKeyHandlers = [];
+
+                    const confirmYes = () => {
+                        dialogKeyHandlers.forEach(h => h.cancel());
                         k.get('confirmDialog').forEach(e => k.destroy(e));
                         gameState.currentFloor = 1;
                         gameState.currentRoom = 1;
                         gameState.playerStats = null;
                         k.go('menu');
-                    });
+                    };
 
-                    noButton.onClick(() => {
+                    const confirmNo = () => {
+                        dialogKeyHandlers.forEach(h => h.cancel());
                         k.get('confirmDialog').forEach(e => k.destroy(e));
-                    });
+                    };
+
+                    yesButton.onClick(confirmYes);
+                    noButton.onClick(confirmNo);
+
+                    // Keyboard support: Y/Enter to confirm, N/Escape to cancel
+                    dialogKeyHandlers.push(k.onKeyPress('y', confirmYes));
+                    dialogKeyHandlers.push(k.onKeyPress('enter', confirmYes));
+                    dialogKeyHandlers.push(k.onKeyPress('n', confirmNo));
+                    dialogKeyHandlers.push(k.onKeyPress('escape', confirmNo));
                 } else {
                     // No confirmation required, just quit
                     gameState.currentFloor = 1;

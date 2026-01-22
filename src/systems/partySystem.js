@@ -17,6 +17,7 @@ import {
     disconnect
 } from './networkSystem.js';
 import { sendInitialGameState, handlePlayerDisconnect as cleanupDisconnectedPlayer } from './multiplayerGame.js';
+import { onPlayerJoinedParty } from './matchmakingSystem.js';
 
 // Party state
 const party = {
@@ -187,6 +188,9 @@ export function setupNetworkHandlers() {
 
             // Broadcast updated party to all other clients
             broadcastPartyUpdate();
+
+            // Notify matchmaking system that a player joined (host removes self from queue)
+            onPlayerJoinedParty();
         } else {
             // Party full - send rejection
             sendToPeer(fromPeerId, 'join_rejected', { reason: 'Party full' });
@@ -400,7 +404,8 @@ export async function joinPartyAsClient(hostInviteCode) {
                 selectedPortrait: null,
                 playerLevel: 1,
                 isLocal: false,
-                peerId: null
+                peerId: null,
+                isReady: false
             };
         }
 
@@ -488,7 +493,8 @@ export function restoreLocalPlayerToSoloParty(playerInfo) {
             selectedPortrait: null,
             playerLevel: 1,
             isLocal: false,
-            peerId: null
+            peerId: null,
+            isReady: false
         };
     }
 
@@ -808,7 +814,8 @@ function removePlayerFromPartyAndShift(slotIndex) {
         selectedPortrait: null,
         playerLevel: 1,
         isLocal: false,
-        peerId: null
+        peerId: null,
+        isReady: false
     };
 
     console.log('[PartySystem] Slots after shift:', party.slots.map((s, i) => `${i}: ${s.playerName || 'empty'}`));

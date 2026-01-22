@@ -91,10 +91,16 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
             // Auto-pause on level up if setting is enabled (single player only)
             const autoPause = getSetting('gameplay', 'autoPause');
             if (autoPause && !k.paused) {
+                // Mark that auto-pause is handling this level up
+                // This prevents the notification timeout from clearing levelUpInProgress
+                const autoPauseHandlingThis = true;
+
                 // Short delay to let the notification show, then pause and show upgrade draft
                 k.wait(0.3, () => {
+                    // Only proceed if still not paused and we have pending level ups
                     if (!k.paused && player.pendingLevelUps.length > 0) {
                         k.paused = true;
+                        levelUpInProgress = true; // Ensure flag is set for upgrade draft
                         // Immediately show upgrade draft
                         const pendingLevel = player.pendingLevelUps.shift();
                         showUpgradeDraft(k, player, () => {
@@ -103,6 +109,13 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
                         }, null, pendingLevel);
                     }
                 });
+
+                // Clean up notification but don't touch levelUpInProgress (auto-pause handles it)
+                k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
+                    if (notification.exists()) k.destroy(notification);
+                    // Don't set levelUpInProgress = false here - auto-pause callback handles it
+                });
+                return; // Skip the normal notification timeout below
             }
         }
 
