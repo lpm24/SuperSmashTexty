@@ -43,6 +43,7 @@ import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio, playCombatMusic } from '../systems/sounds.js';
 import { initVisualEffects, updateScreenShake, resetVisualEffects, EffectPresets, isInHitFreeze } from '../systems/visualEffects.js';
+import { getSetting } from '../systems/settings.js';
 import { generateFloorMap } from '../systems/floorMap.js';
 import { createMinimap } from '../systems/minimap.js';
 import { renderFloorDecorations, getFloorTheme } from '../systems/floorTheming.js';
@@ -427,7 +428,9 @@ export function setupGameScene(k) {
         const getFloorName = (floor) => floorNames[floor] || `Network ${floor}`;
 
         // Show floor title when entering a new floor (room 1)
-        if (currentRoom === 1) {
+        // Skip if setting is enabled
+        const skipIntroAnimation = getSetting('gameplay', 'skipIntroAnimation');
+        if (currentRoom === 1 && !skipIntroAnimation) {
             const floorTitle = k.add([
                 k.text(`Floor ${currentFloor}`, { size: 32 }),
                 k.pos(k.width() / 2, k.height() / 3),
@@ -1752,6 +1755,53 @@ export function setupGameScene(k) {
             k.z(950)
         ]);
 
+        // ==========================================
+        // RUN TIMER (Below credits, if enabled)
+        // ==========================================
+        let runTimer = null;
+        let runTimerText = null;
+        let runElapsedTime = 0;
+
+        if (getSetting('visual', 'showTimer') !== false) {
+            runTimer = k.add([
+                k.rect(60, 18),
+                k.pos(k.width() - 10, 28),
+                k.anchor('topright'),
+                k.color(0, 0, 0),
+                k.opacity(0.6),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_BG)
+            ]);
+
+            runTimerText = k.add([
+                k.text('0:00', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(k.width() - 15, 30),
+                k.anchor('topright'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        }
+
+        // ==========================================
+        // FPS COUNTER (Top center, if enabled)
+        // ==========================================
+        let fpsCounter = null;
+        let fpsUpdateInterval = 0;
+        let frameCount = 0;
+        let lastFps = 60;
+
+        if (getSetting('visual', 'showFPS')) {
+            fpsCounter = k.add([
+                k.text('60 FPS', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                k.pos(k.width() / 2, 6),
+                k.anchor('top'),
+                k.color(...UI_COLORS.TEXT_SECONDARY),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_TEXT)
+            ]);
+        }
+
         // Multiplayer Connection Indicator (only show if multiplayer is active)
         let connectionIndicator = null;
         let connectionText = null;
@@ -2307,6 +2357,39 @@ export function setupGameScene(k) {
         // Update screen shake effect
         eventHandlers.updates.push(k.onUpdate(() => {
             updateScreenShake(k.dt());
+        }));
+
+        // Update run timer and FPS counter
+        eventHandlers.updates.push(k.onUpdate(() => {
+            const dt = k.dt();
+
+            // Update run timer
+            if (runTimerText && runTimerText.exists()) {
+                runElapsedTime += dt;
+                const minutes = Math.floor(runElapsedTime / 60);
+                const seconds = Math.floor(runElapsedTime % 60);
+                runTimerText.text = `${minutes}:${seconds.toString().padStart(2, '0')}`;
+            }
+
+            // Update FPS counter (update every 0.5 seconds)
+            if (fpsCounter && fpsCounter.exists()) {
+                frameCount++;
+                fpsUpdateInterval += dt;
+                if (fpsUpdateInterval >= 0.5) {
+                    lastFps = Math.round(frameCount / fpsUpdateInterval);
+                    fpsCounter.text = `${lastFps} FPS`;
+                    // Color based on FPS (green > 50, yellow 30-50, red < 30)
+                    if (lastFps >= 50) {
+                        fpsCounter.color = k.rgb(100, 255, 100);
+                    } else if (lastFps >= 30) {
+                        fpsCounter.color = k.rgb(255, 255, 100);
+                    } else {
+                        fpsCounter.color = k.rgb(255, 100, 100);
+                    }
+                    frameCount = 0;
+                    fpsUpdateInterval = 0;
+                }
+            }
         }));
 
         // Update synergy effects (berserker, survivalist)
@@ -3776,9 +3859,13 @@ export function setupGameScene(k) {
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
+            // Auto-pickup XP: use screen-wide radius if enabled
+            const autoPickupXP = getSetting('gameplay', 'autoPickupXP');
+            const effectiveXPRadius = autoPickupXP ? 2000 : player.pickupRadius;
+
             // OPTIMIZATION: Instead of checking ALL pickups, only check pickups near players
             // Get nearby pickups using spatial grid (much faster than k.get('xpPickup'))
-            const pickupCheckRadius = player.pickupRadius * 1.5; // Add buffer for safety
+            const pickupCheckRadius = effectiveXPRadius * 1.5; // Add buffer for safety
             const nearbyPickups = new Set(); // Use Set to avoid duplicates in multiplayer
 
             // In single player, only check near the player
@@ -3823,7 +3910,9 @@ export function setupGameScene(k) {
                 }
 
                 // Start magnetizing if within pickup radius (once started, never stops)
-                if (!pickup.magnetizing && closestDistance <= closestPlayer.pickupRadius) {
+                // Use effective radius for auto-pickup setting
+                const magnetRadius = autoPickupXP ? effectiveXPRadius : closestPlayer.pickupRadius;
+                if (!pickup.magnetizing && closestDistance <= magnetRadius) {
                     pickup.magnetizing = true;
                     pickup.targetPlayer = closestPlayer;
                 }
@@ -3867,8 +3956,12 @@ export function setupGameScene(k) {
         eventHandlers.updates.push(k.onUpdate(() => {
             if (!player.exists() || k.paused) return;
 
+            // Auto-pickup currency: use screen-wide radius if enabled
+            const autoPickupCurrency = getSetting('gameplay', 'autoPickupCurrency');
+            const effectiveCurrencyRadius = autoPickupCurrency ? 2000 : player.pickupRadius;
+
             // OPTIMIZATION: Only check pickups near players (using spatial grid)
-            const pickupCheckRadius = player.pickupRadius * 1.5;
+            const pickupCheckRadius = effectiveCurrencyRadius * 1.5;
             const nearbyPickups = new Set();
 
             if (partySize === 1) {
@@ -3911,7 +4004,9 @@ export function setupGameScene(k) {
                 }
 
                 // Start magnetizing if within pickup radius (once started, never stops)
-                if (!pickup.magnetizing && closestDistance <= closestPlayer.pickupRadius) {
+                // Use effective radius for auto-pickup setting
+                const magnetRadius = autoPickupCurrency ? effectiveCurrencyRadius : closestPlayer.pickupRadius;
+                if (!pickup.magnetizing && closestDistance <= magnetRadius) {
                     pickup.magnetizing = true;
                     pickup.targetPlayer = closestPlayer;
                 }
@@ -5106,11 +5201,93 @@ export function setupGameScene(k) {
                     });
                 }
             } else {
-                // Single player: just quit
-                gameState.currentFloor = 1;
-                gameState.currentRoom = 1;
-                gameState.playerStats = null;
-                k.go('menu');
+                // Single player: check if confirmation is required
+                const confirmBeforeQuit = getSetting('gameplay', 'confirmBeforeQuit') !== false;
+
+                if (confirmBeforeQuit) {
+                    // Show confirmation dialog
+                    const confirmOverlay = k.add([
+                        k.rect(k.width(), k.height()),
+                        k.pos(0, 0),
+                        k.color(0, 0, 0),
+                        k.opacity(0.8),
+                        k.fixed(),
+                        k.z(3000),
+                        'confirmDialog'
+                    ]);
+
+                    const confirmText = k.add([
+                        k.text('Abandon run and return to menu?', { size: 20 }),
+                        k.pos(k.width() / 2, k.height() / 2 - 50),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    const yesButton = k.add([
+                        k.rect(100, 40),
+                        k.pos(k.width() / 2 - 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(150, 50, 50),
+                        k.outline(2, k.rgb(200, 100, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    k.add([
+                        k.text('Yes', { size: 16 }),
+                        k.pos(k.width() / 2 - 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3002),
+                        'confirmDialog'
+                    ]);
+
+                    const noButton = k.add([
+                        k.rect(100, 40),
+                        k.pos(k.width() / 2 + 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(50, 100, 50),
+                        k.outline(2, k.rgb(100, 150, 100)),
+                        k.area(),
+                        k.fixed(),
+                        k.z(3001),
+                        'confirmDialog'
+                    ]);
+
+                    k.add([
+                        k.text('No', { size: 16 }),
+                        k.pos(k.width() / 2 + 60, k.height() / 2 + 10),
+                        k.anchor('center'),
+                        k.color(255, 255, 255),
+                        k.fixed(),
+                        k.z(3002),
+                        'confirmDialog'
+                    ]);
+
+                    yesButton.onClick(() => {
+                        k.get('confirmDialog').forEach(e => k.destroy(e));
+                        gameState.currentFloor = 1;
+                        gameState.currentRoom = 1;
+                        gameState.playerStats = null;
+                        k.go('menu');
+                    });
+
+                    noButton.onClick(() => {
+                        k.get('confirmDialog').forEach(e => k.destroy(e));
+                    });
+                } else {
+                    // No confirmation required, just quit
+                    gameState.currentFloor = 1;
+                    gameState.currentRoom = 1;
+                    gameState.playerStats = null;
+                    k.go('menu');
+                }
             }
         });
         

@@ -10,6 +10,7 @@
  */
 
 import { getParticlePool } from './objectPool.js';
+import { getSetting } from './settings.js';
 
 /**
  * Create a single particle (with optional pooling)
@@ -115,6 +116,17 @@ export function updateParticles(k) {
 }
 
 /**
+ * Check if particles are enabled in settings
+ * @returns {boolean} - Whether particles should be shown
+ */
+function areParticlesEnabled() {
+    // Disable particles if setting is off or reduced motion is enabled
+    if (getSetting('visual', 'showParticles') === false) return false;
+    if (getSetting('accessibility', 'reducedMotion')) return false;
+    return true;
+}
+
+/**
  * Spawn blood splatter particles
  * @param {Object} k - Kaplay instance
  * @param {number} x - X position
@@ -122,6 +134,8 @@ export function updateParticles(k) {
  * @param {Object} options - Blood splatter options
  */
 export function spawnBloodSplatter(k, x, y, options = {}) {
+    if (!areParticlesEnabled()) return;
+
     const {
         count = 8,
         color = [255, 50, 50],
@@ -164,6 +178,8 @@ export function spawnBloodSplatter(k, x, y, options = {}) {
  * @param {Object} options - Death explosion options
  */
 export function spawnDeathExplosion(k, x, y, options = {}) {
+    if (!areParticlesEnabled()) return;
+
     const {
         count = 8,
         color = [255, 100, 100],
@@ -207,6 +223,8 @@ export function spawnDeathExplosion(k, x, y, options = {}) {
  * @param {Object} options - Hit impact options
  */
 export function spawnHitImpact(k, x, y, direction, options = {}) {
+    if (!areParticlesEnabled()) return;
+
     const {
         count = 5,
         color = [255, 255, 100],
@@ -255,6 +273,8 @@ export function spawnHitImpact(k, x, y, direction, options = {}) {
  * @param {Object} options - Particle burst options
  */
 export function spawnParticleBurst(k, x, y, options = {}) {
+    if (!areParticlesEnabled()) return;
+
     const {
         count = 10,
         char = '*',
@@ -294,6 +314,8 @@ export function spawnParticleBurst(k, x, y, options = {}) {
  * @param {number} y - Y position
  */
 export function spawnXPSparkles(k, x, y) {
+    if (!areParticlesEnabled()) return;
+
     const chars = ['*', '+', '·'];
     const count = 5;
 
@@ -325,6 +347,8 @@ export function spawnXPSparkles(k, x, y) {
  * @param {number} y - Y position
  */
 export function spawnLevelUpEffect(k, x, y) {
+    if (!areParticlesEnabled()) return;
+
     const chars = ['★', '☆', '*', '+'];
     const count = 20;
 
@@ -362,6 +386,8 @@ export function spawnLevelUpEffect(k, x, y) {
  * @param {Array} color - RGB color array or 'rainbow'
  */
 export function spawnTrailParticle(k, x, y, trailType, color) {
+    if (!areParticlesEnabled()) return;
+
     const chars = {
         trailFire: ['░', '▒', '▓', '█'],
         trailIce: ['*', '❄', '·', '°'],
@@ -473,6 +499,8 @@ export function updateGlowEffect(k, glow) {
  * @param {Array} enemyColor - Enemy's color
  */
 export function spawnCosmeticDeath(k, x, y, deathType, enemyColor = [255, 100, 100]) {
+    if (!areParticlesEnabled()) return;
+
     switch (deathType) {
         case 'deathExplosion':
             spawnExplosiveDeath(k, x, y, enemyColor);

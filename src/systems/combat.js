@@ -46,6 +46,57 @@ import {
 // Visual effects imports
 import { screenShake, hitFreeze, EffectPresets } from './visualEffects.js';
 
+// Settings import
+import { getSetting } from './settings.js';
+
+/**
+ * Spawn a floating damage number
+ * @param {Object} k - Kaplay instance
+ * @param {number} x - X position
+ * @param {number} y - Y position
+ * @param {number} damage - Damage amount to display
+ * @param {Object} options - Display options
+ */
+function spawnDamageNumber(k, x, y, damage, options = {}) {
+    // Check if damage numbers are enabled
+    if (getSetting('visual', 'showDamageNumbers') === false) return;
+
+    const {
+        isCrit = false,
+        color = isCrit ? [255, 200, 50] : [255, 255, 255]
+    } = options;
+
+    const size = isCrit ? 18 : 14;
+    const displayText = isCrit ? `${damage}!` : `${damage}`;
+
+    // Random offset to prevent overlap
+    const offsetX = (Math.random() - 0.5) * 20;
+    const offsetY = (Math.random() - 0.5) * 10;
+
+    const dmgText = k.add([
+        k.text(displayText, { size }),
+        k.pos(x + offsetX, y - 20 + offsetY),
+        k.anchor('center'),
+        k.color(...color),
+        k.z(500),
+        'damageNumber'
+    ]);
+
+    // Animate upward and fade out
+    let elapsed = 0;
+    const duration = 0.8;
+
+    dmgText.onUpdate(() => {
+        elapsed += k.dt();
+        dmgText.pos.y -= 40 * k.dt(); // Float upward
+        dmgText.opacity = Math.max(0, 1 - (elapsed / duration));
+
+        if (elapsed >= duration) {
+            k.destroy(dmgText);
+        }
+    });
+}
+
 // Helper function to apply knockback while respecting collisions and room boundaries
 function applySafeKnockback(k, entity, knockbackDir, knockbackAmount) {
     if (!entity || !entity.exists()) return;
@@ -686,6 +737,9 @@ export function setupCombatSystem(k, player) {
             enemy.hurt(finalDamage);
         }
 
+        // Spawn damage number
+        spawnDamageNumber(k, enemy.pos.x, enemy.pos.y, finalDamage, { isCrit: projectile.isCrit });
+
         // Vampiric Rounds synergy: heal player on crit damage
         if (projectile.isCrit && projectile.ownerSlotIndex !== undefined) {
             // Find the player who owns this projectile
@@ -882,6 +936,9 @@ export function setupCombatSystem(k, player) {
             boss.hurt(projectile.damage);
         }
 
+        // Spawn damage number
+        spawnDamageNumber(k, boss.pos.x, boss.pos.y, projectile.damage, { isCrit: projectile.isCrit });
+
         // Track who last hit this boss for kill attribution
         if (projectile.ownerSlotIndex !== undefined) {
             boss.lastHitBySlot = projectile.ownerSlotIndex;
@@ -970,6 +1027,9 @@ export function setupCombatSystem(k, player) {
         } else {
             miniboss.hurt(finalDamage);
         }
+
+        // Spawn damage number
+        spawnDamageNumber(k, miniboss.pos.x, miniboss.pos.y, finalDamage, { isCrit: projectile.isCrit });
 
         // Track who last hit this miniboss for kill attribution
         if (projectile.ownerSlotIndex !== undefined) {

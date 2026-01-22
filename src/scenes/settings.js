@@ -297,11 +297,6 @@ export function setupSettingsScene(k) {
                     updateSetting('visual', 'showDamageNumbers', value);
                 });
 
-                // Compact HUD
-                currentY = addToggle(k, 'Compact HUD', settings.visual?.compactHUD || false, currentY, (value) => {
-                    updateSetting('visual', 'compactHUD', value);
-                });
-
                 // FPS Counter
                 currentY = addToggle(k, 'FPS Counter', settings.visual?.showFPS || false, currentY, (value) => {
                     updateSetting('visual', 'showFPS', value);
@@ -404,30 +399,22 @@ export function setupSettingsScene(k) {
             } else if (currentTab === 'access') {
                 // Accessibility tab
 
-                // Colorblind Mode dropdown (simplified as toggle for now)
-                currentY = addToggle(k, 'Colorblind Mode', settings.accessibility?.colorblindMode !== 'off', currentY, (value) => {
-                    updateSetting('accessibility', 'colorblindMode', value ? 'deuteranopia' : 'off');
-                });
-
-                // Reduced Motion
+                // Reduced Motion - disables particles, screen shake, and hit freeze
                 currentY = addToggle(k, 'Reduced Motion', settings.accessibility?.reducedMotion || false, currentY, (value) => {
                     updateSetting('accessibility', 'reducedMotion', value);
-                    // Also disable particles and screen shake
-                    if (value) {
-                        updateSetting('visual', 'showParticles', false);
-                        updateSetting('visual', 'showScreenShake', false);
-                    }
                 });
 
-                // Large Text
-                currentY = addToggle(k, 'Large Text', settings.accessibility?.largeText || false, currentY, (value) => {
-                    updateSetting('accessibility', 'largeText', value);
-                });
-
-                // High Contrast
-                currentY = addToggle(k, 'High Contrast', settings.accessibility?.highContrast || false, currentY, (value) => {
-                    updateSetting('accessibility', 'highContrast', value);
-                });
+                // Info text explaining reduced motion
+                const infoText = k.add([
+                    k.text('Disables particles, screen shake, and hit freeze effects', { size: 12 }),
+                    k.pos(k.width() / 2, currentY + 10),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                settingsItems.push(infoText);
+                currentY += 40;
 
             } else if (currentTab === 'data') {
                 // Data management tab

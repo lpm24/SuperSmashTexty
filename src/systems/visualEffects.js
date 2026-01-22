@@ -31,8 +31,9 @@ export function initVisualEffects(k) {
 export function screenShake(intensity = 5, duration = 0.1) {
     if (!kInstance) return;
 
-    // Check if screen shake is enabled in settings
+    // Check if screen shake is enabled in settings (or if reduced motion is enabled)
     if (!getSetting('visual', 'showScreenShake')) return;
+    if (getSetting('accessibility', 'reducedMotion')) return;
 
     // Rate limit screen shake to prevent performance issues
     const currentTime = kInstance.time();
@@ -90,8 +91,9 @@ export function updateScreenShake(dt) {
 export function hitFreeze(duration = 50) {
     if (!kInstance) return;
 
-    // Check if hit freeze is enabled in settings
+    // Check if hit freeze is enabled in settings (or if reduced motion is enabled)
     if (!getSetting('visual', 'showHitFreeze')) return;
+    if (getSetting('accessibility', 'reducedMotion')) return;
 
     // Don't freeze if already paused or in freeze
     if (kInstance.paused || inHitFreeze) return;

@@ -21,6 +21,9 @@ import { playLevelUp } from './sounds.js';
 // Multiplayer imports
 import { broadcastLevelUpQueued, isHost } from './multiplayerGame.js';
 
+// Settings import
+import { getSetting } from './settings.js';
+
 export function setupProgressionSystem(k, player, reviveAllPlayersCallback = null, isMultiplayer = false) {
     let levelUpInProgress = false;
 
@@ -84,6 +87,23 @@ export function setupProgressionSystem(k, player, reviveAllPlayersCallback = nul
         } else {
             // Single player: queue locally
             player.pendingLevelUps.push(level);
+
+            // Auto-pause on level up if setting is enabled (single player only)
+            const autoPause = getSetting('gameplay', 'autoPause');
+            if (autoPause && !k.paused) {
+                // Short delay to let the notification show, then pause and show upgrade draft
+                k.wait(0.3, () => {
+                    if (!k.paused && player.pendingLevelUps.length > 0) {
+                        k.paused = true;
+                        // Immediately show upgrade draft
+                        const pendingLevel = player.pendingLevelUps.shift();
+                        showUpgradeDraft(k, player, () => {
+                            levelUpInProgress = false;
+                            k.paused = false;
+                        }, null, pendingLevel);
+                    }
+                });
+            }
         }
 
         k.wait(PROGRESSION_CONFIG.LEVEL_UP_NOTIFICATION_DURATION, () => {
