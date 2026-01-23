@@ -363,7 +363,7 @@ export function setupMenuScene(k) {
                 const slotBg = k.add([
                     k.rect(partyPanelWidth - 16, slotHeight),
                     k.pos(partyPanelX + 8, slotY),
-                    k.color(slot.isEmpty ? UI_COLORS.BG_DARK : UI_COLORS.BG_LIGHT),
+                    k.color(...(slot.isEmpty ? UI_COLORS.BG_DARK : UI_COLORS.BG_LIGHT)),
                     k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_BACKGROUND + 1),
@@ -444,7 +444,7 @@ export function setupMenuScene(k) {
                     k.text(slot.playerName.substring(0, 16), { size: UI_TEXT_SIZES.SMALL - 2 }),
                     k.pos(partyPanelX + (slot.isEmpty ? 32 : 55), slotY + slotHeight / 2),
                     k.anchor('left'),
-                    k.color(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
+                    k.color(...(slot.isEmpty ? UI_COLORS.TEXT_DISABLED : (slot.isLocal ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY))),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'partySlotUI'
@@ -531,7 +531,7 @@ export function setupMenuScene(k) {
             k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(partyPanelX + partyPanelWidth - 8, inviteCodeY),
             k.anchor('right'),
-            k.color(inviteCode === 'OFFLINE' ? [...UI_COLORS.TEXT_DISABLED] : [...UI_COLORS.GOLD]),
+            k.color(...(inviteCode === 'OFFLINE' ? UI_COLORS.TEXT_DISABLED : UI_COLORS.GOLD)),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -563,12 +563,16 @@ export function setupMenuScene(k) {
         const findMatchY = joinButtonY + 32;
         let findMatchButton = null;
         let findMatchLabel = null;
-        let isSearchingForMatch = false;
+        let isUpdatingFindMatch = false;
 
         // Set up global match handler for scene navigation
         setupGlobalMatchHandler(k);
 
         function updateFindMatchButton() {
+            // Prevent re-entrant calls
+            if (isUpdatingFindMatch) return;
+            isUpdatingFindMatch = true;
+
             // Clean up existing button
             if (findMatchButton && findMatchButton.exists()) k.destroy(findMatchButton);
             if (findMatchLabel && findMatchLabel.exists()) k.destroy(findMatchLabel);
@@ -594,7 +598,7 @@ export function setupMenuScene(k) {
                 k.text(buttonText, { size: UI_TEXT_SIZES.SMALL }),
                 k.pos(partyPanelX + partyPanelWidth / 2, findMatchY),
                 k.anchor('center'),
-                k.color(...(searching ? UI_COLORS.GOLD : UI_COLORS.WHITE)),
+                k.color(...(searching ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT),
                 'findMatchButton'
@@ -604,7 +608,7 @@ export function setupMenuScene(k) {
                 playMenuSelect();
                 if (isMatchmaking()) {
                     stopMatchmaking();
-                    updateFindMatchButton();
+                    // Don't call updateFindMatchButton here - onSearchEnd callback handles it
                 } else {
                     startMatchmaking({
                         onSearchStart: () => {
@@ -625,6 +629,8 @@ export function setupMenuScene(k) {
                     });
                 }
             });
+
+            isUpdatingFindMatch = false;
         }
 
         // Only show Find Match if Firebase is configured
