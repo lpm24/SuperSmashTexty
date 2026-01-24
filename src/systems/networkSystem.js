@@ -52,53 +52,44 @@ export function initNetwork(inviteCode, isHost = true) {
         // Create peer with invite code as ID (for host) or random ID (for client)
         const peerId = isHost ? `smash-${inviteCode}` : undefined;
 
-        // Auto-detect environment: use local PeerJS server for localhost, cloud for production
-        const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-
-        // Configure PeerJS connection based on environment
-        let peerConfig;
-        if (isLocalhost) {
-            // Localhost: use local PeerJS server
-            peerConfig = {
-                debug: 3, // Maximum debug logging
-                host: 'localhost',
-                port: 9000,
-                path: '/',
-                secure: false, // HTTP for localhost
-                config: {
-                    // STUN and TURN servers for reliable connection
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        // Public TURN server as fallback relay
-                        {
-                            urls: 'turn:numb.viagenie.ca',
-                            username: 'webrtc@live.com',
-                            credential: 'muazkh'
-                        }
-                    ]
-                }
-            };
-        } else {
-            // Production (GitHub Pages): use PeerJS cloud service
-            peerConfig = {
-                debug: 2, // Moderate debug logging
-                // No host/port/path specified = uses PeerJS cloud service (cloud.peerjs.com)
-                secure: true, // HTTPS for production
-                config: {
-                    // STUN and TURN servers for reliable connection
-                    iceServers: [
-                        { urls: 'stun:stun.l.google.com:19302' },
-                        { urls: 'stun:stun1.l.google.com:19302' },
-                        // Public TURN server as fallback relay
-                        {
-                            urls: 'turn:numb.viagenie.ca',
-                            username: 'webrtc@live.com',
-                            credential: 'muazkh'
-                        }
-                    ]
-                }
-            };
-        }
+        // Use PeerJS cloud service for all environments
+        const peerConfig = {
+            debug: 2,
+            // No host/port/path = uses PeerJS cloud service (0.peerjs.com)
+            config: {
+                iceServers: [
+                    // STUN servers for NAT discovery
+                    { urls: 'stun:stun.l.google.com:19302' },
+                    { urls: 'stun:stun.relay.metered.ca:80' },
+                    // TURN servers from Metered.ca free tier for relay fallback
+                    {
+                        urls: 'turn:global.relay.metered.ca:80',
+                        username: 'e7312c28f330eeb65ba0d000',
+                        credential: 'CWfp+/uh3V/hKus3'
+                    },
+                    {
+                        urls: 'turn:global.relay.metered.ca:80?transport=tcp',
+                        username: 'e7312c28f330eeb65ba0d000',
+                        credential: 'CWfp+/uh3V/hKus3'
+                    },
+                    {
+                        urls: 'turn:global.relay.metered.ca:443',
+                        username: 'e7312c28f330eeb65ba0d000',
+                        credential: 'CWfp+/uh3V/hKus3'
+                    },
+                    {
+                        urls: 'turns:global.relay.metered.ca:443?transport=tcp',
+                        username: 'e7312c28f330eeb65ba0d000',
+                        credential: 'CWfp+/uh3V/hKus3'
+                    }
+                ],
+                // Allow all ICE transport types for better connectivity
+                iceTransportPolicy: 'all',
+                // Bundle policy for better performance
+                bundlePolicy: 'max-bundle',
+                rtcpMuxPolicy: 'require'
+            }
+        };
 
         try {
             network.peer = new Peer(peerId, peerConfig);
@@ -234,8 +225,24 @@ export function connectToHost(hostInviteCode) {
         let isResolved = false;
 
         const conn = network.peer.connect(hostPeerId, {
-            reliable: true
+            reliable: true,
+            serialization: 'json'
         });
+
+        // Log ICE connection state changes for debugging
+        if (NET_DEBUG && conn.peerConnection) {
+            conn.peerConnection.oniceconnectionstatechange = () => {
+                console.log('[NetworkSystem] ICE state:', conn.peerConnection.iceConnectionState);
+            };
+            conn.peerConnection.onicegatheringstatechange = () => {
+                console.log('[NetworkSystem] ICE gathering:', conn.peerConnection.iceGatheringState);
+            };
+            conn.peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    console.log('[NetworkSystem] ICE candidate:', event.candidate.type, event.candidate.address);
+                }
+            };
+        }
 
         // Set timeout for connection attempt (30 seconds)
         connectionTimeout = setTimeout(() => {

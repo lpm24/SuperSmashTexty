@@ -39,9 +39,10 @@ let isInitialized = false;
 // Matchmaking state
 let isSearching = false;
 let queueEntryRef = null;
-let queueListener = null;
+let queueListenerRef = null;  // The actual ref we subscribed to
 let kaplayInstance = null;
 let matchmakingCallbacks = null;
+let isStoppingMatchmaking = false;  // Prevent re-entrant calls
 
 /**
  * Initialize Firebase (lazy initialization)
@@ -126,7 +127,7 @@ export async function startMatchmaking(callbacks = {}) {
         await set(queueEntryRef, {
             inviteCode: inviteCode,
             playerName: playerName,
-            timestamp: serverTimestamp()
+            timestamp: Date.now() // Use client timestamp for consistent stale checking
         });
 
         // Set up auto-remove on disconnect
@@ -135,20 +136,25 @@ export async function startMatchmaking(callbacks = {}) {
         console.log('[Matchmaking] Added to queue:', inviteCode);
 
         // Listen for changes in the queue
-        const orderedQueueRef = query(queueRef, orderByChild('timestamp'));
-        queueListener = onValue(orderedQueueRef, async (snapshot) => {
+        queueListenerRef = query(queueRef, orderByChild('timestamp'));
+        onValue(queueListenerRef, async (snapshot) => {
             if (!isSearching) return;
 
             const queueData = snapshot.val();
             if (!queueData) return;
 
             // Convert to array and sort by timestamp
+            // Filter out stale entries (older than 60 seconds)
+            const now = Date.now();
+            const STALE_THRESHOLD_MS = 60000; // 60 seconds
+
             const players = Object.entries(queueData)
                 .map(([key, value]) => ({ key, ...value }))
                 .filter(p => p.timestamp) // Filter out entries without timestamp yet
+                .filter(p => (now - p.timestamp) < STALE_THRESHOLD_MS) // Filter out stale entries
                 .sort((a, b) => a.timestamp - b.timestamp);
 
-            console.log('[Matchmaking] Queue updated:', players.length, 'players');
+            console.log('[Matchmaking] Queue updated:', players.length, 'active players');
 
             if (players.length >= 2) {
                 // Find our entry
@@ -169,6 +175,9 @@ export async function startMatchmaking(callbacks = {}) {
 
                     // Stop listening before attempting to join (don't notify yet)
                     stopMatchmaking(false);
+
+                    // Small delay to ensure host's peer is fully registered with PeerJS cloud
+                    await new Promise(resolve => setTimeout(resolve, 500));
 
                     try {
                         const success = await joinPartyAsClient(hostEntry.inviteCode);
@@ -211,34 +220,40 @@ export async function startMatchmaking(callbacks = {}) {
  * Stop matchmaking - remove from queue and cancel listener
  * @param {boolean} notifyEnd - Whether to call onSearchEnd callback (default true)
  */
-export async function stopMatchmaking(notifyEnd = true) {
-    if (!isSearching && !queueEntryRef) {
+export function stopMatchmaking(notifyEnd = true) {
+    // Prevent re-entrant calls
+    if (isStoppingMatchmaking) {
         return;
     }
 
+    if (!isSearching && !queueEntryRef && !queueListenerRef) {
+        return;
+    }
+
+    isStoppingMatchmaking = true;
     console.log('[Matchmaking] Stopping matchmaking');
     isSearching = false;
 
-    // Remove queue listener
-    if (queueListener && database) {
-        const queueRef = ref(database, 'matchmaking/queue');
-        off(queueRef);
-        queueListener = null;
+    // Remove queue listener using the correct reference
+    if (queueListenerRef) {
+        off(queueListenerRef);
+        queueListenerRef = null;
     }
 
-    // Remove ourselves from the queue (fire and forget - don't block UI)
+    // Clear the queue entry reference
     if (queueEntryRef) {
-        const entryToRemove = queueEntryRef;
         queueEntryRef = null;
-        remove(entryToRemove)
-            .then(() => console.log('[Matchmaking] Removed from queue'))
-            .catch(err => console.error('[Matchmaking] Failed to remove from queue:', err));
     }
 
-    if (notifyEnd) {
-        matchmakingCallbacks?.onSearchEnd?.();
-    }
+    // Save and clear callbacks before calling them
+    const callbacks = matchmakingCallbacks;
     matchmakingCallbacks = null;
+
+    if (notifyEnd && callbacks?.onSearchEnd) {
+        callbacks.onSearchEnd();
+    }
+
+    isStoppingMatchmaking = false;
 }
 
 /**

@@ -578,9 +578,12 @@ export function setupMenuScene(k) {
             if (findMatchLabel && findMatchLabel.exists()) k.destroy(findMatchLabel);
 
             const searching = isMatchmaking();
-            const buttonText = searching ? 'SEARCHING...' : 'FIND MATCH';
+            const buttonText = searching ? 'CANCEL SEARCH' : 'FIND MATCH';
             const buttonColor = searching ? [150, 120, 50] : [60, 80, 120];
+            const buttonHoverColor = searching ? [180, 150, 70] : [80, 110, 160];
             const outlineColor = searching ? [200, 180, 80] : [80, 120, 180];
+            const outlineHoverColor = searching ? [230, 210, 110] : [120, 160, 220];
+            const textColor = searching ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY;
 
             findMatchButton = k.add([
                 k.rect(partyPanelWidth - 20, 28),
@@ -590,6 +593,7 @@ export function setupMenuScene(k) {
                 k.outline(2, k.rgb(...outlineColor)),
                 k.area(),
                 k.fixed(),
+                k.scale(1),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS),
                 'findMatchButton'
             ]);
@@ -598,11 +602,38 @@ export function setupMenuScene(k) {
                 k.text(buttonText, { size: UI_TEXT_SIZES.SMALL }),
                 k.pos(partyPanelX + partyPanelWidth / 2, findMatchY),
                 k.anchor('center'),
-                k.color(...(searching ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY)),
+                k.color(...textColor),
                 k.fixed(),
+                k.scale(1),
                 k.z(UI_Z_LAYERS.UI_TEXT),
                 'findMatchButton'
             ]);
+
+            // Store colors for hover states
+            findMatchButton.originalColor = buttonColor;
+            findMatchButton.hoverColor = buttonHoverColor;
+            findMatchButton.originalOutline = outlineColor;
+            findMatchButton.hoverOutline = outlineHoverColor;
+            findMatchButton.isHovered = false;
+
+            findMatchButton.onHoverUpdate(() => {
+                if (!findMatchButton.isHovered) {
+                    findMatchButton.isHovered = true;
+                    playMenuNav();
+                }
+                findMatchButton.color = k.rgb(...findMatchButton.hoverColor);
+                findMatchButton.outline.color = k.rgb(...findMatchButton.hoverOutline);
+                findMatchButton.scale = k.vec2(UI_BUTTON.HOVER_SCALE, UI_BUTTON.HOVER_SCALE);
+                findMatchLabel.scale = k.vec2(UI_BUTTON.HOVER_SCALE, UI_BUTTON.HOVER_SCALE);
+            });
+
+            findMatchButton.onHoverEnd(() => {
+                findMatchButton.isHovered = false;
+                findMatchButton.color = k.rgb(...findMatchButton.originalColor);
+                findMatchButton.outline.color = k.rgb(...findMatchButton.originalOutline);
+                findMatchButton.scale = k.vec2(1, 1);
+                findMatchLabel.scale = k.vec2(1, 1);
+            });
 
             findMatchButton.onClick(() => {
                 playMenuSelect();
@@ -612,19 +643,22 @@ export function setupMenuScene(k) {
                 } else {
                     startMatchmaking({
                         onSearchStart: () => {
-                            updateFindMatchButton();
+                            // Defer update to avoid re-triggering onClick while mouse is still down
+                            setTimeout(() => updateFindMatchButton(), 0);
                         },
                         onMatchFound: (hostCode) => {
                             console.log('[Menu] Match found!', hostCode ? `Joined ${hostCode}` : 'We are host');
-                            updateFindMatchButton();
-                            updatePartySlots();
+                            setTimeout(() => {
+                                updateFindMatchButton();
+                                updatePartySlots();
+                            }, 0);
                         },
                         onError: (err) => {
                             console.error('[Menu] Matchmaking error:', err);
-                            updateFindMatchButton();
+                            setTimeout(() => updateFindMatchButton(), 0);
                         },
                         onSearchEnd: () => {
-                            updateFindMatchButton();
+                            setTimeout(() => updateFindMatchButton(), 0);
                         }
                     });
                 }
@@ -674,14 +708,20 @@ export function setupMenuScene(k) {
             }
 
             if (partySize >= 2) {
+                const readyBgColor = isReady ? [100, 150, 100] : [60, 80, 120];
+                const readyBgHoverColor = isReady ? [120, 180, 120] : [80, 110, 160];
+                const readyOutlineColor = isReady ? [100, 200, 100] : [80, 120, 180];
+                const readyOutlineHoverColor = isReady ? [130, 230, 130] : [120, 160, 220];
+
                 const readyBg = k.add([
                     k.rect(partyPanelWidth - 20, 24),
                     k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY),
                     k.anchor('center'),
-                    k.color(isReady ? 100 : 60, isReady ? 150 : 80, isReady ? 100 : 120),
-                    k.outline(2, k.rgb(isReady ? 100 : 80, isReady ? 200 : 120, isReady ? 100 : 180)),
+                    k.color(...readyBgColor),
+                    k.outline(2, k.rgb(...readyOutlineColor)),
                     k.area(),
                     k.fixed(),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.UI_ELEMENTS),
                     'readyButtonUI'
                 ]);
@@ -693,10 +733,37 @@ export function setupMenuScene(k) {
                     k.anchor('center'),
                     k.color(isReady ? 150 : 100, isReady ? 255 : 150, isReady ? 150 : 200),
                     k.fixed(),
+                    k.scale(1),
                     k.z(UI_Z_LAYERS.UI_TEXT),
                     'readyButtonUI'
                 ]);
                 readyButtonElements.push(readyLabel);
+
+                // Store colors for hover states
+                readyBg.originalColor = readyBgColor;
+                readyBg.hoverColor = readyBgHoverColor;
+                readyBg.originalOutline = readyOutlineColor;
+                readyBg.hoverOutline = readyOutlineHoverColor;
+                readyBg.isHovered = false;
+
+                readyBg.onHoverUpdate(() => {
+                    if (!readyBg.isHovered) {
+                        readyBg.isHovered = true;
+                        playMenuNav();
+                    }
+                    readyBg.color = k.rgb(...readyBg.hoverColor);
+                    readyBg.outline.color = k.rgb(...readyBg.hoverOutline);
+                    readyBg.scale = k.vec2(UI_BUTTON.HOVER_SCALE, UI_BUTTON.HOVER_SCALE);
+                    readyLabel.scale = k.vec2(UI_BUTTON.HOVER_SCALE, UI_BUTTON.HOVER_SCALE);
+                });
+
+                readyBg.onHoverEnd(() => {
+                    readyBg.isHovered = false;
+                    readyBg.color = k.rgb(...readyBg.originalColor);
+                    readyBg.outline.color = k.rgb(...readyBg.originalOutline);
+                    readyBg.scale = k.vec2(1, 1);
+                    readyLabel.scale = k.vec2(1, 1);
+                });
 
                 readyBg.onClick(() => {
                     playMenuSelect();
