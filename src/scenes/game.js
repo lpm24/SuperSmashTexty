@@ -38,7 +38,7 @@ import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../syste
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, getSelectedCharacter } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
-import { checkAchievements, initAchievementChecker, trackPlayerDamage } from '../systems/achievementChecker.js';
+import { checkAchievements, initAchievementChecker, trackPlayerDamage, trackFloorDamage, trackBossDamage, startBossFight, onBossDefeated, onFloorCompleted } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio, playCombatMusic } from '../systems/sounds.js';
@@ -505,7 +505,13 @@ export function setupGameScene(k) {
             // Restore player with previous stats
             player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
             // Track local player damage for the flawless_run achievement
-            player.onHurt((amount) => trackPlayerDamage(amount));
+            player.onHurt((amount) => {
+                if (amount > 0) {
+                    trackPlayerDamage(amount);
+                    trackFloorDamage(gameState.currentFloor, amount);
+                    trackBossDamage();
+                }
+            });
             // Restore stats
             Object.assign(player, gameState.playerStats);
             // CRITICAL: Local player is NEVER remote - host's saved stats may have isRemote: true
@@ -599,7 +605,13 @@ export function setupGameScene(k) {
             const characterOverride = gameState.isDailyRun ? gameState.dailyCharacter : null;
             player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
             // Track local player damage for the flawless_run achievement
-            player.onHurt((amount) => trackPlayerDamage(amount));
+            player.onHurt((amount) => {
+                if (amount > 0) {
+                    trackPlayerDamage(amount);
+                    trackFloorDamage(gameState.currentFloor, amount);
+                    trackBossDamage();
+                }
+            });
 
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);
@@ -3306,6 +3318,9 @@ export function setupGameScene(k) {
                         // Play boss spawn sound
                         playBossSpawn();
 
+                        // Begin no-hit-boss tracking for this boss fight
+                        startBossFight(player.hp());
+
                         // Show boss announcement
                         const announcement = k.add([
                             k.text('THE CO-HOSTS', { size: 32 }),
@@ -3350,6 +3365,9 @@ export function setupGameScene(k) {
 
                         // Play boss spawn sound
                         playBossSpawn();
+
+                        // Begin no-hit-boss tracking for this boss fight
+                        startBossFight(player.hp());
 
                         // Show boss announcement
                         let bossName = 'BOSS';
@@ -3805,6 +3823,8 @@ export function setupGameScene(k) {
                     // Track boss kill by type (counts as enemy too)
                     runStats.enemiesKilled++;
                     runStats.bossesKilled++;
+                    // Award boss-fight challenge achievements (noHitBoss, glassCannonWin, bossRush)
+                    onBossDefeated(player.hp(), player.maxHealth);
                     const bossType = boss.type || 'boss';
                     runStats.killsByType[bossType] = (runStats.killsByType[bossType] || 0) + 1;
 
@@ -4717,6 +4737,8 @@ export function setupGameScene(k) {
                 if (isFloorAdvancement) {
                     // Floor advancement - going through north door after defeating boss
                     currentFloor++;
+                    // The floor we just cleared (perfectFloor / speedRunner achievements)
+                    onFloorCompleted(currentFloor - 1);
 
                     // Check for character unlocks based on floor completion
                     const unlocked = checkFloorUnlocks(currentFloor - 1);

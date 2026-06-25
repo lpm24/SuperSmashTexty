@@ -249,7 +249,9 @@ export function checkAchievements(k, currentRunStats = null) {
         totalBossesKilled: (savedStats.totalBossesKilled || 0) + (currentRunStats?.bossesKilled || 0),
         totalRuns: savedStats.totalRuns || 0,
         bestLevel: Math.max(savedStats.bestLevel || 0, currentRunStats?.level || 0),
-        totalCurrencyEarned: (savedStats.totalCurrencyEarned || 0) + (currentRunStats?.currencyEarned || 0)
+        totalCurrencyEarned: (savedStats.totalCurrencyEarned || 0) + (currentRunStats?.currencyEarned || 0),
+        totalRoomsCleared: savedStats.totalRoomsCleared || 0,
+        totalCurrencySpent: savedStats.totalCurrencySpent || 0
     };
 
     const newlyUnlocked = [];
@@ -302,6 +304,15 @@ export function checkAchievements(k, currentRunStats = null) {
     check(stats.totalCurrencyEarned >= 1000, 'earn1000');
     check(stats.totalCurrencyEarned >= 5000, 'earn5000');
     check(stats.totalCurrencyEarned >= 10000, 'earn10000');
+    check(stats.totalCurrencySpent >= 1000, 'bigSpender');
+
+    // Rooms-cleared achievements (these thresholds existed but were never checked)
+    check(stats.totalRoomsCleared >= 100, 'rooms100');
+    check(stats.totalRoomsCleared >= 500, 'rooms500');
+
+    // Self-contained checks that read save data directly (no run stats needed)
+    checkMaxUpgrade();
+    checkAllCharactersUnlocked();
 
     // Run-specific challenge: flawless run (defeat a boss having taken zero
     // damage the entire run). bossesKilled here is the current run's count.
