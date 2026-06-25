@@ -1,5 +1,7 @@
 // Settings scene - allows players to configure game options
-import { getSettings, updateSetting, resetSettings, saveSettings } from '../systems/settings.js';
+// Note: saveSettings is intentionally not imported - updateSetting() and resetSettings()
+// both persist to localStorage internally, so no explicit save call is needed here.
+import { getSettings, updateSetting, resetSettings } from '../systems/settings.js';
 import { setMusicVolume, setMasterVolume, setSfxVolume, setUiSoundsEnabled, setCombatSoundsEnabled, playMenuNav } from '../systems/sounds.js';
 import {
     UI_SIZES,
@@ -11,9 +13,17 @@ import {
 } from '../config/uiConfig.js';
 
 /**
- * Show reset confirmation dialog
+ * Show a confirmation dialog for destructive actions.
+ * Defaults to the "Reset to Defaults?" copy; pass `options` to reuse it for
+ * other destructive actions (e.g. importing a save, which overwrites the existing one).
+ * @param {object} [options] - { title, message, confirmLabel }
  */
-function showResetConfirmationDialog(k, onConfirm) {
+function showResetConfirmationDialog(k, onConfirm, options = {}) {
+    const {
+        title = 'Reset to Defaults?',
+        message = 'This will reset all settings to their default values.',
+        confirmLabel = 'Reset'
+    } = options;
     // Overlay
     const overlay = k.add([
         k.rect(k.width(), k.height()),
@@ -63,7 +73,7 @@ function showResetConfirmationDialog(k, onConfirm) {
     ]);
 
     const cancelText = k.add([
-        k.text('Cancel', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.text('Cancel', { size: UI_TEXT_SIZES.TINY }),
         k.pos(k.width() / 2 - 60, k.height() / 2 + 50),
         k.anchor('center'),
         k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -89,7 +99,7 @@ function showResetConfirmationDialog(k, onConfirm) {
     ]);
 
     const confirmText = k.add([
-        k.text('Reset', { size: UI_TEXT_SIZES.SMALL - 2 }),
+        k.text(confirmLabel, { size: UI_TEXT_SIZES.TINY }),
         k.pos(k.width() / 2 + 60, k.height() / 2 + 50),
         k.anchor('center'),
         k.color(255, 200, 200),
@@ -105,7 +115,7 @@ function showResetConfirmationDialog(k, onConfirm) {
 
     // Add title and message to cleanup list
     const titleText = k.add([
-        k.text('Reset to Defaults?', { size: UI_TEXT_SIZES.LABEL }),
+        k.text(title, { size: UI_TEXT_SIZES.LABEL }),
         k.pos(k.width() / 2, k.height() / 2 - 50),
         k.anchor('center'),
         k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -115,7 +125,7 @@ function showResetConfirmationDialog(k, onConfirm) {
     dialogEntities.push(titleText);
 
     const messageText = k.add([
-        k.text('This will reset all settings to their default values.', { size: UI_TEXT_SIZES.SMALL }),
+        k.text(message, { size: UI_TEXT_SIZES.SMALL }),
         k.pos(k.width() / 2, k.height() / 2 - 10),
         k.anchor('center'),
         k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -177,32 +187,51 @@ export function setupSettingsScene(k) {
         tabs.forEach((tab, index) => {
             const tabX = firstTabX + index * tabSpacing;
             const isActive = currentTab === tab.key;
-            
+
+            // Active/inactive styling driven by UI_COLORS to match statistics.js.
+            // Active tab gets a brighter, thicker outline (BORDER_ACTIVE) as a clearer selected indicator.
             const tabBg = k.add([
                 k.rect(tabWidth, tabHeight),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 100 : 50, isActive ? 100 : 50, isActive ? 150 : 80),
-                k.outline(2, k.rgb(150, 150, 150)),
+                k.color(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM)),
+                k.outline(isActive ? 3 : 2, k.rgb(...(isActive ? UI_COLORS.BORDER_ACTIVE : UI_COLORS.BORDER))),
                 k.area(),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ]);
-            
+
             const tabLabel = k.add([
-                k.text(tab.label, { size: 16 }),
+                k.text(tab.label, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(tabX, tabY),
                 k.anchor('center'),
-                k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
+                k.color(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
-            
+
             tabBg.onClick(() => {
                 currentTab = tab.key;
                 refreshSettings();
             });
-            
+
+            // Hover feedback: brighten + pointer cursor (mirrors profile.js pattern).
+            // Skip recoloring the active tab so the selected state stays visible.
+            tabBg.onHoverUpdate(() => {
+                k.setCursor('pointer');
+                if (currentTab !== tab.key) {
+                    tabBg.color = k.rgb(...UI_COLORS.SECONDARY_HOVER);
+                    tabBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+                }
+            });
+            tabBg.onHoverEnd(() => {
+                k.setCursor('default');
+                if (currentTab !== tab.key) {
+                    tabBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                    tabBg.outline.color = k.rgb(...UI_COLORS.BORDER);
+                }
+            });
+
             tabButtons.push({ bg: tabBg, label: tabLabel, key: tab.key });
         });
         
@@ -215,19 +244,14 @@ export function setupSettingsScene(k) {
         
         // Refresh settings display
         function refreshSettings() {
-            // Update tab visuals
+            // Update tab visuals (UI_COLORS-driven to match statistics.js;
+            // active tab uses brighter, thicker BORDER_ACTIVE outline)
             tabButtons.forEach(tab => {
                 const isActive = currentTab === tab.key;
-                tab.bg.color = k.rgb(
-                    isActive ? 100 : 50,
-                    isActive ? 100 : 50,
-                    isActive ? 150 : 80
-                );
-                tab.label.color = k.rgb(
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150
-                );
+                tab.bg.color = k.rgb(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM));
+                tab.bg.outline.width = isActive ? 3 : 2;
+                tab.bg.outline.color = k.rgb(...(isActive ? UI_COLORS.BORDER_ACTIVE : UI_COLORS.BORDER));
+                tab.label.color = k.rgb(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY));
             });
             
             // Clear existing items
@@ -325,42 +349,44 @@ export function setupSettingsScene(k) {
                     
                     // Label (moved left for consistency)
                     const labelText = k.add([
-                        k.text(control.label + ':', { size: 16 }),
+                        k.text(control.label + ':', { size: UI_TEXT_SIZES.BODY }),
                         k.pos(150, y),
                         k.anchor('left'),
                         k.color(200, 200, 200),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
-                    
-                    // Key display (moved right for more space)
+
+                    // Key display - read-only (remapping not yet supported).
+                    // Dimmed (BG_DISABLED / TEXT_DISABLED) and intentionally non-interactive
+                    // so it doesn't look like a clickable button. No k.area().
                     const keyDisplay = k.add([
                         k.rect(100, 30),
                         k.pos(500, y),
                         k.anchor('center'),
-                        k.color(50, 50, 70),
-                        k.outline(2, k.rgb(100, 100, 120)),
+                        k.color(...UI_COLORS.BG_DISABLED),
+                        k.outline(2, k.rgb(...UI_COLORS.TEXT_DISABLED)),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_ELEMENTS)
                     ]);
-                    
+
                     const keyText = k.add([
-                        k.text(control.value.toUpperCase(), { size: 16 }),
+                        k.text(control.value.toUpperCase(), { size: UI_TEXT_SIZES.BODY }),
                         k.pos(500, y),
                         k.anchor('center'),
-                        k.color(255, 255, 255),
+                        k.color(...UI_COLORS.TEXT_DISABLED),
                         k.fixed(),
                         k.z(UI_Z_LAYERS.UI_TEXT)
                     ]);
-                    
+
                     settingsItems.push(labelText, keyDisplay, keyText);
                 });
-                
-                // Note about remapping (positioned to avoid button overlap)
+
+                // Note about remapping - always shown so the read-only key caps are explained.
                 const maxContentY = startY + controlLabels.length * itemSpacing;
-                if (maxContentY < k.height() - bottomButtonArea) {
+                {
                     const noteText = k.add([
-                        k.text('(Key remapping coming soon)', { size: 12 }),
+                        k.text('(Key remapping coming soon)', { size: UI_TEXT_SIZES.TINY }),
                         k.pos(k.width() / 2, maxContentY + 20),
                         k.anchor('center'),
                         k.color(150, 150, 150),
@@ -441,6 +467,17 @@ export function setupSettingsScene(k) {
                 ]);
 
                 let exportStatusText = null;
+                let importStatusText = null;
+
+                // Hover feedback (mirrors profile.js): brighten + pointer cursor
+                exportButton.onHoverUpdate(() => {
+                    k.setCursor('pointer');
+                    exportButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                });
+                exportButton.onHoverEnd(() => {
+                    k.setCursor('default');
+                    exportButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                });
 
                 exportButton.onClick(() => {
                     try {
@@ -475,7 +512,7 @@ export function setupSettingsScene(k) {
 
                 // Status text for export
                 exportStatusText = k.add([
-                    k.text('', { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.text('', { size: UI_TEXT_SIZES.TINY }),
                     k.pos(k.width() / 2, currentY - 10),
                     k.anchor('center'),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
@@ -506,12 +543,23 @@ export function setupSettingsScene(k) {
                     k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
 
-                importButton.onClick(() => {
+                // Hover feedback (mirrors profile.js): brighten + pointer cursor
+                importButton.onHoverUpdate(() => {
+                    k.setCursor('pointer');
+                    importButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                });
+                importButton.onHoverEnd(() => {
+                    k.setCursor('default');
+                    importButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                });
+
+                // Reads clipboard and overwrites the current save. Reports to importStatusText.
+                const performImport = () => {
                     // Check if clipboard API is available
                     if (!navigator.clipboard || !navigator.clipboard.readText) {
-                        if (exportStatusText && exportStatusText.exists()) {
-                            exportStatusText.text = 'Clipboard not available';
-                            exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                        if (importStatusText && importStatusText.exists()) {
+                            importStatusText.text = 'Clipboard not available';
+                            importStatusText.color = k.rgb(...UI_COLORS.DANGER);
                         }
                         return;
                     }
@@ -520,26 +568,48 @@ export function setupSettingsScene(k) {
                             const data = JSON.parse(text);
                             if (data && typeof data === 'object') {
                                 localStorage.setItem('superSmashTexty_save', text);
-                                if (exportStatusText && exportStatusText.exists()) {
-                                    exportStatusText.text = 'Import successful! Refresh to apply.';
-                                    exportStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
+                                if (importStatusText && importStatusText.exists()) {
+                                    importStatusText.text = 'Import successful! Refresh to apply.';
+                                    importStatusText.color = k.rgb(...UI_COLORS.SUCCESS);
                                 }
                             }
                         } catch (e) {
-                            if (exportStatusText && exportStatusText.exists()) {
-                                exportStatusText.text = 'Invalid save data';
-                                exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                            if (importStatusText && importStatusText.exists()) {
+                                importStatusText.text = 'Invalid save data';
+                                importStatusText.color = k.rgb(...UI_COLORS.DANGER);
                             }
                         }
                     }).catch(() => {
-                        if (exportStatusText && exportStatusText.exists()) {
-                            exportStatusText.text = 'Failed to read clipboard';
-                            exportStatusText.color = k.rgb(...UI_COLORS.DANGER);
+                        if (importStatusText && importStatusText.exists()) {
+                            importStatusText.text = 'Failed to read clipboard';
+                            importStatusText.color = k.rgb(...UI_COLORS.DANGER);
                         }
+                    });
+                };
+
+                importButton.onClick(() => {
+                    // Importing overwrites the existing save - gate it behind a confirmation,
+                    // same as the destructive Reset action below.
+                    showResetConfirmationDialog(k, performImport, {
+                        title: 'Import Save Data?',
+                        message: 'This will overwrite your current save. This cannot be undone.',
+                        confirmLabel: 'Import'
                     });
                 });
                 settingsItems.push(importButton, importText);
-                currentY += 60;
+                currentY += 50;
+
+                // Status text for import (its own line, under the Import button)
+                importStatusText = k.add([
+                    k.text('', { size: UI_TEXT_SIZES.TINY }),
+                    k.pos(k.width() / 2, currentY - 10),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                settingsItems.push(importStatusText);
+                currentY += 30;
 
                 // Reset Progress button
                 const resetProgressButton = k.add([
@@ -561,6 +631,16 @@ export function setupSettingsScene(k) {
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT)
                 ]);
+
+                // Hover feedback (mirrors profile.js): brighten + pointer cursor
+                resetProgressButton.onHoverUpdate(() => {
+                    k.setCursor('pointer');
+                    resetProgressButton.color = k.rgb(...UI_COLORS.DANGER_HOVER);
+                });
+                resetProgressButton.onHoverEnd(() => {
+                    k.setCursor('default');
+                    resetProgressButton.color = k.rgb(...UI_COLORS.DANGER);
+                });
 
                 resetProgressButton.onClick(() => {
                     // Double-confirm for dangerous action
@@ -651,17 +731,33 @@ export function setupSettingsScene(k) {
             
             // Slider handle
             const handleX = 500 - trackWidth / 2 + fillWidth;
+            // Base handle colors (no exact UI_COLORS token match for these light-lavender values)
+            const handleBaseColor = [200, 200, 255];
+            const handleHoverColor = [230, 230, 255]; // subtle brighten on hover
+            const handleBaseOutline = [150, 150, 200];
             const handle = k.add([
                 k.rect(20, trackHeight + 4),
                 k.pos(handleX, y),
                 k.anchor('center'),
-                k.color(200, 200, 255),
-                k.outline(2, k.rgb(150, 150, 200)),
+                k.color(...handleBaseColor),
+                k.outline(2, k.rgb(...handleBaseOutline)),
                 k.area(),
                 k.fixed(),
                 k.z(1002)
             ]);
-            
+
+            // Hover feedback (mirrors profile.js): brighten + pointer cursor
+            handle.onHoverUpdate(() => {
+                k.setCursor('pointer');
+                handle.color = k.rgb(...handleHoverColor);
+                handle.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+            });
+            handle.onHoverEnd(() => {
+                k.setCursor('default');
+                handle.color = k.rgb(...handleBaseColor);
+                handle.outline.color = k.rgb(...handleBaseOutline);
+            });
+
             // Value text (moved further right to avoid clipping)
             const valueText = k.add([
                 k.text(Math.round(value * 100) + '%', { size: 14 }),
@@ -739,9 +835,15 @@ export function setupSettingsScene(k) {
         
         // Helper function to add toggle
         function addToggle(k, label, value, y, onChange) {
+            // On/off background colors driven by UI_COLORS (PRIMARY = on, DANGER = off)
+            const bgColorFor = (on) => on ? UI_COLORS.PRIMARY : UI_COLORS.DANGER;
+            const bgHoverFor = (on) => on ? UI_COLORS.PRIMARY_HOVER : UI_COLORS.DANGER_HOVER;
+            // ON label = SUCCESS, OFF label = TEXT_TERTIARY (exact token equivalents of prior values)
+            const textColorFor = (on) => on ? UI_COLORS.SUCCESS : UI_COLORS.TEXT_TERTIARY;
+
             // Label (moved left for more space, with max width to prevent overflow)
             const labelText = k.add([
-                k.text(label + ':', { size: 16, width: 280 }),
+                k.text(label + ':', { size: UI_TEXT_SIZES.BODY, width: 280 }),
                 k.pos(150, y),
                 k.anchor('left'),
                 k.color(200, 200, 200),
@@ -757,7 +859,7 @@ export function setupSettingsScene(k) {
                 k.rect(toggleWidth, toggleHeight),
                 k.pos(toggleX, y),
                 k.anchor('center'),
-                k.color(value ? 50 : 70, value ? 150 : 50, value ? 50 : 70),
+                k.color(...bgColorFor(value)),
                 k.outline(2, k.rgb(100, 100, 120)),
                 k.area(),
                 k.fixed(),
@@ -780,31 +882,35 @@ export function setupSettingsScene(k) {
             // Toggle text (positioned based on current state)
             const textX = value ? toggleX - 12 : toggleX + 8;
             const toggleText = k.add([
-                k.text(value ? 'ON' : 'OFF', { size: 12 }),
+                k.text(value ? 'ON' : 'OFF', { size: UI_TEXT_SIZES.TINY }),
                 k.pos(textX, y),
                 k.anchor('center'),
-                k.color(value ? 100 : 150, value ? 255 : 150, value ? 100 : 150),
+                k.color(...textColorFor(value)),
                 k.fixed(),
                 k.z(1002)
             ]);
+
+            // Hover feedback (mirrors profile.js): brighten + pointer cursor
+            toggleBg.onHoverUpdate(() => {
+                k.setCursor('pointer');
+                toggleBg.color = k.rgb(...bgHoverFor(value));
+                toggleBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+            });
+            toggleBg.onHoverEnd(() => {
+                k.setCursor('default');
+                toggleBg.color = k.rgb(...bgColorFor(value));
+                toggleBg.outline.color = k.rgb(100, 100, 120);
+            });
 
             // Click handler
             toggleBg.onClick(() => {
                 const newValue = !value;
                 value = newValue; // Update local value for text positioning
-                toggleBg.color = k.rgb(
-                    newValue ? 50 : 70,
-                    newValue ? 150 : 50,
-                    newValue ? 50 : 70
-                );
+                toggleBg.color = k.rgb(...bgColorFor(newValue));
                 toggleHandle.pos.x = newValue ? toggleX + toggleWidth / 2 - handleSize / 2 - 4 : toggleX - toggleWidth / 2 + handleSize / 2 + 4;
                 toggleText.text = newValue ? 'ON' : 'OFF';
                 toggleText.pos.x = newValue ? toggleX - 12 : toggleX + 8;
-                toggleText.color = k.rgb(
-                    newValue ? 100 : 150,
-                    newValue ? 255 : 150,
-                    newValue ? 100 : 150
-                );
+                toggleText.color = k.rgb(...textColorFor(newValue));
                 onChange(newValue);
             });
 
@@ -844,6 +950,16 @@ export function setupSettingsScene(k) {
             });
         });
 
+        // Hover feedback (mirrors profile.js): brighten + pointer cursor
+        resetButton.onHoverUpdate(() => {
+            k.setCursor('pointer');
+            resetButton.color = k.rgb(...UI_COLORS.DANGER_HOVER);
+        });
+        resetButton.onHoverEnd(() => {
+            k.setCursor('default');
+            resetButton.color = k.rgb(...UI_COLORS.DANGER);
+        });
+
         // Initial refresh
         refreshSettings();
 
@@ -867,7 +983,17 @@ export function setupSettingsScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
-        
+
+        // Esc hint under the BACK button (escape already exits the scene)
+        k.add([
+            k.text('(Esc)', { size: UI_TEXT_SIZES.TINY }),
+            k.pos(k.width() / 2 - 80, k.height() - 12),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_TERTIARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
         backButton.onClick(() => {
             if (fromGame) {
                 k.go('game');
@@ -875,7 +1001,17 @@ export function setupSettingsScene(k) {
                 k.go('menu');
             }
         });
-        
+
+        // Hover feedback (mirrors profile.js): brighten + pointer cursor
+        backButton.onHoverUpdate(() => {
+            k.setCursor('pointer');
+            backButton.color = k.rgb(...UI_COLORS.NEUTRAL_HOVER);
+        });
+        backButton.onHoverEnd(() => {
+            k.setCursor('default');
+            backButton.color = k.rgb(...UI_COLORS.NEUTRAL);
+        });
+
         k.onKeyPress('escape', () => {
             if (fromGame) {
                 k.go('game');

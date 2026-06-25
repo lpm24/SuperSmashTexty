@@ -35,15 +35,26 @@ const TABS = {
     GLOBAL: 'global'
 };
 
+// Shared leaderboard column X positions (used by both header and rows).
+// Numeric columns (Score/Floor/Time) treat their position as the RIGHT edge
+// so digits align down the list; Name is the left edge, Rank is centered.
+const LEADERBOARD_COLS = [80, 150, 350, 470, 560];
+
 export function setupLeaderboardsScene(k) {
     k.scene('leaderboards', (args = {}) => {
         const initialTab = args.tab || TABS.DAILY;
         let currentTab = initialTab;
 
         // Pagination settings
-        const ENTRIES_PER_PAGE = 10;
+        const ENTRIES_PER_PAGE = 8;
         const CHARACTERS_PER_PAGE = 5;
         let currentPage = 0; // Used for DAILY, ALL-TIME, and PERSONAL tabs
+
+        // Layout band reserved for the BACK button at the bottom of the screen.
+        // Keep all leaderboard rows + pagination above this so nothing overlaps
+        // the BACK button (mirrors statistics.js viewportBottom pattern).
+        const ROW_HEIGHT = 28; // shrunk from 35 so a full page fits on-canvas
+        const viewportBottom = k.height() - 70;
 
         // Background
         k.add([
@@ -53,9 +64,9 @@ export function setupLeaderboardsScene(k) {
             k.z(UI_Z_LAYERS.BACKGROUND)
         ]);
 
-        // Title
+        // Title (use H1 for consistency with statistics/profile scenes)
         k.add([
-            k.text('LEADERBOARDS', { size: UI_TEXT_SIZES.TITLE }),
+            k.text('LEADERBOARDS', { size: UI_TEXT_SIZES.H1 }),
             k.pos(k.width() / 2, 50),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_PRIMARY),
@@ -76,6 +87,11 @@ export function setupLeaderboardsScene(k) {
         // Content elements (will be destroyed and recreated on tab change)
         let contentElements = [];
 
+        // Monotonic token bumped on every renderContent() call. Async work (the
+        // GLOBAL fetch) captures the token at call time and bails on resolve if
+        // the value has changed (tab switched / scene re-rendered / destroyed).
+        let renderSeq = 0;
+
         // Create tab button
         function createTab(text, tabType, x) {
             const isActive = currentTab === tabType;
@@ -95,7 +111,7 @@ export function setupLeaderboardsScene(k) {
                 k.text(text, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(x, tabY),
                 k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
+                k.color(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT),
                 'tab'
@@ -143,6 +159,9 @@ export function setupLeaderboardsScene(k) {
 
         // Render content based on current tab
         function renderContent() {
+            // Bump the render token so any in-flight async render bails out.
+            renderSeq++;
+
             // Clear previous content
             contentElements.forEach(el => {
                 if (el.exists()) k.destroy(el);
@@ -217,15 +236,19 @@ export function setupLeaderboardsScene(k) {
                 contentElements.push(noData);
             } else {
                 entries.forEach((entry, index) => {
-                    const rowY = headerY + 40 + (index * 35);
+                    const rowY = headerY + 40 + (index * ROW_HEIGHT);
                     const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
                     const globalRank = startIndex + index + 1;
                     renderLeaderboardRow(globalRank, entry, rowY, isPlayer);
                 });
 
-                // Pagination controls
+                // Pagination controls - keep clamped above the BACK button band
                 if (totalPages > 1) {
-                    renderPaginationControls(headerY + 40 + (ENTRIES_PER_PAGE * 35) + 10, totalPages);
+                    const paginationY = Math.min(
+                        headerY + 40 + (ENTRIES_PER_PAGE * ROW_HEIGHT) + 10,
+                        viewportBottom - 20
+                    );
+                    renderPaginationControls(paginationY, totalPages);
                 }
             }
         }
@@ -258,15 +281,19 @@ export function setupLeaderboardsScene(k) {
                 contentElements.push(noData);
             } else {
                 entries.forEach((entry, index) => {
-                    const rowY = headerY + 40 + (index * 35);
+                    const rowY = headerY + 40 + (index * ROW_HEIGHT);
                     const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
                     const globalRank = startIndex + index + 1;
                     renderLeaderboardRow(globalRank, entry, rowY, isPlayer);
                 });
 
-                // Pagination controls
+                // Pagination controls - keep clamped above the BACK button band
                 if (totalPages > 1) {
-                    renderPaginationControls(headerY + 40 + (ENTRIES_PER_PAGE * 35) + 10, totalPages);
+                    const paginationY = Math.min(
+                        headerY + 40 + (ENTRIES_PER_PAGE * ROW_HEIGHT) + 10,
+                        viewportBottom - 20
+                    );
+                    renderPaginationControls(paginationY, totalPages);
                 }
             }
         }
@@ -275,6 +302,23 @@ export function setupLeaderboardsScene(k) {
         function renderPersonalContent() {
             const personalBests = getPersonalBests();
             const characters = Object.keys(CHARACTER_UNLOCKS);
+
+            // If the player has no personal bests for ANY character, show a single
+            // centered empty state instead of a full table of '-- no data --'.
+            const hasAnyBests = characters.some(charKey => personalBests[charKey]);
+            if (!hasAnyBests) {
+                const emptyState = k.add([
+                    k.text('No personal bests yet — play a run!', { size: UI_TEXT_SIZES.BODY }),
+                    k.pos(k.width() / 2, contentY + 80),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_DISABLED),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                contentElements.push(emptyState);
+                return;
+            }
+
             const totalPages = Math.ceil(characters.length / CHARACTERS_PER_PAGE);
 
             // Clamp page to valid range
@@ -388,6 +432,10 @@ export function setupLeaderboardsScene(k) {
             const playerName = getPlayerName() || 'Anonymous';
             const headerY = contentY + 10;
 
+            // Capture the render token so we can bail if the scene re-renders or
+            // the user switches away while the async fetch is still in flight.
+            const mySeq = renderSeq;
+
             // Show loading state initially
             const loadingText = k.add([
                 k.text('Connecting to global leaderboard...', { size: UI_TEXT_SIZES.BODY }),
@@ -399,17 +447,27 @@ export function setupLeaderboardsScene(k) {
             ]);
             contentElements.push(loadingText);
 
-            // Fetch global leaderboard
-            getOnlineLeaderboard(10).then(result => {
+            // Fetch a larger window (100) so we can surface the player's own rank
+            // even when they fall outside the top 10. Race against an 8s timeout
+            // that falls back to the standard error UI below.
+            const FETCH_TIMEOUT_MS = 8000;
+            const timeoutFallback = new Promise(resolve => {
+                k.wait(FETCH_TIMEOUT_MS / 1000, () => {
+                    resolve({ entries: [], totalCount: 0, error: 'Connection timed out' });
+                });
+            });
+
+            Promise.race([getOnlineLeaderboard(100), timeoutFallback]).then(result => {
+                // Bail if this render is stale (tab switched, re-rendered, or the
+                // scene was destroyed) - prevents drawing onto the wrong screen.
+                if (renderSeq !== mySeq || currentTab !== TABS.GLOBAL) return;
+
                 // Remove loading text
                 if (loadingText.exists()) {
                     k.destroy(loadingText);
                     const idx = contentElements.indexOf(loadingText);
                     if (idx > -1) contentElements.splice(idx, 1);
                 }
-
-                // Check if we're still on the GLOBAL tab
-                if (currentTab !== TABS.GLOBAL) return;
 
                 if (result.error) {
                     // Error state
@@ -462,13 +520,14 @@ export function setupLeaderboardsScene(k) {
                     return;
                 }
 
-                const entries = result.entries;
+                const allEntries = result.entries;
+                const topEntries = allEntries.slice(0, 10);
 
                 // Header row
                 renderLeaderboardHeader(headerY);
 
-                // Entries
-                if (entries.length === 0) {
+                // Entries (top 10)
+                if (topEntries.length === 0) {
                     const noData = k.add([
                         k.text('No global entries yet. Be the first!', { size: UI_TEXT_SIZES.BODY }),
                         k.pos(k.width() / 2, headerY + 60),
@@ -479,16 +538,34 @@ export function setupLeaderboardsScene(k) {
                     ]);
                     contentElements.push(noData);
                 } else {
-                    entries.forEach((entry, index) => {
-                        const rowY = headerY + 40 + (index * 35);
+                    topEntries.forEach((entry, index) => {
+                        const rowY = headerY + 40 + (index * ROW_HEIGHT);
                         const isPlayer = entry.name.toLowerCase() === playerName.toLowerCase();
                         renderLeaderboardRow(index + 1, entry, rowY, isPlayer);
                     });
                 }
 
-                // Show total count at bottom
+                // Pin the player's own standing below the top 10 when they exist
+                // in the leaderboard but fall outside the visible window. Keeps the
+                // your-rank affordance consistent with DAILY / ALL-TIME.
+                const playerIndex = allEntries.findIndex(
+                    e => e.name.toLowerCase() === playerName.toLowerCase()
+                );
+                const bottomBaseY = headerY + 40 + (Math.min(topEntries.length, 10) * ROW_HEIGHT);
+                const hasYouRow = playerIndex >= 10;
+
+                if (hasYouRow) {
+                    const playerEntry = allEntries[playerIndex];
+                    const playerRank = playerIndex + 1;
+                    // Clamp the pinned row above the BACK button band.
+                    const youRowY = Math.min(bottomBaseY + 6, viewportBottom - 36);
+                    renderLeaderboardRow(playerRank, playerEntry, youRowY, true);
+                }
+
+                // Show total count at bottom (kept above the BACK button band)
                 if (result.totalCount > 0) {
-                    const totalY = headerY + 40 + (Math.min(entries.length, 10) * 35) + 20;
+                    const baseTotalY = hasYouRow ? bottomBaseY + ROW_HEIGHT + 14 : bottomBaseY + 20;
+                    const totalY = Math.min(baseTotalY, viewportBottom - 10);
                     const totalText = k.add([
                         k.text(`${result.totalCount} player${result.totalCount !== 1 ? 's' : ''} worldwide`, { size: UI_TEXT_SIZES.SMALL }),
                         k.pos(k.width() / 2, totalY),
@@ -619,13 +696,16 @@ export function setupLeaderboardsScene(k) {
         // Render leaderboard header row
         function renderLeaderboardHeader(y) {
             const headers = ['#', 'Name', 'Score', 'Floor', 'Time'];
-            const colPositions = [80, 150, 350, 470, 560];
+            const colPositions = LEADERBOARD_COLS;
 
             headers.forEach((header, i) => {
+                // Numeric columns (Score/Floor/Time = indices 2..4) are right-anchored
+                // so their header lines up with the right-aligned digits below.
+                const anchor = i === 0 ? 'center' : (i >= 2 ? 'right' : 'left');
                 const headerText = k.add([
                     k.text(header, { size: UI_TEXT_SIZES.SMALL }),
                     k.pos(colPositions[i], y),
-                    k.anchor(i === 0 ? 'center' : 'left'),
+                    k.anchor(anchor),
                     k.color(...UI_COLORS.TEXT_SECONDARY),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_TEXT)
@@ -647,7 +727,7 @@ export function setupLeaderboardsScene(k) {
 
         // Render leaderboard row
         function renderLeaderboardRow(rank, entry, y, isHighlighted = false) {
-            const colPositions = [80, 150, 350, 470, 560];
+            const colPositions = LEADERBOARD_COLS;
             const color = isHighlighted ? UI_COLORS.GOLD : UI_COLORS.TEXT_PRIMARY;
             const charData = CHARACTER_UNLOCKS[entry.character] || CHARACTER_UNLOCKS.survivor;
 
@@ -673,51 +753,65 @@ export function setupLeaderboardsScene(k) {
             ]);
             contentElements.push(nameText);
 
-            // Score
+            // Score (right-anchored so digits align down the column)
             const scoreText = k.add([
                 k.text(formatScore(entry.score), { size: UI_TEXT_SIZES.BODY }),
                 k.pos(colPositions[2], y),
-                k.anchor('left'),
+                k.anchor('right'),
                 k.color(...color),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             contentElements.push(scoreText);
 
-            // Floor
+            // Floor (right-anchored so digits align down the column)
             const floorText = k.add([
                 k.text(`${entry.floor}`, { size: UI_TEXT_SIZES.BODY }),
                 k.pos(colPositions[3], y),
-                k.anchor('left'),
+                k.anchor('right'),
                 k.color(...color),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             contentElements.push(floorText);
 
-            // Time
+            // Time (right-anchored so digits align down the column)
             const timeText = k.add([
                 k.text(formatTime(entry.time), { size: UI_TEXT_SIZES.BODY }),
                 k.pos(colPositions[4], y),
-                k.anchor('left'),
+                k.anchor('right'),
                 k.color(...color),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
             contentElements.push(timeText);
 
-            // Highlight background for current player
+            // Highlight background for current player - make it pop with a
+            // stronger fill, a gold outline, and a small 'YOU' marker.
             if (isHighlighted) {
+                const bandWidth = 550;
                 const highlight = k.add([
-                    k.rect(550, 30),
+                    k.rect(bandWidth, 30),
                     k.pos(k.width() / 2, y),
                     k.anchor('center'),
                     k.color(...UI_COLORS.GOLD),
-                    k.opacity(0.1),
+                    k.opacity(0.22),
+                    k.outline(2, k.rgb(...UI_COLORS.GOLD)),
                     k.fixed(),
                     k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
                 ]);
                 contentElements.push(highlight);
+
+                // 'YOU' marker just left of the highlight band
+                const youMarker = k.add([
+                    k.text('YOU', { size: UI_TEXT_SIZES.TINY }),
+                    k.pos(k.width() / 2 - bandWidth / 2 - 6, y),
+                    k.anchor('right'),
+                    k.color(...UI_COLORS.GOLD),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+                contentElements.push(youMarker);
             }
         }
 

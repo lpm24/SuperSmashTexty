@@ -2,7 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <!-- Mobile web-app meta -->
+    <meta name="theme-color" content="#000000">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="description" content="A roguelike arena game with ASCII aesthetics. Fast-paced combat, procedural levels, and up to 4-player co-op via P2P networking.">
     <link rel="canonical" href="https://lpm24.github.io/SuperSmashTexty/">
     <!-- Open Graph / Social Media -->
@@ -20,7 +24,7 @@
         window.dataLayer = window.dataLayer || [];
         function gtag(){dataLayer.push(arguments);}
         gtag('js', new Date());
-        gtag('config', 'G-SXG8M67HPV', { content_group: 'SuperSmashTexty' });
+        gtag('config', 'G-SXG8M67HPV', { cookie_domain: window.location.hostname, content_group: 'SuperSmashTexty' });
     </script>
     <title>SuperSmashTexty</title>
     <script type="application/ld+json">
@@ -52,12 +56,52 @@
         canvas {
             display: block;
         }
+
+        /* Loading screen shown immediately on first paint, removed by JS after k.go('menu') */
+        #loading-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            background: #000;
+            color: #c0c0c0;
+            font-family: monospace;
+            text-align: center;
+            z-index: 9999;
+            animation: loading-pulse 1.2s ease-in-out infinite;
+        }
+
+        #loading-screen .loading-title {
+            font-size: 28px;
+            letter-spacing: 2px;
+            margin-bottom: 12px;
+        }
+
+        #loading-screen .loading-text {
+            font-size: 16px;
+        }
+
+        @keyframes loading-pulse {
+            0%   { opacity: 0.45; }
+            50%  { opacity: 1; }
+            100% { opacity: 0.45; }
+        }
     </style>
     <!-- PeerJS for P2P multiplayer -->
     <script src="https://unpkg.com/peerjs@1.5.4/dist/peerjs.min.js"></script>
 </head>
 <body>
-    <div id="game-container"></div>
+    <div id="game-container">
+        <div id="loading-screen">
+            <div class="loading-title">SuperSmashTexty</div>
+            <div class="loading-text">loading&hellip;</div>
+        </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
 </body>
 </html>

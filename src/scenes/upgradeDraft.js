@@ -1,7 +1,7 @@
 // Upgrade draft UI scene
 import { getRandomUpgrades, applyUpgrade, getUpgradeDescription } from '../systems/upgrades.js';
 import { trackUpgrade, checkAndApplySynergies } from '../systems/synergies.js';
-import { playUpgradeSelect } from '../systems/sounds.js';
+import { playUpgradeSelect, playMenuNav } from '../systems/sounds.js';
 import { isMultiplayerActive, getUpgradeRNG, broadcastUpgradeSelected, broadcastSynergyActivated } from '../systems/multiplayerGame.js';
 import { getPermanentUpgradeLevel } from '../systems/metaProgression.js';
 import {
@@ -97,12 +97,21 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         }
     });
 
-    // Title - show player name in multiplayer
-    const titleText = inMultiplayer && playerName
-        ? `${playerName} - Level Up! Choose an Upgrade`
-        : 'Level Up! Choose an Upgrade';
+    // Title - show player name on its own smaller line in multiplayer
+    // Player name on a separate line so the main title never clips at 800px
+    if (inMultiplayer && playerName) {
+        k.add([
+            k.text(playerName, { size: UI_TEXT_SIZES.H2, width: k.width() - 80 }),
+            k.pos(k.width() / 2, 56),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.MODAL + 1),
+            'upgradeUI'
+        ]);
+    }
     const title = k.add([
-        k.text(titleText, { size: UI_TEXT_SIZES.TITLE }),
+        k.text('Level Up! Choose an Upgrade', { size: UI_TEXT_SIZES.H1, width: k.width() - 80 }),
         k.pos(k.width() / 2, 80),
         k.anchor('center'),
         k.color(...UI_COLORS.WARNING),
@@ -147,26 +156,50 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         upgrades.forEach((upgrade, index) => {
             const cardX = startX + (index * spacing);
 
+            // Category color (passive=SUCCESS, weapon=WARNING, other=INFO)
+            // Used for both the icon tint and the card outline so category is scannable
+            const categoryColor = upgrade.category === 'passive'
+                ? UI_COLORS.SUCCESS
+                : (upgrade.weaponKey ? UI_COLORS.WARNING : UI_COLORS.INFO);
+
             // Card background
             const cardBg = k.add([
                 k.rect(cardWidth, cardHeight),
                 k.pos(cardX, cardY),
                 k.anchor('center'),
                 k.color(...UI_COLORS.BG_MEDIUM),
-                k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+                k.outline(2, k.rgb(...categoryColor)),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.MODAL + 1),
                 k.area(),
+                k.scale(1),
                 'upgradeUI',
                 'upgradeCard'
             ]);
 
+            // Hover feedback: brighten, white border, slight scale up, nav sound
+            cardBg.isHovered = false;
+            cardBg.onHoverUpdate(() => {
+                if (!cardBg.isHovered) {
+                    cardBg.isHovered = true;
+                    playMenuNav();
+                }
+                k.setCursor('pointer');
+                cardBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                cardBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+                cardBg.scale = k.vec2(1.04, 1.04);
+            });
+            cardBg.onHoverEnd(() => {
+                cardBg.isHovered = false;
+                cardBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                cardBg.outline.color = k.rgb(...categoryColor);
+                cardBg.scale = k.vec2(1, 1);
+            });
+
             // Upgrade icon (scale based on card size)
             const iconSize = cardWidth <= 140 ? 32 : 48;
             if (upgrade.icon) {
-                const iconColor = upgrade.category === 'passive'
-                    ? UI_COLORS.SUCCESS
-                    : (upgrade.weaponKey ? UI_COLORS.WARNING : UI_COLORS.INFO);
+                const iconColor = categoryColor;
 
                 k.add([
                     k.text(upgrade.icon, { size: iconSize }),
@@ -181,7 +214,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
             }
 
             // Upgrade name (scale text size based on card width)
-            const nameSize = cardWidth <= 140 ? 12 : UI_TEXT_SIZES.BUTTON;
+            const nameSize = cardWidth <= 140 ? UI_TEXT_SIZES.TINY : UI_TEXT_SIZES.BUTTON;
             k.add([
                 k.text(upgrade.name, { size: nameSize, width: cardWidth - 10 }),
                 k.pos(cardX, cardY - 5),
@@ -208,7 +241,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
             ]);
 
             // Selection number (top-right corner of card)
-            const numSize = cardWidth <= 140 ? 14 : UI_TEXT_SIZES.HEADER;
+            const numSize = cardWidth <= 140 ? UI_TEXT_SIZES.SMALL : UI_TEXT_SIZES.HEADER;
             k.add([
                 k.text(`${index + 1}`, { size: numSize }),
                 k.pos(cardX + cardWidth / 2 - 15, cardY - cardHeight / 2 + 12),
@@ -241,6 +274,7 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
 
     // Create reroll button if player has rerolls
     let rerollText = null;
+    let rerollBox = null;
     if (mulliganLevel > 0) {
         const rerollButton = k.add([
             k.rect(120, 35),
@@ -251,12 +285,35 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL + 1),
             k.area(),
+            k.scale(1),
             'upgradeUI'
         ]);
+        rerollBox = rerollButton;
+
+        // Hover feedback (only while rerolls remain)
+        rerollButton.isHovered = false;
+        rerollButton.onHoverUpdate(() => {
+            if (rerollsRemaining <= 0) return;
+            if (!rerollButton.isHovered) {
+                rerollButton.isHovered = true;
+                playMenuNav();
+            }
+            k.setCursor('pointer');
+            rerollButton.color = k.rgb(...UI_COLORS.BG_LIGHT);
+            rerollButton.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+            rerollButton.scale = k.vec2(1.02, 1.02);
+        });
+        rerollButton.onHoverEnd(() => {
+            rerollButton.isHovered = false;
+            if (rerollsRemaining <= 0) return;
+            rerollButton.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+            rerollButton.outline.color = k.rgb(...UI_COLORS.WARNING);
+            rerollButton.scale = k.vec2(1, 1);
+        });
 
         // Using parentheses instead of square brackets to avoid KAPLAY styled text tag parsing
         rerollText = k.add([
-            k.text(`(R) Reroll (${rerollsRemaining})`, { size: 14 }),
+            k.text(`(R) Reroll (${rerollsRemaining})`, { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, k.height() - 60),
             k.anchor('center'),
             k.color(...UI_COLORS.WARNING),
@@ -285,8 +342,15 @@ export function showUpgradeDraft(k, player, onSelect, playerName = null, levelOv
         if (rerollText && rerollText.exists()) {
             rerollText.text = `(R) Reroll (${rerollsRemaining})`;
             if (rerollsRemaining === 0) {
-                rerollText.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
+                rerollText.color = k.rgb(...UI_COLORS.TEXT_DISABLED);
             }
+        }
+
+        // Gray out the button box once rerolls are exhausted (mirrors disabled Confirm)
+        if (rerollBox && rerollBox.exists() && rerollsRemaining === 0) {
+            rerollBox.color = k.rgb(...UI_COLORS.BG_DISABLED);
+            rerollBox.outline.color = k.rgb(...UI_COLORS.BG_DARK);
+            rerollBox.scale = k.vec2(1, 1);
         }
     }
     

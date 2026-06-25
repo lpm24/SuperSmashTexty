@@ -927,7 +927,8 @@ export function setupCombatSystem(k, player) {
             if (projectile.piercedEnemies) {
                 projectile.piercedEnemies.add(boss);
             }
-            if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+            // Boomerangs return instead of being destroyed on pierce-exhaustion.
+            if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
                 k.destroy(projectile);
             }
             return;
@@ -961,7 +962,8 @@ export function setupCombatSystem(k, player) {
             projectile.piercedEnemies.add(boss);
         }
 
-        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+        // Boomerangs return instead of being destroyed on pierce-exhaustion.
+        if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
             k.destroy(projectile);
         }
 
@@ -1012,7 +1014,8 @@ export function setupCombatSystem(k, player) {
             if (projectile.piercedEnemies) {
                 projectile.piercedEnemies.add(miniboss);
             }
-            if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+            // Boomerangs return instead of being destroyed on pierce-exhaustion.
+            if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
                 k.destroy(projectile);
             }
             return; // Skip damage dealing on client
@@ -1063,9 +1066,10 @@ export function setupCombatSystem(k, player) {
         if (projectile.piercedEnemies) {
             projectile.piercedEnemies.add(miniboss);
         }
-        
-        // Destroy projectile if it can't pierce anymore
-        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+
+        // Destroy projectile if it can't pierce anymore.
+        // Boomerangs return instead of being destroyed on pierce-exhaustion.
+        if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
             k.destroy(projectile);
         }
         

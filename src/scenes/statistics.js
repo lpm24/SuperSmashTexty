@@ -127,6 +127,23 @@ export function setupStatisticsScene(k) {
                 });
             });
 
+            // Hover affordance (mirror leaderboards.js tab pattern; skip when active)
+            tabBg.onHoverUpdate(() => {
+                k.setCursor('pointer');
+                if (currentTab !== tab.key) {
+                    tabBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                    tabBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+                }
+            });
+
+            tabBg.onHoverEnd(() => {
+                k.setCursor('default');
+                if (currentTab !== tab.key) {
+                    tabBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                    tabBg.outline.color = k.rgb(...UI_COLORS.BORDER);
+                }
+            });
+
             tabButtons.push({ bg: tabBg, label: tabLabel, key: tab.key });
         });
 
@@ -148,19 +165,12 @@ export function setupStatisticsScene(k) {
                 return;
             }
 
-            // Update tab visuals
+            // Update tab visuals (route active/inactive through UI_COLORS for consistency)
             tabButtons.forEach(tab => {
                 const isActive = currentTab === tab.key;
-                tab.bg.color = k.rgb(
-                    isActive ? 100 : 50,
-                    isActive ? 100 : 50,
-                    isActive ? 150 : 80
-                );
-                tab.label.color = k.rgb(
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150
-                );
+                tab.bg.color = k.rgb(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM));
+                tab.bg.outline.color = k.rgb(...UI_COLORS.BORDER);
+                tab.label.color = k.rgb(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY));
             });
 
             // Clear existing items
@@ -221,7 +231,7 @@ export function setupStatisticsScene(k) {
                             k.rect(categoryTabWidth, categoryTabHeight),
                             k.pos(catX, categoryTabY),
                             k.anchor('center'),
-                            k.color(isActive ? 80 : 40, isActive ? 80 : 40, isActive ? 120 : 60),
+                            k.color(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM)),
                             k.outline(1, k.rgb(100, 100, 150)),
                             k.area(),
                             k.fixed(),
@@ -232,7 +242,7 @@ export function setupStatisticsScene(k) {
                             k.text(catName, { size: 11 }),
                             k.pos(catX, categoryTabY),
                             k.anchor('center'),
-                            k.color(isActive ? 255 : 150, isActive ? 255 : 150, isActive ? 255 : 150),
+                            k.color(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY)),
                             k.fixed(),
                             k.z(1001)
                         ]);
@@ -248,6 +258,23 @@ export function setupStatisticsScene(k) {
                                 refreshContent();
                                 k.wait(0.1, () => { isNavigating = false; });
                             });
+                        });
+
+                        // Hover affordance (mirror leaderboards.js tab pattern; skip when active)
+                        catBg.onHoverUpdate(() => {
+                            k.setCursor('pointer');
+                            if (!isActive) {
+                                catBg.color = k.rgb(...UI_COLORS.BG_LIGHT);
+                                catBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+                            }
+                        });
+
+                        catBg.onHoverEnd(() => {
+                            k.setCursor('default');
+                            if (!isActive) {
+                                catBg.color = k.rgb(...UI_COLORS.BG_MEDIUM);
+                                catBg.outline.color = k.rgb(100, 100, 150);
+                            }
                         });
 
                         categoryTabItems.push(catBg, catLabel);
@@ -838,14 +865,20 @@ export function setupStatisticsScene(k) {
                     const displayRuns = runHistory.slice(startIndex, endIndex);
 
                     // Header row
+                    // Column 0 (#) is left-anchored; the numeric columns (Floor/Rooms/Kills/
+                    // Level/Credits/Time) are right-anchored so digits line up on the right edge
+                    // of their cell and scan cleanly. headerRightPositions are the cell right edges
+                    // (each sits within its original cell, before the next column starts).
                     const headers = ['#', 'Floor', 'Rooms', 'Kills', 'Level', 'Credits', 'Time'];
-                    const headerPositions = [60, 120, 200, 280, 360, 450, 550];
+                    const headerLeftPositions = [60, 120, 200, 280, 360, 450, 550];
+                    const headerRightPositions = [60, 190, 270, 350, 440, 540, 620];
 
                     headers.forEach((header, i) => {
+                        const isNumeric = i > 0; // '#' stays left-anchored
                         const headerText = k.add([
                             k.text(header, { size: 14 }),
-                            k.pos(headerPositions[i], historyY),
-                            k.anchor('left'),
+                            k.pos(isNumeric ? headerRightPositions[i] : headerLeftPositions[i], historyY),
+                            k.anchor(isNumeric ? 'right' : 'left'),
                             k.color(255, 200, 100),
                             k.fixed(),
                             k.z(1000)
@@ -874,10 +907,11 @@ export function setupStatisticsScene(k) {
                         ];
 
                         rowData.forEach((value, i) => {
+                            const isNumeric = i > 0; // '#' stays left-anchored, numerics right-anchored
                             const cellText = k.add([
                                 k.text(value, { size: 14 }),
-                                k.pos(headerPositions[i], y),
-                                k.anchor('left'),
+                                k.pos(isNumeric ? headerRightPositions[i] : headerLeftPositions[i], y),
+                                k.anchor(isNumeric ? 'right' : 'left'),
                                 k.color(200, 200, 200),
                                 k.fixed(),
                                 k.z(1000)

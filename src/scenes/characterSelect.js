@@ -29,6 +29,12 @@ const CHAR_ANIM = {
     GLOW_MAX: 0.7
 };
 
+// Locked-card styling: a muted-but-present outline (TEXT_DISABLED dimmed) and a
+// slightly darker/desaturated fill so 'locked' reads as a present-but-disabled
+// slot rather than an empty one. Kept local so we don't approximate shared tokens.
+const LOCKED_CARD_OUTLINE = [70, 70, 70]; // TEXT_DISABLED [100,100,100] at lower intensity
+const LOCKED_CARD_FILL = [16, 16, 22];    // slightly darker/desaturated than BG_DARK [20,20,30]
+
 // Helper function to get unlock requirement text
 function getUnlockText(char) {
     if (!char.unlockRequirement) return null;
@@ -139,19 +145,9 @@ export function setupCharacterSelectScene(k) {
             // Since we can't do inline colors, let's just make the whole description look different
             // by adding a separate line for the key stat highlights
 
-            // Find all stat mentions and create a summary line
-            if (matches.length > 0) {
-                const statSummary = matches.join(' | ');
-                const highlightText = k.add([
-                    k.text(statSummary, { size: UI_TEXT_SIZES.TINY }),
-                    k.pos(x, y + 28),
-                    k.anchor('center'),
-                    k.color(...UI_COLORS.GOLD),
-                    k.fixed(),
-                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
-                ]);
-                elements.push(highlightText);
-            }
+            // (Removed redundant gold stat-summary line: the description already
+            // states the stats, and the summary could collide with the wrapped
+            // description and emitted garbled partial matches.)
 
             return elements;
         };
@@ -224,8 +220,8 @@ export function setupCharacterSelectScene(k) {
                     k.rect(cardWidth, cardHeight),
                     k.pos(cardX, cardY),
                     k.anchor('topleft'),
-                    k.color(...(isViewed ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK)),
-                    k.outline(2, isViewed ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...UI_COLORS.BG_DARK))),
+                    k.color(...(isViewed ? UI_COLORS.BG_MEDIUM : (isUnlockedChar ? UI_COLORS.BG_DARK : LOCKED_CARD_FILL))),
+                    k.outline(2, isViewed ? k.rgb(...UI_COLORS.BORDER_ACTIVE) : (isUnlockedChar ? k.rgb(...UI_COLORS.TEXT_DISABLED) : k.rgb(...LOCKED_CARD_OUTLINE))),
                     k.area(),
                     k.fixed(),
                     k.scale(1),
@@ -290,7 +286,7 @@ export function setupCharacterSelectScene(k) {
                     cardBg.scale = k.vec2(1, 1);
                     charVisual.scale = k.vec2(1, 1);
                     nameText.scale = k.vec2(1, 1);
-                    cardBg.color = k.rgb(...(isViewed ? UI_COLORS.BG_MEDIUM : UI_COLORS.BG_DARK));
+                    cardBg.color = k.rgb(...(isViewed ? UI_COLORS.BG_MEDIUM : (isUnlockedChar ? UI_COLORS.BG_DARK : LOCKED_CARD_FILL)));
                     charVisual.pos.y = charVisual.baseY;
                 });
 
@@ -570,6 +566,8 @@ export function setupCharacterSelectScene(k) {
             const statRowHeight = 24;
 
             // Health stat bar (max 175 - characters range 60-150)
+            // Neutral fill (INFO) instead of percentage coloring, which implied
+            // good/bad; bar length + number already convey magnitude.
             const healthBar = createStatBar(k, {
                 label: UI_TERMS.HEALTH,
                 value: viewedChar.stats.health,
@@ -577,7 +575,7 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                usePercentageColor: true
+                color: UI_COLORS.INFO
             });
             detailItems.push(...healthBar.elements);
             detailY += statRowHeight;
@@ -590,7 +588,7 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                usePercentageColor: true
+                color: UI_COLORS.INFO
             });
             detailItems.push(...speedBar.elements);
             detailY += statRowHeight;
@@ -603,7 +601,7 @@ export function setupCharacterSelectScene(k) {
                 x: statBarX,
                 y: detailY,
                 width: statBarWidth,
-                usePercentageColor: true
+                color: UI_COLORS.INFO
             });
             detailItems.push(...damageBar.elements);
             detailY += 30;
@@ -669,22 +667,45 @@ export function setupCharacterSelectScene(k) {
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
             k.area(),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.UI_ELEMENTS)
         ]);
 
-        k.add([
+        const cancelText = k.add([
             k.text(formatButtonText('Cancel'), { size: UI_TEXT_SIZES.BODY }),
             k.pos(k.width() / 2 - 70, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
+            k.scale(1),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
+
+        // Hover effect (mirrors Confirm/createButton hovered buttons)
+        cancelButton.isHovered = false;
+        cancelButton.onHoverUpdate(() => {
+            if (!cancelButton.isHovered) {
+                cancelButton.isHovered = true;
+                playMenuNav();
+            }
+            cancelButton.color = k.rgb(...UI_COLORS.NEUTRAL_HOVER);
+            cancelButton.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+            cancelButton.scale = k.vec2(1.02, 1.02);
+            cancelText.scale = k.vec2(1.02, 1.02);
+        });
+        cancelButton.onHoverEnd(() => {
+            cancelButton.isHovered = false;
+            cancelButton.color = k.rgb(...UI_COLORS.NEUTRAL);
+            cancelButton.outline.color = k.rgb(...UI_COLORS.BORDER);
+            cancelButton.scale = k.vec2(1, 1);
+            cancelText.scale = k.vec2(1, 1);
+        });
 
         cancelButton.onClick(() => {
             playMenuNav();
             k.go('menu');
         });
+        cancelButton.cursor = 'pointer';
 
         // Confirm button (right side) - track for enabling/disabling
         let confirmButton = null;

@@ -121,26 +121,64 @@ export function setupShopScene(k) {
 
         // Flag to prevent double-handling of pagination clicks in same frame
         let paginationClickHandled = false;
-        
+
+        // Styled feedback toast: small panel + outline colored by intent, anchored
+        // just above the back bar (instead of dead-center over the clicked card),
+        // held ~1.2s then faded out. Replaces the old plain center-screen text.
+        function showToast(message, accentColor) {
+            const toastWidth = 240;
+            const toastHeight = 36;
+            const toastX = k.width() / 2;
+            const toastY = k.height() - 95; // just above the refund/back bar
+
+            const toastBg = k.add([
+                k.rect(toastWidth, toastHeight),
+                k.pos(toastX, toastY),
+                k.anchor('center'),
+                k.color(...UI_COLORS.BG_DARK),
+                k.outline(2, k.rgb(...accentColor)),
+                k.opacity(0.95),
+                k.fixed(),
+                k.z(2000)
+            ]);
+
+            const toastLabel = k.add([
+                k.text(message, { size: UI_TEXT_SIZES.SMALL }),
+                k.pos(toastX, toastY),
+                k.anchor('center'),
+                k.color(...accentColor),
+                k.opacity(1),
+                k.fixed(),
+                k.z(2001)
+            ]);
+
+            // Hold ~1.2s, then a short fade-out (mirrors game.js boosterText pattern)
+            k.wait(1.2, () => {
+                if (toastBg.exists()) {
+                    k.tween(toastBg.opacity, 0, 0.3, (val) => toastBg.opacity = val, k.easings.easeOutQuad).onEnd(() => {
+                        if (toastBg.exists()) k.destroy(toastBg);
+                    });
+                }
+                if (toastLabel.exists()) {
+                    k.tween(toastLabel.opacity, 0, 0.3, (val) => toastLabel.opacity = val, k.easings.easeOutQuad).onEnd(() => {
+                        if (toastLabel.exists()) k.destroy(toastLabel);
+                    });
+                }
+            });
+        }
+
         // Refresh shop display
         function refreshShop() {
             // Update currency display
             const currentCurrency = getCurrency();
             creditIndicator.updateCurrency(currentCurrency);
             
-            // Update tab visuals
+            // Update tab visuals (reuse the SAME tokens used at creation so the
+            // strip doesn't shift colors on first refresh)
             tabButtons.forEach(tab => {
                 const isActive = currentCategory === tab.category;
-                tab.bg.color = k.rgb(
-                    isActive ? 100 : 50,
-                    isActive ? 100 : 50,
-                    isActive ? 150 : 80
-                );
-                tab.label.color = k.rgb(
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150,
-                    isActive ? 255 : 150
-                );
+                tab.bg.color = k.rgb(...(isActive ? UI_COLORS.SECONDARY : UI_COLORS.BG_MEDIUM));
+                tab.label.color = k.rgb(...(isActive ? UI_COLORS.TEXT_PRIMARY : UI_COLORS.TEXT_TERTIARY));
             });
             
             // Update refund button visibility
@@ -393,8 +431,20 @@ export function setupShopScene(k) {
                     }
                 }
 
+                // Constrain description to 2 lines max so it can never overlap the
+                // bottom action row (descY=itemY+30, bottom row at itemY+cardHeight-28).
+                // At size 12 we fit ~6px/char; cap to ~2 lines worth of chars and add
+                // an ellipsis when the real string is longer (longest char/unlock strings).
+                const DESC_FONT_SIZE = 12;
+                const charsPerDescLine = Math.max(8, Math.floor(descWidth / (DESC_FONT_SIZE * 0.5)));
+                const maxDescChars = charsPerDescLine * 2;
+                let displayDescription = descriptionText;
+                if (displayDescription && displayDescription.length > maxDescChars) {
+                    displayDescription = displayDescription.slice(0, maxDescChars - 1).trimEnd() + '…';
+                }
+
                 const descText = k.add([
-                    k.text(descriptionText, { size: 12, width: descWidth }),
+                    k.text(displayDescription, { size: DESC_FONT_SIZE, width: descWidth }),
                     k.pos(contentStartX, descY),
                     k.anchor('topleft'),
                     k.color(isAchievementLocked ? 140 : 180, isAchievementLocked ? 110 : 180, isAchievementLocked ? 110 : 180),
@@ -472,7 +522,7 @@ export function setupShopScene(k) {
                 } else if (currentCategory === 'boosters') {
                     const boosterCount = getActiveBoostersCount(key);
                     statusText = boosterCount > 0 ? `Ready (${boosterCount})` : 'Consumable';
-                    canPurchase = currency >= purchaseCost;
+                    canPurchase = currentCurrency >= purchaseCost;
                 } else if (currentCategory === 'cosmetics') {
                     const cosmeticType = unlock.category;
                     if (isEquippedCosmetic) {
@@ -625,12 +675,24 @@ export function setupShopScene(k) {
                     ]);
                     unlockItems.push(lockedText);
                 } else if (canPurchase || (currentCategory === 'permanentUpgrades' && progressLevel < progressMax)) {
+                    // Enabled (affordable) vs disabled (can't afford) base colors.
+                    // Disabled gets a clearer dimmed treatment so it reads as inactive.
+                    const enabledBgColor = [40, 120, 40];
+                    const enabledOutlineColor = [80, 180, 80];
+                    const enabledTextColor = UI_COLORS.TEXT_PRIMARY; // [255,255,255]
+                    const disabledBgColor = UI_COLORS.BG_DISABLED; // [60,60,60]
+                    const disabledOutlineColor = UI_COLORS.NEUTRAL; // [100,100,120]
+                    const disabledTextColor = UI_COLORS.TEXT_DISABLED; // [100,100,100]
+
+                    const baseBgColor = canPurchase ? enabledBgColor : disabledBgColor;
+                    const baseOutlineColor = canPurchase ? enabledOutlineColor : disabledOutlineColor;
+
                     const buttonBg = k.add([
                         k.rect(buttonWidth, buttonHeight),
                         k.pos(buttonX, bottomY),
                         k.anchor('topleft'),
-                        k.color(canPurchase ? 40 : 30, canPurchase ? 120 : 40, canPurchase ? 40 : 30),
-                        k.outline(1, k.rgb(canPurchase ? 80 : 50, canPurchase ? 180 : 60, canPurchase ? 80 : 50)),
+                        k.color(...baseBgColor),
+                        k.outline(1, k.rgb(...baseOutlineColor)),
                         k.area(),
                         k.fixed(),
                         k.z(1001)
@@ -640,14 +702,44 @@ export function setupShopScene(k) {
                         k.text(`$${purchaseCost}`, { size: 12 }),
                         k.pos(buttonX + buttonWidth / 2, bottomY + buttonHeight / 2),
                         k.anchor('center'),
-                        k.color(canPurchase ? 255 : 120, canPurchase ? 255 : 120, canPurchase ? 255 : 120),
+                        k.color(...(canPurchase ? enabledTextColor : disabledTextColor)),
                         k.fixed(),
                         k.z(1002)
                     ]);
-                    
+
+                    // Hover affordance for the purchase button (mirror VIEW/EQUIP/UNEQUIP
+                    // siblings) so it matches the rest of the card's interactive buttons.
+                    if (canPurchase) {
+                        buttonBg.onHover(() => {
+                            buttonBg.color = k.rgb(...UI_COLORS.PRIMARY_HOVER); // [120,220,120]
+                            buttonBg.outline.color = k.rgb(...UI_COLORS.BORDER_HOVER);
+                            buttonText.color = k.rgb(...UI_COLORS.TEXT_PRIMARY);
+                        });
+                        buttonBg.onHoverEnd(() => {
+                            buttonBg.color = k.rgb(...enabledBgColor);
+                            buttonBg.outline.color = k.rgb(...enabledOutlineColor);
+                            buttonText.color = k.rgb(...enabledTextColor);
+                        });
+                        buttonBg.cursor = 'pointer';
+                    }
+
+
                     // Add right-click handler for permanent upgrades (refund single level)
                     if (currentCategory === 'permanentUpgrades') {
                         if (progressLevel > 0) {
+                            // Discoverability hint for the (otherwise hidden) right-click
+                            // refund. Tiny microtext near the price; does not change the
+                            // refund logic itself.
+                            const refundHint = k.add([
+                                k.text('↺ R-click: refund', { size: UI_TEXT_SIZES.MICRO }),
+                                k.pos(itemX + cardWidth - 10, bottomY - 12),
+                                k.anchor('topright'),
+                                k.color(...UI_COLORS.TEXT_TERTIARY),
+                                k.fixed(),
+                                k.z(1001)
+                            ]);
+                            unlockItems.push(refundHint);
+
                             // Use global mouse release event to detect right-click
                             let rightClickHandler = null;
                             rightClickHandler = k.onMouseRelease('right', () => {
@@ -666,20 +758,9 @@ export function setupShopScene(k) {
                                         // Play purchase success sound (reusing for refund)
                                         playPurchaseSuccess();
                                         
-                                        // Refund successful
-                                        const refundMsg = k.add([
-                                            k.text(`Refunded $${result.refundAmount}!`, { size: 20 }),
-                                            k.pos(k.width() / 2, k.height() / 2),
-                                            k.anchor('center'),
-                                            k.color(100, 200, 255),
-                                            k.fixed(),
-                                            k.z(2000)
-                                        ]);
-                                        
-                                        k.wait(0.5, () => {
-                                            if (refundMsg.exists()) k.destroy(refundMsg);
-                                        });
-                                        
+                                        // Refund successful (info/blue accent)
+                                        showToast(`Refunded $${result.refundAmount}!`, UI_COLORS.INFO);
+
                                         // Refresh shop and reset flag
                                         refreshShop();
                                         k.wait(0.2, () => {
@@ -724,18 +805,7 @@ export function setupShopScene(k) {
 
                                     // Purchase successful - different message for boosters
                                     const msgText = currentCategory === 'boosters' ? 'Booster Ready!' : 'Purchased!';
-                                    const successMsg = k.add([
-                                        k.text(msgText, { size: 20 }),
-                                        k.pos(k.width() / 2, k.height() / 2),
-                                        k.anchor('center'),
-                                        k.color(100, 255, 100),
-                                        k.fixed(),
-                                        k.z(2000)
-                                    ]);
-
-                                    k.wait(0.5, () => {
-                                        if (successMsg.exists()) k.destroy(successMsg);
-                                    });
+                                    showToast(msgText, UI_COLORS.SUCCESS);
 
                                     // Refresh shop and reset purchasing flag with delay to prevent double-purchase
                                     refreshShop();
@@ -747,18 +817,7 @@ export function setupShopScene(k) {
                                     playPurchaseError();
 
                                     // Not enough currency
-                                    const errorMsg = k.add([
-                                        k.text(`Not enough ${currencyName}!`, { size: 20 }),
-                                        k.pos(k.width() / 2, k.height() / 2),
-                                        k.anchor('center'),
-                                        k.color(255, 100, 100),
-                                        k.fixed(),
-                                        k.z(2000)
-                                    ]);
-
-                                    k.wait(0.5, () => {
-                                        if (errorMsg.exists()) k.destroy(errorMsg);
-                                    });
+                                    showToast(`Not enough ${currencyName}!`, UI_COLORS.ERROR);
 
                                     // Reset purchasing flag
                                     isPurchasing = false;
@@ -773,18 +832,7 @@ export function setupShopScene(k) {
                                     playPurchaseSuccess();
 
                                     // Purchase successful
-                                    const successMsg = k.add([
-                                        k.text('Purchased!', { size: 20 }),
-                                        k.pos(k.width() / 2, k.height() / 2),
-                                        k.anchor('center'),
-                                        k.color(100, 255, 100),
-                                        k.fixed(),
-                                        k.z(2000)
-                                    ]);
-
-                                    k.wait(0.5, () => {
-                                        if (successMsg.exists()) k.destroy(successMsg);
-                                    });
+                                    showToast('Purchased!', UI_COLORS.SUCCESS);
 
                                     // Refresh shop and reset purchasing flag with delay to prevent double-purchase
                                     refreshShop();
@@ -796,19 +844,8 @@ export function setupShopScene(k) {
                                     playPurchaseError();
 
                                     // Not enough currency
-                                    const errorMsg = k.add([
-                                        k.text(`Not enough ${currencyName}!`, { size: 20 }),
-                                        k.pos(k.width() / 2, k.height() / 2),
-                                        k.anchor('center'),
-                                        k.color(255, 100, 100),
-                                        k.fixed(),
-                                        k.z(2000)
-                                    ]);
+                                    showToast(`Not enough ${currencyName}!`, UI_COLORS.ERROR);
 
-                                    k.wait(0.5, () => {
-                                        if (errorMsg.exists()) k.destroy(errorMsg);
-                                    });
-                                    
                                     // Reset purchasing flag
                                     isPurchasing = false;
                                 }

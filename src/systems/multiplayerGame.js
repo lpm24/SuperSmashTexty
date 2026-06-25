@@ -242,13 +242,14 @@ function setupHostHandlers() {
         // Apply upgrade to the player on host side
         const player = mpGame.players.get(payload.slotIndex);
         if (player && player.exists()) {
+            // applyUpgrade() already increments player.upgradeStacks (clamped to the
+            // upgrade's max) and recalculates. Do NOT increment again here, or the host
+            // double-counts every stack and blows past the cap.
             applyUpgrade(player, payload.upgradeKey);
-            // Track the upgrade in upgradeStacks for proper persistence
-            if (!player.upgradeStacks) player.upgradeStacks = {};
-            player.upgradeStacks[payload.upgradeKey] = (player.upgradeStacks[payload.upgradeKey] || 0) + 1;
-            // Track in selectedUpgrades for synergy detection
+            // Track in selectedUpgrades for synergy detection (applyUpgrade does not)
             if (!player.selectedUpgrades) player.selectedUpgrades = new Set();
             player.selectedUpgrades.add(payload.upgradeKey);
+            // Recalculate again now that the synergy set is updated
             recalculateAllUpgrades(player);
         }
 

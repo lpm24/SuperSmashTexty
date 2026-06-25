@@ -270,7 +270,7 @@ export function setupProfileScene(k) {
         const portraitY = cardY + cardHeight / 2;
         const currentPortrait = getPortraitById(selectedPortraitId) || PORTRAITS.default;
 
-        k.add([
+        const heroPortraitBox = k.add([
             k.rect(portraitSize, portraitSize),
             k.pos(portraitX, portraitY),
             k.anchor('center'),
@@ -492,13 +492,86 @@ export function setupProfileScene(k) {
         let selectedInfoText = null;
         let selectedDescText = null;
 
+        // Track portrait box refs so unlocked selection can update visuals in place
+        const portraitBoxRefs = [];
+
         function updateSelectedInfo(portrait) {
             if (selectedInfoText && selectedInfoText.exists()) {
                 selectedInfoText.text = `Selected: "${portrait.name}"`;
+                selectedInfoText.color = k.rgb(...UI_COLORS.GOLD);
             }
             if (selectedDescText && selectedDescText.exists()) {
                 selectedDescText.text = portrait.description;
+                selectedDescText.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
             }
+        }
+
+        // Refresh selection visuals in place (border/box) for all portrait boxes
+        function refreshSelectionVisuals() {
+            portraitBoxRefs.forEach((ref) => {
+                const nowSelected = ref.id === selectedPortraitId;
+                ref.isSelected = nowSelected;
+                ref.boxColor = ref.isUnlocked
+                    ? (nowSelected ? [80, 100, 140] : UI_COLORS.BG_LIGHT)
+                    : [40, 40, 50];
+                const newBorder = nowSelected
+                    ? UI_COLORS.GOLD
+                    : (ref.isUnlocked ? ref.portrait.color : [80, 80, 80]);
+                if (ref.box && ref.box.exists()) {
+                    ref.box.color = k.rgb(...ref.boxColor);
+                    ref.box.outline.width = nowSelected ? 3 : 2;
+                    ref.box.outline.color = k.rgb(...newBorder);
+                }
+            });
+
+            // Also refresh the large hero portrait so it reflects the new selection
+            // (previously this only updated after a full k.go('profile') scene reload)
+            const heroSel = getPortraitById(selectedPortraitId) || PORTRAITS.default;
+            if (heroPortraitBox && heroPortraitBox.exists()) {
+                heroPortraitBox.outline.color = k.rgb(...(heroSel.color || [200, 200, 200]));
+            }
+            if (portraitIcon && portraitIcon.exists()) {
+                portraitIcon.text = heroSel.icon;
+                portraitIcon.color = k.rgb(...(heroSel.color || [200, 200, 200]));
+            }
+        }
+
+        // Small hover tooltip for locked-portrait requirements (created once, reused).
+        // Uses the dedicated TOOLTIP layer so it renders above portrait icons/names.
+        const lockTooltipBg = k.add([
+            k.rect(10, 22),
+            k.pos(0, 0),
+            k.anchor('center'),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(2, k.rgb(...UI_COLORS.DANGER)),
+            k.fixed(),
+            k.opacity(0),
+            k.z(UI_Z_LAYERS.TOOLTIP)
+        ]);
+        const lockTooltipText = k.add([
+            k.text('', { size: UI_TEXT_SIZES.TINY }),
+            k.pos(0, 0),
+            k.anchor('center'),
+            k.color(...UI_COLORS.WARNING),
+            k.fixed(),
+            k.opacity(0),
+            k.z(UI_Z_LAYERS.TOOLTIP + 1)
+        ]);
+
+        function showLockTooltip(text, x, y) {
+            lockTooltipText.text = text;
+            // Size bg to fit text (approx TINY char width ~6px) with padding
+            const w = Math.max(60, text.length * 6 + 16);
+            lockTooltipBg.width = w;
+            lockTooltipText.pos = k.vec2(x, y);
+            lockTooltipBg.pos = k.vec2(x, y);
+            lockTooltipText.opacity = 1;
+            lockTooltipBg.opacity = 0.95;
+        }
+
+        function hideLockTooltip() {
+            lockTooltipText.opacity = 0;
+            lockTooltipBg.opacity = 0;
         }
 
         allPortraits.forEach((portrait, index) => {
@@ -532,6 +605,17 @@ export function setupProfileScene(k) {
                 k.z(UI_Z_LAYERS.UI_ELEMENTS)
             ].filter(Boolean));
 
+            // Register box ref so selection visuals can update in place (no scene reload)
+            const boxRef = {
+                id: portrait.id,
+                portrait,
+                box: portraitBox,
+                isUnlocked,
+                isSelected,
+                boxColor
+            };
+            portraitBoxRefs.push(boxRef);
+
             // Portrait icon (show icon even when locked, grayed out communicates lock)
             const displayColor = isUnlocked ? portrait.color : [80, 80, 80];
             const iconText = k.add([
@@ -557,32 +641,39 @@ export function setupProfileScene(k) {
             // Click handler - only for own profile
             if (!isViewingOther) {
                 portraitBox.onClick(() => {
-                    if (isUnlocked) {
+                    if (boxRef.isUnlocked) {
                         playMenuSelect();
                         setSelectedPortrait(portrait.id);
                         selectedPortraitId = portrait.id;
-                        // Update UI - would need to refresh scene
+                        // Update selection visuals in place (no full scene reload)
                         updateSelectedInfo(portrait);
-                        k.go('profile'); // Refresh scene to show new selection
+                        refreshSelectionVisuals();
                     } else {
                         playMenuNav();
-                        // Show unlock requirement
+                        // Show unlock requirement near the clicked icon (tooltip)
                         const desc = getPortraitUnlockDescription(portrait.id);
-                        if (selectedDescText && selectedDescText.exists()) {
-                            selectedDescText.text = `Locked: ${desc}`;
-                            selectedDescText.color = k.rgb(...UI_COLORS.DANGER);
-                        }
+                        showLockTooltip(`🔒 ${desc}`, x, y - iconSize / 2 - 12);
                     }
                 });
 
                 portraitBox.onHoverUpdate(() => {
-                    if (!isSelected) {
-                        portraitBox.color = k.rgb(...(isUnlocked ? [100, 120, 160] : [50, 50, 60]));
+                    k.setCursor('pointer');
+                    if (!boxRef.isSelected) {
+                        portraitBox.color = k.rgb(...(boxRef.isUnlocked ? [100, 120, 160] : [50, 50, 60]));
+                    }
+                    // Show locked requirement as a tooltip by the hovered icon
+                    if (!boxRef.isUnlocked) {
+                        const desc = getPortraitUnlockDescription(portrait.id);
+                        showLockTooltip(`🔒 ${desc}`, x, y - iconSize / 2 - 12);
                     }
                 });
                 portraitBox.onHoverEnd(() => {
-                    if (!isSelected) {
-                        portraitBox.color = k.rgb(...boxColor);
+                    k.setCursor('default');
+                    if (!boxRef.isSelected) {
+                        portraitBox.color = k.rgb(...boxRef.boxColor);
+                    }
+                    if (!boxRef.isUnlocked) {
+                        hideLockTooltip();
                     }
                 });
             }
@@ -624,6 +715,11 @@ export function setupProfileScene(k) {
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
 
+        // Left gutter reserved for row-group labels so the 3-row grouping reads as intentional
+        const statsGutter = 64;
+        const statsGridX = cardX - cardWidth / 2 + statsGutter;
+        const statsGridWidth = cardWidth - statsGutter;
+
         // Stats display - Three rows (use profileStats for both local and external)
         const stats = profileStats;
         const totalRuns = stats.totalRuns || 0;
@@ -646,29 +742,60 @@ export function setupProfileScene(k) {
             { label: 'Fastest Run', value: fastestDisplay }
         ];
 
-        const statWidth = cardWidth / row1Stats.length;
-        row1Stats.forEach((stat, index) => {
-            const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 15;
+        const statWidth = statsGridWidth / row1Stats.length;
 
+        // Shared renderer so all three rows have identical value styling (size + color).
+        // Gold is reserved only for the row-group labels (the intentional accent).
+        const ROW_LABEL_OFFSET = 16;
+        function renderStatRow(rowStats, rowY, groupLabel) {
+            // Row-group label in the left gutter, vertically centered on the row
             k.add([
-                k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(x, y),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_SECONDARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-
-            k.add([
-                k.text(String(stat.value), { size: UI_TEXT_SIZES.LABEL }),
-                k.pos(x, y + 16),
-                k.anchor('center'),
+                k.text(groupLabel, { size: UI_TEXT_SIZES.TINY }),
+                k.pos(cardX - cardWidth / 2 + 10, rowY + ROW_LABEL_OFFSET / 2),
+                k.anchor('left'),
                 k.color(...UI_COLORS.GOLD),
                 k.fixed(),
                 k.z(UI_Z_LAYERS.UI_TEXT)
             ]);
+
+            rowStats.forEach((stat, index) => {
+                const x = statsGridX + statWidth * index + statWidth / 2;
+
+                k.add([
+                    k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(x, rowY),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_SECONDARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+
+                k.add([
+                    k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
+                    k.pos(x, rowY + ROW_LABEL_OFFSET),
+                    k.anchor('center'),
+                    k.color(...UI_COLORS.TEXT_PRIMARY),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT)
+                ]);
+            });
+        }
+
+        // Subtle separators between the three row-groups
+        const statsSepColor = [80, 80, 100];
+        [statsY + 38, statsY + 73].forEach((sepY) => {
+            k.add([
+                k.rect(statsGridWidth - 8, 1),
+                k.pos(statsGridX + 4, sepY),
+                k.anchor('left'),
+                k.color(...statsSepColor),
+                k.opacity(0.6),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.UI_BACKGROUND + 1)
+            ]);
         });
+
+        renderStatRow(row1Stats, statsY + 12, 'RECORDS');
 
         // Row 2: Combat stats (5 columns)
         const row2Stats = [
@@ -679,28 +806,7 @@ export function setupProfileScene(k) {
             { label: 'Avg Rooms', value: avgRooms }
         ];
 
-        row2Stats.forEach((stat, index) => {
-            const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 50;
-
-            k.add([
-                k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(x, y),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_SECONDARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-
-            k.add([
-                k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(x, y + 14),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-        });
+        renderStatRow(row2Stats, statsY + 47, 'COMBAT');
 
         // Row 3: Currency stats (5 columns)
         const row3Stats = [
@@ -716,28 +822,7 @@ export function setupProfileScene(k) {
             })() }
         ];
 
-        row3Stats.forEach((stat, index) => {
-            const x = cardX - cardWidth / 2 + statWidth * index + statWidth / 2;
-            const y = statsY + 85;
-
-            k.add([
-                k.text(stat.label, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                k.pos(x, y),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_SECONDARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-
-            k.add([
-                k.text(String(stat.value), { size: UI_TEXT_SIZES.SMALL }),
-                k.pos(x, y + 14),
-                k.anchor('center'),
-                k.color(...UI_COLORS.TEXT_PRIMARY),
-                k.fixed(),
-                k.z(UI_Z_LAYERS.UI_TEXT)
-            ]);
-        });
+        renderStatRow(row3Stats, statsY + 82, 'ECONOMY');
 
         // ==========================================
         // BACK BUTTON
@@ -760,6 +845,16 @@ export function setupProfileScene(k) {
             k.pos(k.width() / 2, k.height() - 40),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        // Esc hint next to BACK
+        k.add([
+            k.text('(Esc)', { size: UI_TEXT_SIZES.TINY }),
+            k.pos(k.width() / 2 + SM.width / 2 + 8, k.height() - 40),
+            k.anchor('left'),
+            k.color(...UI_COLORS.TEXT_TERTIARY),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);

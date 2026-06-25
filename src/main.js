@@ -39,3 +39,6 @@ setupProfileScene(k);
 // Start with menu
 k.go('menu');
 
+// Engine is booted and the menu scene is live; remove the static loading screen
+document.getElementById('loading-screen')?.remove();
+

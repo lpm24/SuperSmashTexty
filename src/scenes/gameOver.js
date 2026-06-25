@@ -16,11 +16,8 @@ import {
     UI_SIZES,
     UI_TEXT_SIZES,
     UI_COLORS,
-    UI_Z_LAYERS,
-    UI_TERMS,
-    createProgressBar
+    UI_Z_LAYERS
 } from '../config/uiConfig.js';
-import { createButton } from '../config/uiComponents.js';
 
 // Get enemy name from data files, with fallback to type key
 function getEnemyName(type) {
@@ -162,9 +159,9 @@ export function setupGameOverScene(k) {
         // ==========================================
         const headerY = 25;
 
-        // Title
+        // Title - secondary to the score below
         k.add([
-            k.text('BROADCAST TERMINATED', { size: 28 }),
+            k.text('BROADCAST TERMINATED', { size: 20 }),
             k.pos(k.width() / 2, headerY),
             k.anchor('center'),
             k.color(...UI_COLORS.DANGER),
@@ -172,20 +169,38 @@ export function setupGameOverScene(k) {
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
-        // Score display - large and centered
+        // Score display - dominant element, large and centered
         k.add([
-            k.text(`SCORE: ${formatScore(score)}`, { size: 22 }),
-            k.pos(k.width() / 2, headerY + 32),
+            k.text(`SCORE: ${formatScore(score)}`, { size: 28 }),
+            k.pos(k.width() / 2, headerY + 27),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
             k.fixed(),
             k.z(UI_Z_LAYERS.MODAL)
         ]);
 
+        // Personal best / new record accent - bright and prominent right under the score
+        let bestAccentText = '';
+        if (isDailyRun && leaderboardResult.dailyRank === 1) {
+            bestAccentText = 'NEW RECORD';
+        } else if (!isDailyRun && leaderboardResult.isNewBest) {
+            bestAccentText = 'PERSONAL BEST';
+        }
+        if (bestAccentText) {
+            k.add([
+                k.text(bestAccentText, { size: 16 }),
+                k.pos(k.width() / 2, headerY + 48),
+                k.anchor('center'),
+                k.color(...UI_COLORS.SUCCESS),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL)
+            ]);
+        }
+
         // Run summary - compact horizontal
         k.add([
             k.text(`Floor ${runStats.floorsReached} | ${runStats.roomsCleared} Rooms | ${runStats.enemiesKilled} Kills | ${Math.floor(duration)}s`, { size: 12 }),
-            k.pos(k.width() / 2, headerY + 54),
+            k.pos(k.width() / 2, headerY + 62),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
@@ -197,14 +212,12 @@ export function setupGameOverScene(k) {
         // ==========================================
         const rankRowY = headerY + 75;
 
-        // Build rank display strings
+        // Build rank display strings (PERSONAL BEST / NEW RECORD surfaced near the score above)
         let localRankText = '';
         if (isDailyRun && leaderboardResult.dailyRank) {
             localRankText = `Daily #${leaderboardResult.dailyRank}`;
-            if (leaderboardResult.dailyRank === 1) localRankText += ' NEW RECORD!';
         } else if (leaderboardResult.rank) {
             localRankText = `All-Time #${leaderboardResult.rank}`;
-            if (leaderboardResult.isNewBest) localRankText += ' PERSONAL BEST!';
         }
 
         if (localRankText) {
@@ -396,11 +409,20 @@ export function setupGameOverScene(k) {
 
         // Helper to show award info modal
         let activeAwardModal = null;
-        function showAwardModal(award, player) {
-            // Remove any existing modal
+        let activeAwardEscHandler = null;
+        function closeAwardModal() {
             if (activeAwardModal) {
                 activeAwardModal.forEach(e => { if (e.exists()) k.destroy(e); });
+                activeAwardModal = null;
             }
+            if (activeAwardEscHandler) {
+                activeAwardEscHandler.cancel();
+                activeAwardEscHandler = null;
+            }
+        }
+        function showAwardModal(award, player) {
+            // Remove any existing modal
+            closeAwardModal();
 
             const modalWidth = 220;
             const modalHeight = 100;
@@ -408,6 +430,20 @@ export function setupGameOverScene(k) {
             const modalY = k.height() / 2;
 
             const elements = [];
+
+            // Full-screen blocking overlay - dims the scene and intercepts clicks
+            // so they can't leak to the footer buttons underneath
+            const overlay = k.add([
+                k.rect(k.width(), k.height()),
+                k.pos(0, 0),
+                k.color(0, 0, 0),
+                k.opacity(0.6),
+                k.area(),
+                k.fixed(),
+                k.z(UI_Z_LAYERS.MODAL + 99)
+            ]);
+            overlay.onClick(() => closeAwardModal());
+            elements.push(overlay);
 
             // Modal background
             elements.push(k.add([
@@ -463,16 +499,8 @@ export function setupGameOverScene(k) {
 
             activeAwardModal = elements;
 
-            // Close on click anywhere after a short delay
-            k.wait(0.1, () => {
-                const closeHandler = k.onClick(() => {
-                    closeHandler.cancel();
-                    if (activeAwardModal) {
-                        activeAwardModal.forEach(e => { if (e.exists()) k.destroy(e); });
-                        activeAwardModal = null;
-                    }
-                });
-            });
+            // Close on Escape (overlay click also closes it)
+            activeAwardEscHandler = k.onKeyPress('escape', () => closeAwardModal());
         }
 
         playersToShow.forEach((player, idx) => {
@@ -861,7 +889,8 @@ export function setupGameOverScene(k) {
         // ==========================================
         // FOOTER - Totals and Controls
         // ==========================================
-        const footerY = k.height() - 90;
+        // Lifted up to make room for the larger primary Play Again button below the XP bar
+        const footerY = k.height() - 110;
 
         // Team earnings (left side)
         k.add([
@@ -943,15 +972,15 @@ export function setupGameOverScene(k) {
         // Buttons - centered with proper spacing
         const isHostPlayer = isHost();
         const buttonY = k.height() - 30;
-        const { MD, SM } = UI_SIZES.BUTTON;
+        const { LG, SM } = UI_SIZES.BUTTON;
         const buttonGap = 20;
 
         const playAgainEnabled = !inMultiplayer || isHostPlayer;
         const playAgainText = inMultiplayer && !isHostPlayer ? 'Waiting...' : 'PLAY AGAIN';
 
-        // Use MD size for play again (more reasonable) and SM for menu
-        const playAgainWidth = MD.width;
-        const playAgainHeight = MD.height;
+        // Play Again is the primary CTA: use LG (280x45). Menu stays the smaller SM secondary.
+        const playAgainWidth = LG.width;
+        const playAgainHeight = LG.height;
         const menuWidth = SM.width;
         const menuHeight = SM.height;
 
@@ -1069,8 +1098,9 @@ export function setupGameOverScene(k) {
         });
 
         k.onKeyPress('escape', () => {
-            // Don't navigate away if achievement modal is open (it handles its own escape)
+            // Don't navigate away if a modal is open (each handles its own escape)
             if (isAchievementModalOpen()) return;
+            if (activeAwardModal) return;
             playMenuNav();
             if (inMultiplayer && !isHostPlayer) {
                 offMessage('game_restart');

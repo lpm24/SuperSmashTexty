@@ -133,6 +133,10 @@ function getContrastingTextColor(hue) {
 
 export function setupMenuScene(k) {
     k.scene('menu', () => {
+        // Ensure the game is never left paused when returning to the menu
+        // (e.g. when quitting from the in-game pause screen).
+        k.paused = false;
+
         initAudio();
 
         // Apply saved audio settings
@@ -328,7 +332,19 @@ export function setupMenuScene(k) {
         const slotHeight = 24;
         const slotSpacing = 3;
         const titlePadding = 8;
-        const partyPanelHeight = titlePadding + (slotHeight * 4) + (slotSpacing * 3) + 87;
+
+        const slotsStartY = partyPanelY + titlePadding;
+
+        // Pre-compute stacked control positions so the panel can enclose them.
+        // Layout: slots -> invite code -> Join -> Find Match -> (status) -> Ready -> countdown
+        const inviteCodeY = slotsStartY + (4 * (slotHeight + slotSpacing)) + 6;
+        const joinButtonY = inviteCodeY + 22;
+        const findMatchY = joinButtonY + 32;
+        const findMatchStatusY = findMatchY + 17;
+        const readyButtonY = findMatchY + 32;
+        const countdownY = readyButtonY + 20;
+        // Enclose the deepest visible control (countdown text bottom) plus padding.
+        const partyPanelHeight = (countdownY - partyPanelY) + 16;
 
         // Party panel background
         k.add([
@@ -339,8 +355,6 @@ export function setupMenuScene(k) {
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BACKGROUND)
         ]);
-
-        const slotsStartY = partyPanelY + titlePadding;
         const slotElements = [];
 
         function updatePartySlots() {
@@ -514,9 +528,7 @@ export function setupMenuScene(k) {
             }
         });
 
-        // Invite code section
-        const inviteCodeY = slotsStartY + (4 * (slotHeight + slotSpacing)) + 6;
-
+        // Invite code section (clickable to copy)
         k.add([
             k.text('Code:', { size: UI_TEXT_SIZES.SMALL - 2 }),
             k.pos(partyPanelX + 8, inviteCodeY),
@@ -528,10 +540,11 @@ export function setupMenuScene(k) {
 
         const inviteCode = getDisplayInviteCode();
         const inviteCodeDisplay = k.add([
-            k.text(inviteCode, { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.text(inviteCode, { size: UI_TEXT_SIZES.BODY }),
             k.pos(partyPanelX + partyPanelWidth - 8, inviteCodeY),
             k.anchor('right'),
             k.color(...(inviteCode === 'OFFLINE' ? UI_COLORS.TEXT_DISABLED : UI_COLORS.GOLD)),
+            k.area(),
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_TEXT)
         ]);
@@ -548,8 +561,54 @@ export function setupMenuScene(k) {
             }
         });
 
+        // Click-to-copy invite code with transient "Copied!" confirmation
+        let copyConfirmText = null;
+        inviteCodeDisplay.cursor = 'pointer';
+        inviteCodeDisplay.onClick(() => {
+            const code = inviteCodeDisplay.text;
+            if (code === 'OFFLINE') return; // No code to copy
+            playMenuSelect();
+            const showConfirm = (msg, color) => {
+                if (copyConfirmText && copyConfirmText.exists()) k.destroy(copyConfirmText);
+                // Sits just right of the "Code:" label on the same line to avoid
+                // overlapping the Join button below.
+                copyConfirmText = k.add([
+                    k.text(msg, { size: UI_TEXT_SIZES.SMALL - 2 }),
+                    k.pos(partyPanelX + 44, inviteCodeY),
+                    k.anchor('left'),
+                    k.color(...color),
+                    k.fixed(),
+                    k.z(UI_Z_LAYERS.UI_TEXT + 1)
+                ]);
+                k.wait(1.5, () => {
+                    if (copyConfirmText && copyConfirmText.exists()) {
+                        k.destroy(copyConfirmText);
+                        copyConfirmText = null;
+                    }
+                });
+            };
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(code).then(() => {
+                    showConfirm('Copied!', UI_COLORS.SUCCESS);
+                }).catch(() => {
+                    showConfirm('Copy failed', UI_COLORS.ERROR);
+                });
+            } else {
+                console.log('Invite code:', code);
+                showConfirm('See console', UI_COLORS.TEXT_SECONDARY);
+            }
+        });
+
+        inviteCodeDisplay.onHoverUpdate(() => {
+            if (inviteCodeDisplay.text === 'OFFLINE') return;
+            inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD_HOVER);
+        });
+        inviteCodeDisplay.onHoverEnd(() => {
+            if (inviteCodeDisplay.text === 'OFFLINE') return;
+            inviteCodeDisplay.color = k.rgb(...UI_COLORS.GOLD);
+        });
+
         // Join Party button
-        const joinButtonY = inviteCodeY + 22;
         const joinButton = createMenuButton(
             k, 'JOIN PARTY', partyPanelX + partyPanelWidth / 2, joinButtonY,
             partyPanelWidth - 20, 28, UI_TEXT_SIZES.SMALL
@@ -560,13 +619,44 @@ export function setupMenuScene(k) {
         });
 
         // Find Match button
-        const findMatchY = joinButtonY + 32;
         let findMatchButton = null;
         let findMatchLabel = null;
         let isUpdatingFindMatch = false;
 
         // Set up global match handler for scene navigation
         setupGlobalMatchHandler(k);
+
+        // Matchmaking status line (animated "Searching..." or transient error)
+        const findMatchStatus = k.add([
+            k.text('', { size: UI_TEXT_SIZES.MICRO }),
+            k.pos(partyPanelX + partyPanelWidth / 2, findMatchStatusY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_SECONDARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT),
+            'findMatchStatus'
+        ]);
+        // When > 0, an error message is being shown and the searching animation is suppressed.
+        let findMatchErrorUntil = 0;
+        let findMatchDotTime = 0;
+        findMatchStatus.onUpdate(() => {
+            // Hold error message for its duration, then clear.
+            if (findMatchErrorUntil > 0) {
+                if (k.time() >= findMatchErrorUntil) {
+                    findMatchErrorUntil = 0;
+                    findMatchStatus.text = '';
+                }
+                return;
+            }
+            if (isMatchmaking()) {
+                findMatchDotTime += k.dt();
+                const dots = '.'.repeat(1 + (Math.floor(findMatchDotTime * 2) % 3));
+                findMatchStatus.text = `Searching for opponents${dots}`;
+                findMatchStatus.color = k.rgb(...UI_COLORS.TEXT_SECONDARY);
+            } else if (findMatchStatus.text !== '') {
+                findMatchStatus.text = '';
+            }
+        });
 
         function updateFindMatchButton() {
             // Prevent re-entrant calls
@@ -655,6 +745,13 @@ export function setupMenuScene(k) {
                         },
                         onError: (err) => {
                             console.error('[Menu] Matchmaking error:', err);
+                            // Surface the error in the status line for a few seconds.
+                            if (findMatchStatus && findMatchStatus.exists()) {
+                                const msg = (err && err.message) ? err.message : 'Matchmaking failed';
+                                findMatchStatus.text = msg.length > 28 ? msg.substring(0, 28) + '..' : msg;
+                                findMatchStatus.color = k.rgb(...UI_COLORS.ERROR);
+                                findMatchErrorUntil = k.time() + 4;
+                            }
                             setTimeout(() => updateFindMatchButton(), 0);
                         },
                         onSearchEnd: () => {
@@ -673,7 +770,6 @@ export function setupMenuScene(k) {
         }
 
         // Ready button (only visible in party)
-        const readyButtonY = findMatchY + 32;
         let readyButtonElements = [];
         let countdownDisplay = null;
         // Track state to avoid unnecessary UI rebuilds
@@ -775,7 +871,7 @@ export function setupMenuScene(k) {
                 if (countdown.active) {
                     countdownDisplay = k.add([
                         k.text(`Starting in ${countdownSeconds}...`, { size: UI_TEXT_SIZES.SMALL - 2 }),
-                        k.pos(partyPanelX + partyPanelWidth / 2, readyButtonY + 20),
+                        k.pos(partyPanelX + partyPanelWidth / 2, countdownY),
                         k.anchor('center'),
                         k.color(...UI_COLORS.SUCCESS),
                         k.fixed(),
@@ -1052,7 +1148,9 @@ export function setupMenuScene(k) {
         });
 
         // Main buttons - centered column using standardized sizes
-        const buttonStartY = 310;
+        // Nudged down by UI_SPACING.LG (24px) to give the title art breathing room above
+        // ACTION! while keeping the whole column inside the 800x600 viewport.
+        const buttonStartY = 334;
         const buttonSpacing = 55;
         const { XL, LG } = UI_SIZES.BUTTON;
 
@@ -1060,6 +1158,11 @@ export function setupMenuScene(k) {
             k, 'ACTION!', centerX, buttonStartY,
             XL.width, XL.height, UI_TEXT_SIZES.H1
         );
+        // Primary action button keeps a stable green fill (reserved for start/confirm);
+        // it is excluded from the rainbow loop below so it always reads as the CTA.
+        playButton.color = k.rgb(...UI_COLORS.PRIMARY);
+        playButton.originalColor = [...UI_COLORS.PRIMARY];
+        playButton.hoverColor = [...UI_COLORS.PRIMARY_HOVER];
         playButton.onClick(() => {
             if (playButton.disabled) return;
             playMenuSelect();
@@ -1092,9 +1195,11 @@ export function setupMenuScene(k) {
         const selectedCharData = CHARACTER_UNLOCKS[selectedCharKey];
         if (selectedCharData) {
             const isCharUnlocked = isUnlocked('characters', selectedCharKey) || selectedCharData.unlockedByDefault;
-            const charDisplayX = centerX + LG.width / 2 + 35;
+            // Keep the icon's right edge left of the right column (rightColumnX ~580):
+            // smaller offset + smaller box so it sits between the button edge and the panel.
+            const charDisplayX = centerX + LG.width / 2 + 20;
             const charDisplayY = buttonStartY + buttonSpacing;
-            const charDisplaySize = 45;
+            const charDisplaySize = 36;
 
             const charDisplayBg = k.add([
                 k.rect(charDisplaySize, charDisplaySize),
@@ -1108,7 +1213,7 @@ export function setupMenuScene(k) {
             ]);
 
             const charDisplayIcon = k.add([
-                k.text(selectedCharData.char, { size: 28 }),
+                k.text(selectedCharData.char, { size: 22 }),
                 k.pos(charDisplayX, charDisplayY),
                 k.anchor('center'),
                 k.color(...(isCharUnlocked ? selectedCharData.color : UI_COLORS.BG_DISABLED)),
@@ -1158,12 +1263,14 @@ export function setupMenuScene(k) {
             k.go('settings');
         });
 
-        // Animate button colors
+        // Animate button colors (rainbow). The primary ACTION! button is excluded so it
+        // keeps its stable PRIMARY green and reads as the priority call-to-action.
         const menuButtons = [playButton, characterButton, shopButton, statisticsButton, settingsButton];
         let buttonColorTime = 0;
         k.onUpdate(() => {
             buttonColorTime += k.dt();
             menuButtons.forEach((button, index) => {
+                if (button === playButton) return; // Skip CTA: stays PRIMARY green
                 if (!button.exists() || button.isHovered) return;
                 const hue = (buttonColorTime * 60 + index * 50) % 360;
                 const color = hslToRgb(hue, 70, 50);

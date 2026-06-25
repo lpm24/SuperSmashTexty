@@ -54,7 +54,7 @@ export function initJoinPartyScene(k) {
         // Input display
         let inputCode = '';
         const inputDisplay = k.add([
-            k.text('______', { size: UI_TEXT_SIZES.TITLE * 1.5 }),
+            k.text('______', { size: UI_TEXT_SIZES.H1 }),
             k.pos(k.width() / 2, 280),
             k.anchor('center'),
             k.color(...UI_COLORS.GOLD),
@@ -67,14 +67,14 @@ export function initJoinPartyScene(k) {
             k.text('', { size: UI_TEXT_SIZES.SMALL }),
             k.pos(k.width() / 2, 360),
             k.anchor('center'),
-            k.color(255, 100, 100),
+            k.color(...UI_COLORS.ERROR),
             k.fixed(),
             k.z(10)
         ]);
 
         // Instructions text
         k.add([
-            k.text('Press ESC or click Cancel to go back', { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.text('Press ESC or click Cancel to go back', { size: UI_TEXT_SIZES.TINY }),
             k.pos(k.width() / 2, k.height() - 100),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_DISABLED),
@@ -145,6 +145,21 @@ export function initJoinPartyScene(k) {
             }
         });
 
+        // Animated "Joining party..." status (cycling dots) + client-side timeout
+        let joiningAnim = null;   // k.loop handle for the dot animation
+        let joinTimeout = null;   // k.wait handle for the client-side timeout
+
+        function stopJoiningFeedback() {
+            if (joiningAnim) {
+                joiningAnim.cancel();
+                joiningAnim = null;
+            }
+            if (joinTimeout) {
+                joinTimeout.cancel();
+                joinTimeout = null;
+            }
+        }
+
         // Attempt to join party
         async function attemptJoin() {
             if (isJoining) return;
@@ -153,13 +168,31 @@ export function initJoinPartyScene(k) {
 
             if (!isValidInviteCode(code)) {
                 errorMsg.text = 'Invalid invite code format';
-                errorMsg.color = k.rgb(255, 100, 100);
+                errorMsg.color = k.rgb(...UI_COLORS.ERROR);
                 return;
             }
 
             isJoining = true;
-            errorMsg.text = 'Joining party...';
             errorMsg.color = k.rgb(...UI_COLORS.GOLD);
+
+            // Animate the status so the screen doesn't look frozen while input is locked
+            let dotCount = 1;
+            errorMsg.text = 'Joining party.';
+            joiningAnim = k.loop(0.4, () => {
+                dotCount = (dotCount % 3) + 1;
+                errorMsg.text = 'Joining party' + '.'.repeat(dotCount);
+            });
+
+            // Client-side timeout in case the host is unreachable and the join never resolves
+            joinTimeout = k.wait(12, () => {
+                if (joinCancelled) return;
+                stopJoiningFeedback();
+                isJoining = false;
+                errorMsg.text = 'Could not reach host — check the code and try again';
+                errorMsg.color = k.rgb(...UI_COLORS.ERROR);
+                inputCode = '';
+                updateDisplay();
+            });
 
             try {
                 const success = await joinPartyAsClient(code);
@@ -167,8 +200,10 @@ export function initJoinPartyScene(k) {
                 if (success) {
                     // Check if join was cancelled while waiting
                     if (joinCancelled) {
+                        stopJoiningFeedback();
                         return;
                     }
+                    stopJoiningFeedback();
                     playMenuSelect();
                     errorMsg.text = 'Successfully joined party!';
                     errorMsg.color = k.rgb(...UI_COLORS.SUCCESS);
@@ -180,27 +215,70 @@ export function initJoinPartyScene(k) {
                         }
                     });
                 } else {
+                    stopJoiningFeedback();
                     isJoining = false;
                     errorMsg.text = 'Failed to join party. Check the code and try again.';
-                    errorMsg.color = k.rgb(255, 100, 100);
+                    errorMsg.color = k.rgb(...UI_COLORS.ERROR);
                     inputCode = '';
                     updateDisplay();
                 }
             } catch (error) {
+                stopJoiningFeedback();
                 isJoining = false;
                 console.error('[JoinParty] Error joining party:', error);
                 errorMsg.text = 'Connection error. Please try again.';
-                errorMsg.color = k.rgb(255, 100, 100);
+                errorMsg.color = k.rgb(...UI_COLORS.ERROR);
                 inputCode = '';
                 updateDisplay();
             }
         }
 
-        // Cancel button (MD size - secondary action)
+        // Action buttons (MD size) - primary JOIN beside secondary CANCEL
         const { MD } = UI_SIZES.BUTTON;
+        const buttonY = k.height() - 180;
+        const buttonGap = 20;
+        const joinX = k.width() / 2 - (MD.width / 2 + buttonGap / 2);
+        const cancelX = k.width() / 2 + (MD.width / 2 + buttonGap / 2);
+
+        // Join button (MD size - primary action)
+        const joinButton = k.add([
+            k.rect(MD.width, MD.height),
+            k.pos(joinX, buttonY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.PRIMARY),
+            k.outline(2, k.rgb(...UI_COLORS.BORDER)),
+            k.area(),
+            k.fixed(),
+            k.z(10)
+        ]);
+
+        k.add([
+            k.text('JOIN', { size: UI_TEXT_SIZES.BODY }),
+            k.pos(joinX, buttonY),
+            k.anchor('center'),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(11)
+        ]);
+
+        joinButton.onClick(() => {
+            attemptJoin();
+        });
+
+        joinButton.onHoverUpdate(() => {
+            if (!isJoining) {
+                joinButton.color = k.rgb(...UI_COLORS.PRIMARY_HOVER);
+            }
+        });
+
+        joinButton.onHoverEnd(() => {
+            joinButton.color = k.rgb(...UI_COLORS.PRIMARY);
+        });
+
+        // Cancel button (MD size - secondary action)
         const cancelButton = k.add([
             k.rect(MD.width, MD.height),
-            k.pos(k.width() / 2, k.height() - 180),
+            k.pos(cancelX, buttonY),
             k.anchor('center'),
             k.color(...UI_COLORS.NEUTRAL),
             k.outline(2, k.rgb(...UI_COLORS.BORDER)),
@@ -211,7 +289,7 @@ export function initJoinPartyScene(k) {
 
         const cancelText = k.add([
             k.text('CANCEL', { size: UI_TEXT_SIZES.BODY }),
-            k.pos(k.width() / 2, k.height() - 180),
+            k.pos(cancelX, buttonY),
             k.anchor('center'),
             k.color(...UI_COLORS.TEXT_SECONDARY),
             k.fixed(),
