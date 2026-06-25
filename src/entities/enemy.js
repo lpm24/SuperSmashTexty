@@ -1027,17 +1027,38 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
         }
         
         if (enemy.behavior === 'freeze') {
-            // Freezer: Slows player when nearby
+            // Freezer: Slows player when nearby.
+            // Register a one-time cleanup so that if this freezer is destroyed
+            // while the player is still inside slowRadius, the player's speed is
+            // restored — otherwise the enemy's onUpdate (which restores on exit)
+            // never runs again and the slow sticks for the rest of the room.
+            if (!enemy._freezeCleanupRegistered) {
+                enemy._freezeCleanupRegistered = true;
+                enemy.onDestroy(() => {
+                    k.get('player').forEach(p => {
+                        if (p.slowed && p.slowedBy === enemy) {
+                            p.speed = p.originalSpeed;
+                            p.slowed = false;
+                            p.slowedBy = null;
+                        }
+                    });
+                });
+            }
             if (distance <= enemy.slowRadius) {
                 if (!player.slowed) {
                     player.slowed = true;
                     player.originalSpeed = player.speed;
+                    player.slowedBy = enemy;
                 }
                 player.speed = player.originalSpeed * (1 - enemy.slowAmount);
             } else {
-                if (player.slowed) {
+                // Only the freezer that owns the current slow restores it, so
+                // leaving one freezer's range while still inside another's keeps
+                // the player slowed (the other freezer re-captures next frame).
+                if (player.slowed && player.slowedBy === enemy) {
                     player.speed = player.originalSpeed;
                     player.slowed = false;
+                    player.slowedBy = null;
                 }
             }
             
