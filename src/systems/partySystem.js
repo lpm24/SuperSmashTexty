@@ -143,16 +143,23 @@ export function setupNetworkHandlers() {
             console.warn('[PartySystem] Join request missing playerName, using default');
         }
 
-        // Add player to party
-        const slotIndex = addPlayerToPartyFromNetwork(
-            payload.playerName || 'Player',
-            payload.inviteCode || '000000',
-            payload.selectedCharacter || 'survivor',
-            payload.selectedPortrait || 'default',
-            fromPeerId,
-            payload.permanentUpgradeLevels || null,
-            payload.playerLevel || 1
-        );
+        // Try to reconnect this peer to a slot they recently dropped from (within
+        // the reconnect window) before assigning a brand-new slot. Without this a
+        // reconnecting player double-occupies the party and their disconnected slot
+        // is later removed when finalizeDisconnect fires.
+        let slotIndex = attemptReconnect(fromPeerId, payload.playerName || 'Player');
+        if (slotIndex === null) {
+            // New player - add to party
+            slotIndex = addPlayerToPartyFromNetwork(
+                payload.playerName || 'Player',
+                payload.inviteCode || '000000',
+                payload.selectedCharacter || 'survivor',
+                payload.selectedPortrait || 'default',
+                fromPeerId,
+                payload.permanentUpgradeLevels || null,
+                payload.playerLevel || 1
+            );
+        }
 
         if (slotIndex !== null) {
             // Send party sync to the new player

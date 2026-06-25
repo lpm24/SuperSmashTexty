@@ -240,8 +240,12 @@ export function stopMatchmaking(notifyEnd = true) {
         queueListenerRef = null;
     }
 
-    // Clear the queue entry reference
+    // Remove our queue entry so other searchers don't keep seeing us as a stale
+    // candidate. onDisconnect().remove() only fires on a real socket drop, not on
+    // a normal cancel/match, so without this the entry lingers until it goes stale.
     if (queueEntryRef) {
+        remove(queueEntryRef).catch(err =>
+            console.warn('[Matchmaking] Failed to remove queue entry:', err));
         queueEntryRef = null;
     }
 

@@ -695,12 +695,30 @@ export function applyUpgrade(player, upgradeKey) {
 
 // Recalculate all upgrades from base values
 export function recalculateAllUpgrades(player) {
+    // Reset the stats that transient synergies (berserker) multiply onto, so they
+    // are recomputed from a clean base regardless of which upgrades are stacked.
+    // Otherwise a berserker bonus baked into player.speed/projectileDamage survives
+    // recalculation and is then divided away on deactivation, permanently
+    // corrupting the stat after a mid-berserker level-up.
+    player.speed = player.characterData?.stats?.speed || 150;
+    player.projectileDamage = player.baseProjectileDamage || player.weaponDef?.baseDamage || 10;
+
     // Apply all upgrades in order
     Object.keys(UPGRADES).forEach(key => {
         if (player.upgradeStacks && player.upgradeStacks[key] > 0) {
             UPGRADES[key].apply(player);
         }
     });
+
+    // Re-apply the berserker multiplier on top of the freshly recomputed base so an
+    // active berserker stays consistent across upgrade picks (the onUpdate handler
+    // divides this back out on deactivation).
+    if (player.berserkerActive) {
+        const speedMultiplier = 1 + (player.berserkerSpeedBonus || 0.5);
+        const damageMultiplier = 1 + (player.berserkerDamageBonus || 0.5);
+        player.speed = Math.floor(player.speed * speedMultiplier);
+        player.projectileDamage = Math.floor(player.projectileDamage * damageMultiplier);
+    }
 }
 
 // Get upgrade description with stack count
