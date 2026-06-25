@@ -1873,7 +1873,7 @@ export function setupGameScene(k) {
         const xpBarFill = k.add([
             k.rect(initialXpWidth, xpBarHeight - 4),
             k.pos(58, xpBarY + 2), // Start after level badge (adjusted for larger badge)
-            k.color(100, 200, 255), // Light blue XP color (matches pickup)
+            k.color(...UI_COLORS.XP_BAR), // Light blue XP color (matches pickup)
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 1)
         ]);
@@ -1897,7 +1897,7 @@ export function setupGameScene(k) {
             k.pos(levelBadgeX, levelBadgeY),
             k.anchor('center'),
             k.color(...UI_COLORS.BG_MEDIUM),
-            k.outline(2, k.rgb(100, 200, 255)), // Light blue outline to match XP
+            k.outline(2, k.rgb(...UI_COLORS.XP_BAR)), // Light blue outline to match XP
             k.fixed(),
             k.z(UI_Z_LAYERS.UI_BG + 2)
         ]);
@@ -1929,13 +1929,60 @@ export function setupGameScene(k) {
             k.rect(playerHealthBarWidth - 2, playerHealthBarHeight - 2),
             k.pos(0, 0),
             k.anchor('center'), // Use center anchor for proper width updates
-            k.color(100, 255, 100), // Green health color
+            k.color(...UI_COLORS.HEALTH_FULL), // Green health color
             k.z(UI_Z_LAYERS.OVERLAY + 1)
         ]);
 
         // Initially hide player health bar (only show when damaged)
         playerHealthBarBg.hidden = true;
         playerHealthBarFill.hidden = true;
+
+        // ==========================================
+        // PERSISTENT HP HUD (Top Left - always visible)
+        // Fixed readout below the enemy counter panel so the player can always
+        // see exact health, even at full HP (the floating bar above hides at full).
+        // ==========================================
+        const hpHudX = 8;
+        const hpHudY = 26;
+        const hpHudWidth = 120;
+        const hpBarHeight = 8;
+        const hpBarX = hpHudX + 4;
+        const hpBarY = hpHudY + 14;
+        const hpBarWidth = hpHudWidth - 8;
+
+        const hpHudPanelBg = k.add([
+            k.rect(hpHudWidth, 24),
+            k.pos(hpHudX, hpHudY),
+            k.color(0, 0, 0),
+            k.opacity(0.6),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_BACKGROUND)
+        ]);
+
+        const hpHudText = k.add([
+            k.text(formatHealth(player.maxHealth || 0, player.maxHealth || 0), { size: UI_TEXT_SIZES.SMALL - 2 }),
+            k.pos(hpBarX, hpHudY + 2),
+            k.color(...UI_COLORS.TEXT_PRIMARY),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_TEXT)
+        ]);
+
+        const hpHudBarBg = k.add([
+            k.rect(hpBarWidth, hpBarHeight),
+            k.pos(hpBarX, hpBarY),
+            k.color(...UI_COLORS.BG_DARK),
+            k.outline(1, k.rgb(...UI_COLORS.TEXT_DISABLED)),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_ELEMENTS)
+        ]);
+
+        const hpHudBarFill = k.add([
+            k.rect(hpBarWidth - 2, hpBarHeight - 2),
+            k.pos(hpBarX + 1, hpBarY + 1),
+            k.color(...UI_COLORS.HEALTH_FULL),
+            k.fixed(),
+            k.z(UI_Z_LAYERS.UI_ELEMENTS + 1)
+        ]);
 
         // ==========================================
         // WEAPON INDICATOR (Bottom Left - Icon Only)
@@ -2703,7 +2750,7 @@ export function setupGameScene(k) {
 
                 // Color based on health percentage
                 if (healthPercent > 0.6) {
-                    playerHealthBarFill.color = k.rgb(100, 255, 100); // Green
+                    playerHealthBarFill.color = k.rgb(...UI_COLORS.HEALTH_FULL); // Green
                 } else if (healthPercent > 0.3) {
                     playerHealthBarFill.color = k.rgb(255, 200, 0); // Yellow/Orange
                 } else {
@@ -2712,6 +2759,19 @@ export function setupGameScene(k) {
             } else {
                 playerHealthBarBg.hidden = true;
                 playerHealthBarFill.hidden = true;
+            }
+
+            // Update persistent HP HUD (top-left, always visible)
+            // Uses the same currentHP / player.maxHealth fields as healthPercent above.
+            hpHudText.text = formatHealth(Math.max(0, Math.round(currentHP)), player.maxHealth || 0);
+            const hpHudFillWidth = Math.max(0, (hpBarWidth - 2) * healthPercent);
+            hpHudBarFill.use(k.rect(hpHudFillWidth, hpBarHeight - 2));
+            if (healthPercent > 0.6) {
+                hpHudBarFill.color = k.rgb(...UI_COLORS.HEALTH_FULL);
+            } else if (healthPercent > 0.3) {
+                hpHudBarFill.color = k.rgb(...UI_COLORS.HEALTH_MEDIUM);
+            } else {
+                hpHudBarFill.color = k.rgb(...UI_COLORS.HEALTH_LOW);
             }
 
             // Update enemies counter (only show in regular rooms, not boss rooms)
@@ -3607,20 +3667,24 @@ export function setupGameScene(k) {
                             }
                         }
 
-                        // Damage other enemies in range (optimized with spatial grid)
-                        // OLD: k.get('enemy').forEach() - checks ALL enemies (O(n))
-                        // NEW: getNearby() - only checks enemies in nearby grid cells (O(1))
-                        const nearbyEnemies = spatialGrids.enemies.getNearby(posX, posY, explosionRadius);
-                        nearbyEnemies.forEach(other => {
-                            if (other === enemy || !other.exists()) return;
-                            // Use squared distance to avoid expensive sqrt
-                            const dx = other.pos.x - posX;
-                            const dy = other.pos.y - posY;
-                            const distSq = dx * dx + dy * dy;
-                            if (distSq <= explosionRadius * explosionRadius) {
-                                other.hurt(explosionDamage);
-                            }
-                        });
+                        // Damage other enemies in range (optimized with spatial grid).
+                        // Host-only in multiplayer: enemy HP is host-authoritative
+                        // (clients only show visuals), so a client running this would
+                        // desync enemy health. The player damage above stays local so
+                        // each peer's own player still takes the blast.
+                        if (!isMultiplayerActive() || isHost()) {
+                            const nearbyEnemies = spatialGrids.enemies.getNearby(posX, posY, explosionRadius);
+                            nearbyEnemies.forEach(other => {
+                                if (other === enemy || !other.exists()) return;
+                                // Use squared distance to avoid expensive sqrt
+                                const dx = other.pos.x - posX;
+                                const dy = other.pos.y - posY;
+                                const distSq = dx * dx + dy * dy;
+                                if (distSq <= explosionRadius * explosionRadius) {
+                                    other.hurt(explosionDamage);
+                                }
+                            });
+                        }
 
                         // Spawn larger explosion particle for exploding enemies
                         spawnDeathExplosion(k, posX, posY, {
@@ -5119,7 +5183,19 @@ export function setupGameScene(k) {
             // Only allow clicking when pause menu is visible
             if (!k.paused || resumeButton.hidden) return;
 
+            // In multiplayer only the host controls pause state. A client must ask
+            // the host to resume and wait for the broadcast; unpausing locally
+            // would desync (client runs while host/peers stay frozen).
+            if (isMultiplayerActive() && !isHost()) {
+                sendPauseRequest(false);
+                return;
+            }
+
             k.paused = false;
+            // Mirror the Escape handler: broadcast the resume so clients unpause too.
+            if (isMultiplayerActive() && isHost()) {
+                broadcastPauseState(false);
+            }
             // Restore minimap mode
             if (k.gameData && k.gameData.minimap && k.gameData.minimapSavedMode !== undefined) {
                 k.gameData.minimap.mode = k.gameData.minimapSavedMode;
