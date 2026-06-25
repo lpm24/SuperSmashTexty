@@ -523,11 +523,10 @@ export function unlockAchievement(achievementId) {
         saveGame(save);
 
         // Check if this achievement unlocks any characters
-        checkAchievementUnlocks(achievementId).then(unlockedChars => {
-            if (unlockedChars.length > 0) {
-                console.log('[MetaProgression] Achievement unlocked characters:', unlockedChars);
-            }
-        });
+        const unlockedChars = checkAchievementUnlocks(achievementId);
+        if (unlockedChars.length > 0) {
+            console.log('[MetaProgression] Achievement unlocked characters:', unlockedChars);
+        }
 
         return true; // Newly unlocked
     }
