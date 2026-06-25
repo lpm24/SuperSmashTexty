@@ -148,7 +148,12 @@ export function markDailyCompleted(runStats) {
         completedAt: Date.now()
     };
 
-    data.completedDays[today] = completion;
+    // Only replace an existing completion if this attempt scored higher, so a
+    // worse replay can't overwrite the player's best daily result.
+    const existingCompletion = data.completedDays[today];
+    if (!existingCompletion || completion.score > (existingCompletion.score || 0)) {
+        data.completedDays[today] = completion;
+    }
     saveDailyRunData(data);
 
     console.log('[DailyRuns] Marked daily completed:', completion);

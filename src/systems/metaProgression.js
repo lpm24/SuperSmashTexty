@@ -52,8 +52,19 @@ export function loadSave() {
         const saved = localStorage.getItem(STORAGE_KEY);
         if (saved) {
             const data = JSON.parse(saved);
-            // Merge with default to handle missing fields
-            const mergedData = { ...DEFAULT_SAVE, ...data };
+            // Merge with default to handle missing fields. The object-valued
+            // fields need a nested merge: an older save whose nested object
+            // predates newly-added keys would otherwise replace the defaults
+            // wholesale, leaving the new keys undefined (which corrupts stats
+            // math into NaN once incremented).
+            const mergedData = {
+                ...DEFAULT_SAVE,
+                ...data,
+                unlocks: { ...DEFAULT_SAVE.unlocks, ...(data.unlocks || {}) },
+                stats: { ...DEFAULT_SAVE.stats, ...(data.stats || {}) },
+                permanentUpgradeLevels: { ...DEFAULT_SAVE.permanentUpgradeLevels, ...(data.permanentUpgradeLevels || {}) },
+                permanentUpgradePurchaseHistory: { ...DEFAULT_SAVE.permanentUpgradePurchaseHistory, ...(data.permanentUpgradePurchaseHistory || {}) }
+            };
 
             // Generate player name if not set
             if (!mergedData.playerName) {

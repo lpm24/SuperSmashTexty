@@ -169,8 +169,12 @@ export function submitScore(runData) {
         result.isNewPersonalBest = true;
     }
 
-    // Best time only counts if they reached a minimum floor
-    if (entry.floor >= 3 && entry.time < personal.bestTime) {
+    // Best time only counts if they reached a minimum floor.
+    // Guard against a missing/non-finite bestTime: JSON.stringify turns the
+    // initial Infinity into null, so a freshly-created record reads back as null
+    // and `time < null` would always be false, permanently blocking new records.
+    const noBestTime = personal.bestTime == null || !isFinite(personal.bestTime) || personal.bestTime <= 0;
+    if (entry.floor >= 3 && (noBestTime || entry.time < personal.bestTime)) {
         personal.bestTime = entry.time;
         result.isNewPersonalBest = true;
     }
@@ -179,10 +183,9 @@ export function submitScore(runData) {
 
     console.log('[Leaderboards] Score submitted:', entry, 'Result:', result);
 
-    // Submit to online leaderboard (non-blocking, fire and forget)
-    submitOnlineScore(entry).catch(err => {
-        console.warn('[Leaderboards] Online submission failed:', err);
-    });
+    // Note: online submission is handled by the caller (gameOver), which posts to
+    // both the all-time and daily online boards. Submitting here as well would
+    // double-post every run to the global leaderboard.
 
     return result;
 }

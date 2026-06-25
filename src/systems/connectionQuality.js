@@ -32,8 +32,13 @@ const QUALITY_THRESHOLDS = {
  * Call this when multiplayer starts
  */
 export function initConnectionQuality() {
-    if (connectionState.handlersRegistered) return;
+    // Always (re)register handlers. onMessage() is keyed by message type, so
+    // re-registering simply overwrites — there's no duplicate-handler risk. The
+    // old never-reset `handlersRegistered` early-return meant a second multiplayer
+    // session (after disconnect() cleared all handlers) never re-registered
+    // ping/pong, leaving latency stuck. Clear stale per-peer state too.
     connectionState.handlersRegistered = true;
+    connectionState.peers.clear();
 
     // Handle ping requests (respond with pong)
     onMessage('ping', (payload, fromPeerId) => {

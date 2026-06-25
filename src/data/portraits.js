@@ -161,8 +161,8 @@ export const PORTRAITS = {
         icon: '✨',
         color: [255, 255, 255],
         category: PORTRAIT_CATEGORIES.ACHIEVEMENT,
-        unlockCondition: { type: 'achievement', value: 'flawless_run' },
-        description: 'Completed a run without taking damage.'
+        unlockCondition: { type: 'achievement', value: 'perfectFloor' },
+        description: 'Completed a floor without taking damage.'
     },
     grinder: {
         id: 'grinder',

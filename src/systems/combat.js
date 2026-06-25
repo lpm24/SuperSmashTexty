@@ -706,7 +706,8 @@ export function setupCombatSystem(k, player) {
             if (projectile.piercedEnemies) {
                 projectile.piercedEnemies.add(enemy);
             }
-            if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+            // Boomerangs return instead of being destroyed on pierce-exhaustion.
+            if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
                 k.destroy(projectile);
             }
             return; // Skip damage dealing on client
@@ -821,10 +822,13 @@ export function setupCombatSystem(k, player) {
             projectile.piercedEnemies.add(enemy);
         }
 
-        // Destroy projectile if it can't pierce anymore
+        // Destroy projectile if it can't pierce anymore.
         // If piercing = n, projectile can hit n+1 enemies total
         // piercing = 0: hit 1 enemy, piercing = 1: hit 2 enemies, etc.
-        if (projectile.piercedEnemies.size > (projectile.piercing || 0)) {
+        // Boomerangs are exempt: they fly to max range and return to the player
+        // (projectile.js handles the return), so a pierce-exhausted boomerang
+        // must NOT be destroyed here or it never returns.
+        if (!projectile.isBoomerang && projectile.piercedEnemies.size > (projectile.piercing || 0)) {
             k.destroy(projectile);
         }
 

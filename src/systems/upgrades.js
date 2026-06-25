@@ -638,8 +638,11 @@ export function getRandomUpgrades(count = 3, player = null, rng = null) {
         validOptions = allOptions.filter(option => isUpgradeValidForPlayer(option, player));
     }
 
-    // If not enough valid options, fall back to all options
-    if (validOptions.length < count) {
+    // Only fall back to the full pool if there are NO valid options at all (e.g.
+    // everything is maxed) to avoid an empty draft. Otherwise keep just the valid
+    // ones — never pad with invalid/maxed/wrong-weapon upgrades to reach `count`;
+    // the draft can simply show fewer cards.
+    if (validOptions.length === 0) {
         validOptions = allOptions;
     }
 
@@ -674,11 +677,17 @@ export function applyUpgrade(player, upgradeKey) {
         }
     }
     
-    // Increment stack count
+    // Increment stack count, clamped to the upgrade's max so a fallback draft
+    // pick on an already-maxed upgrade can't push it past its intended limit.
     if (!player.upgradeStacks) {
         player.upgradeStacks = {};
     }
-    player.upgradeStacks[upgradeKey] = (player.upgradeStacks[upgradeKey] || 0) + 1;
+    const maxStacks = upgrade.maxStacks || UPGRADE_STACK_LIMITS[upgradeKey] || 10;
+    const currentStacks = player.upgradeStacks[upgradeKey] || 0;
+    if (currentStacks >= maxStacks) {
+        return; // already at max stacks; nothing to apply
+    }
+    player.upgradeStacks[upgradeKey] = currentStacks + 1;
     
     // Apply upgrade (will recalculate from base values)
     recalculateAllUpgrades(player);
