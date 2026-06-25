@@ -43,7 +43,11 @@
       "Bash(dir:*)",
       "Bash(npx gh-pages -d dist --no-history)",
       "Bash(git status:*)",
-      "Bash(cd:*)"
+      "Bash(cd:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)",
+      "Bash(curl:*)",
+      "Bash(npm run deploy:*)"
     ],
     "deny": [],
     "ask": []

@@ -12,22 +12,26 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    
+
     steps:
     - uses: actions/checkout@v4
-    
+      with:
+        # Full history so the auto-version system (git rev-list --count HEAD in
+        # vite.config.js) produces the correct v0.1.<count> instead of v0.1.1.
+        fetch-depth: 0
+
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
         node-version: '22'
         cache: 'npm'
-    
+
     - name: Install dependencies
       run: npm ci
-    
+
     - name: Build project
       run: npm run build
-    
+
     - name: Check for build errors
       run: |
         if [ ! -d "dist" ]; then
@@ -43,5 +47,41 @@ jobs:
         publish_dir: ./dist
         commit_message: 'Deploy: ${{ github.event.head_commit.message }}'
 
+  deploy-itch:
+    # Only deploy to itch.io on pushes to main, and only if the build job passed.
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
 
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
 
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: 'npm'
+
+    - name: Install dependencies
+      run: npm ci
+
+    - name: Build for itch.io (relative asset base)
+      # itch.io serves the game from its own path inside an iframe, so assets must
+      # be referenced relatively (./assets/...) rather than under /SuperSmashTexty/.
+      run: npx vite build --base=./
+
+    - name: Install butler
+      run: |
+        curl -L -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+        unzip butler.zip
+        chmod +x butler
+        ./butler -V
+
+    - name: Push to itch.io
+      env:
+        BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      run: |
+        VERSION="v0.1.$(git rev-list --count HEAD)"
+        ./butler push dist krool/supersmashtexty:html5 --userversion "$VERSION"

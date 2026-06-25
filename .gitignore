@@ -4,6 +4,9 @@ node_modules/
 # Build output
 dist/
 dist-ssr/
+dist-itch/
+# itch.io packaged upload artifacts (built/pushed in CI, never committed)
+*-itch.zip
 
 # Environment variables
 .env
