@@ -491,6 +491,8 @@ export function updateRunStats(runStats) {
     save.stats.totalEnemiesKilled += runStats.enemiesKilled || 0;
     save.stats.totalBossesKilled += runStats.bossesKilled || 0;
     save.stats.totalCurrencyEarned += runStats.currencyEarned || 0;
+    save.stats.totalMinibossesKilled = (save.stats.totalMinibossesKilled || 0) + (runStats.minibossesKilled || 0);
+    save.stats.totalXpOrbs = (save.stats.totalXpOrbs || 0) + (runStats.xpOrbsCollected || 0);
     
     if (runStats.floorsReached > save.stats.bestFloor) {
         save.stats.bestFloor = runStats.floorsReached;

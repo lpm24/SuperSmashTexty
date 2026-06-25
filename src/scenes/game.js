@@ -38,7 +38,7 @@ import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../syste
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, getSelectedCharacter } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
-import { checkAchievements, initAchievementChecker, trackPlayerDamage, trackFloorDamage, trackBossDamage, startBossFight, onBossDefeated, onFloorCompleted } from '../systems/achievementChecker.js';
+import { checkAchievements, initAchievementChecker, trackPlayerDamage, trackFloorDamage, trackBossDamage, startBossFight, onBossDefeated, onFloorCompleted, trackEnemyKill, trackPickup, trackCloseCall } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio, playCombatMusic } from '../systems/sounds.js';
@@ -511,6 +511,10 @@ export function setupGameScene(k) {
                     trackFloorDamage(gameState.currentFloor, amount);
                     trackBossDamage();
                 }
+                // Survived a hit that left us at exactly 1 HP (closeCall)
+                if (player.hp() === 1) {
+                    trackCloseCall();
+                }
             });
             // Restore stats
             Object.assign(player, gameState.playerStats);
@@ -610,6 +614,10 @@ export function setupGameScene(k) {
                     trackPlayerDamage(amount);
                     trackFloorDamage(gameState.currentFloor, amount);
                     trackBossDamage();
+                }
+                // Survived a hit that left us at exactly 1 HP (closeCall)
+                if (player.hp() === 1) {
+                    trackCloseCall();
                 }
             });
 
@@ -3690,6 +3698,7 @@ export function setupGameScene(k) {
 
                     // Track enemy kill by type
                     runStats.enemiesKilled++;
+                    trackEnemyKill();
                     const enemyType = enemy.type || enemy.enemyType || 'basic';
                     runStats.killsByType[enemyType] = (runStats.killsByType[enemyType] || 0) + 1;
 
@@ -3755,8 +3764,10 @@ export function setupGameScene(k) {
 
                     // Track miniboss kill by type (counts as enemy too)
                     runStats.enemiesKilled++;
+                    trackEnemyKill();
                     const minibossType = miniboss.type || 'miniboss';
                     runStats.killsByType[minibossType] = (runStats.killsByType[minibossType] || 0) + 1;
+                    runStats.minibossesKilled = (runStats.minibossesKilled || 0) + 1;
 
                     // Track kill for the player who last hit this miniboss
                     const minibossKillerSlot = miniboss.lastHitBySlot;
@@ -3822,6 +3833,7 @@ export function setupGameScene(k) {
 
                     // Track boss kill by type (counts as enemy too)
                     runStats.enemiesKilled++;
+                    trackEnemyKill();
                     runStats.bossesKilled++;
                     // Award boss-fight challenge achievements (noHitBoss, glassCannonWin, bossRush)
                     onBossDefeated(player.hp(), player.maxHealth);
@@ -3951,6 +3963,9 @@ export function setupGameScene(k) {
 
                     pickup.collected = true; // Set flag FIRST to prevent race conditions
                     playXPPickup();
+                    // Track XP-orb pickups (xpHoarder) and first-pickup achievement
+                    runStats.xpOrbsCollected = (runStats.xpOrbsCollected || 0) + 1;
+                    trackPickup();
 
                     // In multiplayer, give XP to all players (shared XP)
                     if (partySize > 1) {

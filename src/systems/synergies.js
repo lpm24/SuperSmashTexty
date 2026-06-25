@@ -1,5 +1,6 @@
 // Synergy system - handles upgrade combinations and special effects
 import { showSynergyHint } from './tutorial.js';
+import { onSynergyActivated } from './achievementChecker.js';
 
 // Synergy definitions
 // Each synergy requires specific upgrades and applies a special effect
@@ -305,6 +306,9 @@ export function checkAndApplySynergies(k, player) {
                 synergy.apply(player);
                 player.activeSynergies.add(synergyKey);
                 activeSynergies.push(synergy);
+
+                // Notify achievement system (firstSynergy / synergyMaster)
+                onSynergyActivated();
 
                 // Show tutorial hint for synergies
                 showSynergyHint(k);

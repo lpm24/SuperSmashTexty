@@ -17,7 +17,9 @@ let runChallengeData = {
     bossesKilledThisRun: 0,  // Bosses killed in current run
     currentBossNoDamage: true, // Did we take damage during current boss fight
     bossStartHP: 0,          // HP at start of boss fight
-    damageTakenThisRun: 0    // Total damage the local player has taken this run (for flawless_run)
+    damageTakenThisRun: 0,   // Total damage the local player has taken this run (for flawless_run)
+    enemyKillTimes: [],      // Timestamps of recent kills (for killStreak10)
+    synergyCount: 0          // Synergies activated this run (for synergyMaster)
 };
 
 // Store kaplay instance for showing toasts from event functions
@@ -64,7 +66,9 @@ export function initAchievementChecker(k) {
         bossesKilledThisRun: 0,
         currentBossNoDamage: true,
         bossStartHP: 0,
-        damageTakenThisRun: 0
+        damageTakenThisRun: 0,
+        enemyKillTimes: [],
+        synergyCount: 0
     };
 
     // Store kaplay instance for showing toasts from event functions
@@ -194,7 +198,38 @@ export function onFloorCompleted(floor) {
  * Called when a synergy is activated (for firstSynergy achievement)
  */
 export function onSynergyActivated() {
+    runChallengeData.synergyCount = (runChallengeData.synergyCount || 0) + 1;
     unlockAndNotify('firstSynergy');
+    if (runChallengeData.synergyCount >= 3) {
+        unlockAndNotify('synergyMaster');
+    }
+}
+
+/**
+ * Called when any enemy/miniboss/boss is killed (for killStreak10).
+ * Awards when 10 kills land within a 5-second window.
+ */
+export function trackEnemyKill() {
+    const now = Date.now();
+    runChallengeData.enemyKillTimes.push(now);
+    runChallengeData.enemyKillTimes = runChallengeData.enemyKillTimes.filter(t => now - t <= 5000);
+    if (runChallengeData.enemyKillTimes.length >= 10) {
+        unlockAndNotify('killStreak10');
+    }
+}
+
+/**
+ * Called when the local player collects any pickup (for firstPickup).
+ */
+export function trackPickup() {
+    unlockAndNotify('firstPickup');
+}
+
+/**
+ * Called from the player onHurt hook when a hit leaves the player at exactly 1 HP (for closeCall).
+ */
+export function trackCloseCall() {
+    unlockAndNotify('closeCall');
 }
 
 /**
@@ -251,7 +286,9 @@ export function checkAchievements(k, currentRunStats = null) {
         bestLevel: Math.max(savedStats.bestLevel || 0, currentRunStats?.level || 0),
         totalCurrencyEarned: (savedStats.totalCurrencyEarned || 0) + (currentRunStats?.currencyEarned || 0),
         totalRoomsCleared: savedStats.totalRoomsCleared || 0,
-        totalCurrencySpent: savedStats.totalCurrencySpent || 0
+        totalCurrencySpent: savedStats.totalCurrencySpent || 0,
+        totalMinibossesKilled: savedStats.totalMinibossesKilled || 0,
+        totalXpOrbs: savedStats.totalXpOrbs || 0
     };
 
     const newlyUnlocked = [];
@@ -309,6 +346,16 @@ export function checkAchievements(k, currentRunStats = null) {
     // Rooms-cleared achievements (these thresholds existed but were never checked)
     check(stats.totalRoomsCleared >= 100, 'rooms100');
     check(stats.totalRoomsCleared >= 500, 'rooms500');
+
+    // Miniboss and XP-orb cumulative achievements (stats now tracked per run)
+    check(stats.totalMinibossesKilled >= 10, 'minibossSlayer');
+    check(stats.totalXpOrbs >= 1000, 'xpHoarder');
+
+    // Run-duration achievements (runStartTime is set in initAchievementChecker)
+    const runDuration = (Date.now() - runChallengeData.runStartTime) / 1000;
+    check(runDuration >= 1800, 'longRun'); // Survive 30 minutes
+    // quickDeath only applies at run end (checkAchievements is called with no run stats then)
+    check(!currentRunStats && runDuration < 30, 'quickDeath');
 
     // Self-contained checks that read save data directly (no run stats needed)
     checkMaxUpgrade();
