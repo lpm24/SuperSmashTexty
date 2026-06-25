@@ -95,7 +95,7 @@ export const CHARACTER_UNLOCKS = {
             speed: 130,
             damage: 15
         },
-        weapon: 'launcher',
+        weapon: 'explosive',
         ability: 'explosiveShots' // Projectiles explode, +50% blast radius
     },
     engineer: {

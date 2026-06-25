@@ -1701,7 +1701,7 @@ function chainToNextEnemy(k, projectile, currentEnemy) {
         const startPos = currentEnemy.pos;
         const endPos = nearestEnemy.pos;
         const distance = k.vec2(endPos.x - startPos.x, endPos.y - startPos.y).len();
-        const angle = Math.atan2(endPos.y - startPos.y, endPos.x - startPos.x);
+        const angle = Math.atan2(endPos.y - startPos.y, endPos.x - startPos.x) * (180 / Math.PI);
         const midX = (startPos.x + endPos.x) / 2;
         const midY = (startPos.y + endPos.y) / 2;
         

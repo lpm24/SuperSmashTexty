@@ -467,7 +467,7 @@ export function setupShopScene(k) {
                         statusText = 'MAXED';
                     } else {
                         purchaseCost = getUpgradePrice(level);
-                        canPurchase = currency >= purchaseCost;
+                        canPurchase = currentCurrency >= purchaseCost;
                     }
                 } else if (currentCategory === 'boosters') {
                     const boosterCount = getActiveBoostersCount(key);
@@ -482,16 +482,16 @@ export function setupShopScene(k) {
                         statusText = isCosmeticAchievementUnlocked ? 'UNLOCKED' : 'OWNED';
                     } else if (!isAchievementLocked) {
                         // Only show purchase option if not achievement-locked
-                        canPurchase = currency >= purchaseCost;
+                        canPurchase = currentCurrency >= purchaseCost;
                     }
                     // If achievement-locked, no status text needed (VIEW button handles it)
                 } else if (currentCategory === 'characters') {
                     if (!isUnlockedChar) {
-                        canPurchase = currency >= purchaseCost;
+                        canPurchase = currentCurrency >= purchaseCost;
                     }
                 } else if (currentCategory === 'weapons') {
                     if (!isUnlockedWeapon) {
-                        canPurchase = currency >= purchaseCost;
+                        canPurchase = currentCurrency >= purchaseCost;
                     }
                 }
 

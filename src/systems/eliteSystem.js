@@ -88,6 +88,9 @@ export function applyEliteModifier(k, enemy, modifierKey) {
     const modifier = ELITE_MODIFIERS[modifierKey];
     if (!modifier) return;
 
+    // Don't double-apply: that would stack the prefix and re-apply stat/XP changes
+    if (enemy.isElite) return;
+
     // Mark as elite
     enemy.isElite = true;
     enemy.eliteModifier = modifierKey;
@@ -95,10 +98,10 @@ export function applyEliteModifier(k, enemy, modifierKey) {
     // Apply stat changes
     modifier.apply(enemy);
 
-    // Update visual - add prefix and change color
-    const newChar = `${modifier.prefix}${enemy.coreChar}`;
-    enemy.coreChar = newChar;
-    enemy.text = newChar;
+    // Store the prefix separately so updateVisual renders it OUTSIDE the armor/shield
+    // brackets. Baking it into coreChar would trap the glyph inside the brackets
+    // (e.g. ⟦⚡A⟧) since updateVisual rebuilds text as brackets + coreChar.
+    enemy.elitePrefix = modifier.prefix;
 
     // Update color
     enemy.originalColor = modifier.color;
@@ -110,6 +113,8 @@ export function applyEliteModifier(k, enemy, modifierKey) {
     // Update visual
     if (enemy.updateVisual) {
         enemy.updateVisual();
+    } else {
+        enemy.text = `${modifier.prefix}${enemy.coreChar}`;
     }
 }
 

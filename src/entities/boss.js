@@ -476,10 +476,6 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
                         if (bossRightX > obsLeft && bossLeftX < obsRight &&
                             bossBottomX > obsTop && bossTopX < obsBottom) {
                             canMoveX = false;
-                            if (boss.isCharging) {
-                                boss.isCharging = false;
-                                boss.chargeTimer = 0;
-                            }
                         }
                         
                         // Check Y movement
@@ -491,10 +487,6 @@ export function createBoss(k, x, y, type = 'gatekeeper', floor = 1, rng = null) 
                         if (bossRightY > obsLeft && bossLeftY < obsRight &&
                             bossBottomY > obsTop && bossTopY < obsBottom) {
                             canMoveY = false;
-                            if (boss.isCharging) {
-                                boss.isCharging = false;
-                                boss.chargeTimer = 0;
-                            }
                         }
                     }
                     

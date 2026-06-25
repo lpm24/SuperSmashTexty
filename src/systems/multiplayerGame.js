@@ -1259,39 +1259,39 @@ export function sendAllExistingEntities(peerId) {
     const k = mpGame.k;
     console.log('[Multiplayer] Sending existing entities to new joiner:', peerId);
 
-    // Send all enemies
+    // Send all enemies (mirror registerEnemy's payload so the spawn_entity handler can recreate them)
     mpGame.enemies.forEach((enemy, entityId) => {
         if (enemy && enemy.exists()) {
             const entityData = {
-                entityId: entityId,
+                id: entityId,
                 entityType: 'enemy',
                 x: enemy.pos.x,
                 y: enemy.pos.y,
-                enemyType: enemy.type || 'basic',
+                type: enemy.type || 'basic',
                 floor: enemy.floor || 1,
                 isBoss: enemy.is('boss') || false,
-                isMiniboss: enemy.is('miniboss') || false,
-                health: enemy.hp(),
-                maxHealth: enemy.maxHealth,
-                armorHealth: enemy.armorHealth || 0,
-                shieldHealth: enemy.shieldHealth || 0
+                isBossMinion: enemy.isBossMinion || false
             };
             sendToPeer(peerId, 'spawn_entity', entityData);
         }
     });
 
-    // Send all pickups
+    // Send all pickups (mirror registerPickup; the handler only recreates xp/currency pickups)
     mpGame.pickups.forEach((pickup, entityId) => {
         if (pickup && pickup.exists()) {
+            const pickupType = pickup.pickupType || (pickup.is('xpPickup') ? 'xp' : pickup.is('currencyPickup') ? 'currency' : 'powerup');
+            if (pickupType !== 'xp' && pickupType !== 'currency') return;
+
             const entityData = {
-                entityId: entityId,
-                entityType: 'pickup',
+                id: entityId,
+                entityType: pickupType === 'currency' ? 'currencyPickup' : 'xpPickup',
                 x: pickup.pos.x,
                 y: pickup.pos.y,
-                pickupType: pickup.pickupType || (pickup.is('xpPickup') ? 'xp' : pickup.is('currencyPickup') ? 'currency' : 'powerup'),
-                xpValue: pickup.xpValue || 0,
-                currencyValue: pickup.currencyValue || 0
+                value: pickup.value || 1
             };
+            if (pickupType === 'currency') {
+                entityData.icon = pickup.text;
+            }
             sendToPeer(peerId, 'spawn_entity', entityData);
         }
     });

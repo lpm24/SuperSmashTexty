@@ -198,8 +198,8 @@ export function createEnemy(k, x, y, type = 'basic', floor = 1, rng = null) {
             }
         }
         
-        // Visual format: {[E]} (shields outside, armor inside)
-        const visual = `${leftShield}${leftArmor}${enemy.coreChar}${rightArmor}${rightShield}`;
+        // Visual format: {[E]} (shields outside, armor inside); elite prefix sits outside everything
+        const visual = `${enemy.elitePrefix || ''}${leftShield}${leftArmor}${enemy.coreChar}${rightArmor}${rightShield}`;
         
         // Update text component
         enemy.text = visual;

@@ -200,6 +200,10 @@ export function updateConnectionQuality(k, getConnectedPeers) {
         return;
     }
 
+    // Stamp the send time here so the throttle works for the host too
+    // (sendPing's host branch only updates per-peer state, not lastPingSentTime)
+    connectionState.lastPingSentTime = now;
+
     if (isHost()) {
         // Host: ping all connected clients
         const peers = getConnectedPeers();
