@@ -38,7 +38,7 @@ import { checkAndApplySynergies, trackUpgrade, reapplySynergies } from '../syste
 import { UPGRADES, recalculateAllUpgrades, applyUpgrade } from '../systems/upgrades.js';
 import { updateRunStats, calculateCurrencyEarned, addCurrency, getCurrency, getPermanentUpgradeLevel, checkFloorUnlocks, recordRun, consumeBoosters, getEquippedCosmetics, getSelectedCharacter } from '../systems/metaProgression.js';
 import { RUN_BOOSTER_UNLOCKS, COSMETIC_UNLOCKS } from '../data/unlocks.js';
-import { checkAchievements, initAchievementChecker } from '../systems/achievementChecker.js';
+import { checkAchievements, initAchievementChecker, trackPlayerDamage } from '../systems/achievementChecker.js';
 import { isUpgradeDraftActive, showUpgradeDraft } from './upgradeDraft.js';
 import { updateParticles, spawnBloodSplatter, spawnHitImpact, spawnDeathExplosion, spawnTrailParticle, createGlowEffect, updateGlowEffect, spawnCosmeticDeath } from '../systems/particleSystem.js';
 import { playXPPickup, playCurrencyPickup, playDoorOpen, playBossSpawn, playBossDeath, playEnemyDeath, playPause, playUnpause, initAudio, playCombatMusic } from '../systems/sounds.js';
@@ -504,6 +504,8 @@ export function setupGameScene(k) {
         if (gameState.playerStats) {
             // Restore player with previous stats
             player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
+            // Track local player damage for the flawless_run achievement
+            player.onHurt((amount) => trackPlayerDamage(amount));
             // Restore stats
             Object.assign(player, gameState.playerStats);
             // CRITICAL: Local player is NEVER remote - host's saved stats may have isRemote: true
@@ -596,6 +598,8 @@ export function setupGameScene(k) {
             // For daily runs, use the locked daily character
             const characterOverride = gameState.isDailyRun ? gameState.dailyCharacter : null;
             player = createPlayer(k, playerSpawnX, playerSpawnY, characterOverride);
+            // Track local player damage for the flawless_run achievement
+            player.onHurt((amount) => trackPlayerDamage(amount));
 
             // Apply permanent upgrades
             applyPermanentUpgrades(k, player);

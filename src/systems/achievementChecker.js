@@ -16,7 +16,8 @@ let runChallengeData = {
     runStartTime: 0,         // When the run started
     bossesKilledThisRun: 0,  // Bosses killed in current run
     currentBossNoDamage: true, // Did we take damage during current boss fight
-    bossStartHP: 0           // HP at start of boss fight
+    bossStartHP: 0,          // HP at start of boss fight
+    damageTakenThisRun: 0    // Total damage the local player has taken this run (for flawless_run)
 };
 
 // Store kaplay instance for showing toasts from event functions
@@ -62,7 +63,8 @@ export function initAchievementChecker(k) {
         runStartTime: Date.now(),
         bossesKilledThisRun: 0,
         currentBossNoDamage: true,
-        bossStartHP: 0
+        bossStartHP: 0,
+        damageTakenThisRun: 0
     };
 
     // Store kaplay instance for showing toasts from event functions
@@ -99,6 +101,17 @@ export function trackFloorDamage(floor, damage) {
         runChallengeData.floorDamageTaken[floor] = 0;
     }
     runChallengeData.floorDamageTaken[floor] += damage;
+}
+
+/**
+ * Track damage taken by the local player this run (for the flawless_run achievement).
+ * Hooked to the local player's health "hurt" event in game.js.
+ * @param {number} damage - Amount of damage taken
+ */
+export function trackPlayerDamage(damage = 0) {
+    if (damage > 0) {
+        runChallengeData.damageTakenThisRun += damage;
+    }
 }
 
 /**
@@ -289,6 +302,15 @@ export function checkAchievements(k, currentRunStats = null) {
     check(stats.totalCurrencyEarned >= 1000, 'earn1000');
     check(stats.totalCurrencyEarned >= 5000, 'earn5000');
     check(stats.totalCurrencyEarned >= 10000, 'earn10000');
+
+    // Run-specific challenge: flawless run (defeat a boss having taken zero
+    // damage the entire run). bossesKilled here is the current run's count.
+    check(
+        currentRunStats &&
+        (currentRunStats.bossesKilled || 0) >= 1 &&
+        runChallengeData.damageTakenThisRun === 0,
+        'flawless_run'
+    );
 
     return newlyUnlocked;
 }

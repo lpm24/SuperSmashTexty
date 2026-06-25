@@ -489,6 +489,16 @@ export const ACHIEVEMENTS = {
         difficulty: 'challenge',
         hint: 'Perfect boss fight execution'
     },
+    flawless_run: {
+        id: 'flawless_run',
+        name: 'Flawless Run',
+        description: 'Defeat a floor boss without taking any damage all run',
+        category: 'challenge',
+        icon: '💠',
+        unlocked: false,
+        difficulty: 'benchmark',
+        hint: 'Reach and beat a boss without getting hit once'
+    },
     glassCannonWin: {
         id: 'glassCannonWin',
         name: 'Living Dangerously',

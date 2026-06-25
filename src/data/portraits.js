@@ -99,23 +99,23 @@ export const PORTRAITS = {
         unlockCondition: { type: 'character', value: 'berserker' },
         description: 'Rage incarnate. Pain is just fuel.'
     },
-    ranger: {
-        id: 'ranger',
-        name: 'Ranger',
+    sniper: {
+        id: 'sniper',
+        name: 'Sniper',
         icon: '🎯',
-        color: [100, 255, 150],
+        color: [100, 255, 255],
         category: PORTRAIT_CATEGORIES.CHARACTER,
-        unlockCondition: { type: 'character', value: 'ranger' },
+        unlockCondition: { type: 'character', value: 'sniper' },
         description: 'Swift and precise. Death from a distance.'
     },
-    mage: {
-        id: 'mage',
-        name: 'Mage',
-        icon: '🧙',
-        color: [200, 100, 255],
+    pyro: {
+        id: 'pyro',
+        name: 'Pyro',
+        icon: '🔥',
+        color: [255, 150, 50],
         category: PORTRAIT_CATEGORIES.CHARACTER,
-        unlockCondition: { type: 'character', value: 'mage' },
-        description: 'Master of the arcane arts.'
+        unlockCondition: { type: 'character', value: 'pyro' },
+        description: 'Master of flame. Watch it all burn.'
     },
     tank: {
         id: 'tank',
@@ -126,13 +126,13 @@ export const PORTRAITS = {
         unlockCondition: { type: 'character', value: 'tank' },
         description: 'An immovable wall. Nothing gets through.'
     },
-    assassin: {
-        id: 'assassin',
-        name: 'Assassin',
-        icon: '🗡️',
-        color: [150, 100, 150],
+    ghost: {
+        id: 'ghost',
+        name: 'Ghost',
+        icon: '👻',
+        color: [200, 200, 255],
         category: PORTRAIT_CATEGORIES.CHARACTER,
-        unlockCondition: { type: 'character', value: 'assassin' },
+        unlockCondition: { type: 'character', value: 'ghost' },
         description: 'Silent. Deadly. Gone before you know it.'
     },
 
