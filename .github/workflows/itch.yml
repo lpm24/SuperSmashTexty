@@ -1,0 +1,43 @@
+# Publish SuperSmashTexty to itch.io (https://krool.itch.io/supersmashtexty) via butler.
+#
+# Mirrors itch on every deploy: runs on push to main plus manual dispatch. Gated on the
+# BUTLER_API_KEY secret, so if it is removed the job no-ops and can NEVER publish. Builds with a
+# RELATIVE asset base (--base=./) because itch serves the game from an iframe CDN path; the vite
+# base is unset (defaults to '/', absolute) and would 404 every asset on itch. --if-changed skips
+# the push when the build is byte-identical to the current itch build. fetch-depth: 0 so
+# vite.config.js's git-commit-count version (__APP_VERSION__) matches the real commit count.
+name: Publish to itch.io
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  itch:
+    runs-on: ubuntu-latest
+    env:
+      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - if: env.BUTLER_API_KEY == ''
+        run: echo "::notice::BUTLER_API_KEY not set — itch publish skipped. Add the secret to enable."
+      - uses: actions/setup-node@v5
+        if: env.BUTLER_API_KEY != ''
+        with:
+          node-version: '22'
+          cache: npm
+      - if: env.BUTLER_API_KEY != ''
+        run: npm ci
+      - name: Build with relative base (itch serves from an iframe CDN path)
+        if: env.BUTLER_API_KEY != ''
+        run: npm run build -- --base=./
+      - name: Push to itch.io
+        if: env.BUTLER_API_KEY != ''
+        run: |
+          curl -sL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          unzip -q butler.zip
+          chmod +x butler
+          ./butler push dist krool/supersmashtexty:html5 --userversion "$(git rev-list --count HEAD)" --if-changed
