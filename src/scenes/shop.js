@@ -4,6 +4,7 @@ import { getUnlocksForCategory, getUnlockInfo, CHARACTER_UNLOCKS, WEAPON_UNLOCKS
 import { getAchievementById, getAchievementProgress } from '../data/achievements.js';
 import { showAchievementModal, isAchievementModalOpen } from '../components/achievementModal.js';
 import { playPurchaseSuccess, playPurchaseError, playMenuNav } from '../systems/sounds.js';
+import { Analytics } from '../utils/analytics.js';
 import {
     UI_TEXT_SIZES,
     UI_COLORS,
@@ -802,6 +803,11 @@ export function setupShopScene(k) {
                                 if (result && result.success) {
                                     // Play purchase success sound
                                     playPurchaseSuccess();
+
+                                    // Track permanent upgrade purchases (analytics)
+                                    if (currentCategory === 'permanentUpgrades') {
+                                        Analytics.upgradePurchased(key, purchaseCost);
+                                    }
 
                                     // Purchase successful - different message for boosters
                                     const msgText = currentCategory === 'boosters' ? 'Booster Ready!' : 'Purchased!';

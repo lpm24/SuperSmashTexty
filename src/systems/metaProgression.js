@@ -3,6 +3,7 @@
 import { generateRandomName, generateInviteCode } from './nameGenerator.js';
 import { getAchievementReward, getAchievementById } from '../data/achievements.js';
 import { CHARACTER_UNLOCKS, getUnlockInfo } from '../data/unlocks.js';
+import { Analytics } from '../utils/analytics.js';
 
 const STORAGE_KEY = 'superSmashTexty_save';
 const CURRENCY_NAME = 'Credits'; // Full name (rarely used)
@@ -153,6 +154,7 @@ export function checkFloorUnlocks(floorCompleted) {
             floorCompleted >= char.unlockRequirement.value) {
             if (!isUnlocked('characters', key)) {
                 unlockItem('characters', key);
+                Analytics.characterUnlocked(key);
                 unlocked = true;
             }
         }
@@ -172,6 +174,7 @@ export function checkAchievementUnlocks(achievementId) {
             char.unlockRequirement.value === achievementId) {
             if (!isUnlocked('characters', key)) {
                 unlockItem('characters', key);
+                Analytics.characterUnlocked(key);
                 unlocked.push({ type: 'character', key, name: char.name });
             }
         }

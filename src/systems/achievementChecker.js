@@ -6,6 +6,7 @@ import { playAchievement } from './sounds.js';
 import { showAchievementToast, initToastSystem } from './toastNotifications.js';
 import { CHARACTER_UNLOCKS, PERMANENT_UPGRADE_UNLOCKS } from '../data/unlocks.js';
 import { isMultiplayerActive, getLocalPlayerSlot, broadcastAchievementUnlocked } from './multiplayerGame.js';
+import { Analytics } from '../utils/analytics.js';
 
 // Track achievements unlocked during the current run
 let runUnlockedAchievements = [];
@@ -369,6 +370,9 @@ export function checkAchievements(k, currentRunStats = null) {
         runChallengeData.damageTakenThisRun === 0,
         'flawless_run'
     );
+
+    // Track newly unlocked achievements (analytics)
+    newlyUnlocked.forEach(achievementId => Analytics.achievementUnlocked(achievementId));
 
     return newlyUnlocked;
 }
