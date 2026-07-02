@@ -21,6 +21,9 @@ const network = {
     peerId: null            // Our peer ID (same as invite code for host)
 };
 
+// Registered once for the app lifetime (initNetwork can run multiple times).
+let unloadHandlerRegistered = false;
+
 /**
  * Initialize the network system
  * @param {string} inviteCode - Our invite code (will be our Peer ID if host)
@@ -35,10 +38,15 @@ export function initNetwork(inviteCode, isHost = true) {
             return;
         }
 
-        // Clean up on page unload
-        window.addEventListener('beforeunload', () => {
-            disconnect();
-        });
+        // Clean up on page unload. Register exactly once for the app's lifetime:
+        // initNetwork runs again on every role switch (host<->client) and on the
+        // unavailable-id retry, and a fresh listener each time would accumulate.
+        if (!unloadHandlerRegistered) {
+            window.addEventListener('beforeunload', () => {
+                disconnect();
+            });
+            unloadHandlerRegistered = true;
+        }
 
         // Check if PeerJS is available
         if (typeof Peer === 'undefined') {

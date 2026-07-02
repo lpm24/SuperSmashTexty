@@ -31,6 +31,7 @@ const party = {
     maxSlots: 4,
     peerIdToSlot: new Map(), // Map peer IDs to slot indices
     networkInitialized: false,
+    networkInitializing: false, // In-flight guard: initParty runs per menu entry, initNetwork is async
     kaplayInstance: null, // Reference to kaplay instance for client game start
     hostInviteCode: null, // The host's invite code (null if we are the host, or the code we joined if we're a client)
     // Disconnect handling
@@ -91,10 +92,16 @@ export async function initParty(k = null) {
         console.log('[PartySystem] Client mode - preserving existing slot assignments');
     }
 
-    // Initialize network as host so other players can connect
-    // This is needed because we display the invite code in the UI,
-    // meaning we're always potentially hosting
-    if (!party.networkInitialized) {
+    // Initialize network as host so other players can connect. This is needed
+    // because we display the invite code in the UI, meaning we're always
+    // potentially hosting.
+    //
+    // Guard on networkInitializing as well as networkInitialized: initParty runs on
+    // every menu scene entry and is NOT awaited, while initNetwork's PeerJS handshake
+    // takes ~1-2s. Without the in-flight flag, re-entering the menu during that window
+    // starts a SECOND initNetwork, which creates a second Peer and orphans the first.
+    if (!party.networkInitialized && !party.networkInitializing) {
+        party.networkInitializing = true;
         try {
             console.log('[PartySystem] Initializing network as host...');
             const inviteCode = getInviteCode();
@@ -115,6 +122,8 @@ export async function initParty(k = null) {
             console.error('[PartySystem] Failed to initialize network as host:', err);
             console.log('[PartySystem] Multiplayer disabled - running in single-player mode');
             // Continue anyway - single-player will still work
+        } finally {
+            party.networkInitializing = false;
         }
     }
 }
@@ -565,8 +574,19 @@ function setupClientHandlers() {
 
     // Handle join rejection
     onMessage('join_rejected', (payload) => {
-        console.error('Join rejected:', payload.reason);
-        alert(`Failed to join party: ${payload.reason}`);
+        console.error('Join rejected:', payload?.reason);
+        // joinPartyAsClient() already returned true (it resolves once join_request is
+        // sent, before the host accepts/rejects), so matchmaking may have fired
+        // onMatchFound and torn down our host peer. Left as-is we'd sit in the menu
+        // with empty slots and no local slot. Rebuild a working solo party instead.
+        restoreLocalPlayerToSoloParty({
+            playerName: getPlayerName(),
+            inviteCode: getInviteCode(),
+            selectedCharacter: getSelectedCharacter()
+        });
+        if (party.kaplayInstance) {
+            party.kaplayInstance.go('menu');
+        }
     });
 
     // Handle game start from host
@@ -659,6 +679,7 @@ function broadcastPartyUpdate() {
             inviteCode: slot.inviteCode,
             selectedCharacter: slot.selectedCharacter,
             selectedPortrait: slot.selectedPortrait,
+            playerLevel: slot.playerLevel, // Without this, remote members render as level 1 after any update
             permanentUpgradeLevels: slot.permanentUpgradeLevels,
             isLocal: false, // Always false for remote players
             isReady: slot.isReady || false,
@@ -700,6 +721,12 @@ function handlePlayerDisconnect(peerId) {
         // Mark the slot as disconnected (but keep the player info)
         party.slots[slotIndex].isDisconnected = true;
 
+        // Clear the dropped player's ready flag. Without this, areAllPlayersReady()
+        // still counts the ghost slot as ready (its playerId is retained through the
+        // reconnect window), so a running countdown would auto-start the game with a
+        // disconnected ghost occupying a slot.
+        party.slots[slotIndex].isReady = false;
+
         // Broadcast disconnect status to all clients
         broadcast('player_disconnected', {
             slotIndex: slotIndex,
@@ -707,6 +734,13 @@ function handlePlayerDisconnect(peerId) {
         });
 
         party.peerIdToSlot.delete(peerId);
+
+        // Re-evaluate the countdown: with the ghost no longer ready, the party is no
+        // longer all-ready, so cancel any in-flight countdown. Also push the updated
+        // slot state to remaining clients now instead of waiting ~15s for
+        // finalizeDisconnect, so their party panels reflect the drop immediately.
+        checkAllReady();
+        broadcastPartyUpdate();
 
         // Set timeout to fully remove player if they don't reconnect
         setTimeout(() => {

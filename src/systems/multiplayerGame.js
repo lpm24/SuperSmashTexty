@@ -44,7 +44,9 @@ const mpGame = {
     currentFloor: 1, // Track current floor for seed generation
     currentRoom: { x: 0, y: 0 }, // Track current room for seed generation
     pendingXP: 0, // XP accumulated while player was in upgrade draft screen
-    onGameSeedCallback: null // Callback for when game_seed is received (clients only)
+    onGameSeedCallback: null, // Callback for when game_seed is received (clients only)
+    firstRoomTemplateKey: null, // First room template from host (clients only, consumed on first room load)
+    hostFirstRoomTemplateKey: null // Last first-room template we broadcast (host only, for answering seed_request)
 };
 
 /**
@@ -105,6 +107,18 @@ function setupHostHandlers() {
         return;
     }
     multiplayerHostHandlersRegistered = true;
+
+    // Answer a client's seed pull with the authoritative seed + first room template.
+    // The host builds its game scene at the end of the same frame it sends game_start,
+    // while the client can't receive game_start until network latency later, so this
+    // handler is always registered before any client's seed_request arrives.
+    onMessage('seed_request', (payload, fromPeerId) => {
+        if (!mpGame.isActive) return;
+        sendToPeer(fromPeerId, 'game_seed', {
+            seed: mpGame.gameSeed,
+            roomTemplateKey: mpGame.hostFirstRoomTemplateKey ?? null
+        });
+    });
 
     // Handle player input from clients
     onMessage('player_input', (payload, fromPeerId) => {
@@ -1879,10 +1893,25 @@ export function getUpgradeRNG(playerIndex, playerLevel) {
 export function broadcastGameSeed(firstRoomTemplateKey = null) {
     if (!mpGame.isHost) return;
 
+    // Remember what we broadcast so we can answer a late seed_request from a client
+    // whose game scene (and game_seed handler) wasn't built yet when this push went out.
+    mpGame.hostFirstRoomTemplateKey = firstRoomTemplateKey;
+
     broadcast('game_seed', {
         seed: mpGame.gameSeed,
         roomTemplateKey: firstRoomTemplateKey
     });
+}
+
+/**
+ * Request the game seed from the host (client only).
+ * Kaplay builds a scene the frame after go('game'), so the host's initial game_seed
+ * broadcast can arrive before this client's handler exists and get dropped (world-gen
+ * then desyncs, unrecoverably). Pulling it explicitly on scene entry guarantees delivery.
+ */
+export function requestGameSeed() {
+    if (mpGame.isHost) return;
+    sendToHost('seed_request', {});
 }
 
 /**

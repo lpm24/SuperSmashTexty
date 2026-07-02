@@ -1290,6 +1290,12 @@ export function setupMenuScene(k) {
         const spaceHandler = k.onKeyPress('space', () => {
             if (!playButton.disabled) {
                 playMenuSelect();
+                // Mirror the ACTION! button: as host of a party, tell clients to start
+                // too. Without this, pressing Space took the host into the game while
+                // clients sat in the menu.
+                if (getPartySize() > 1) {
+                    broadcastGameStart();
+                }
                 k.go('game', { resetState: true });
             }
         });
