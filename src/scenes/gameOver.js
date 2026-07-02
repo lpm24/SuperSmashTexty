@@ -12,6 +12,7 @@ import { showAchievementModal, isAchievementModalOpen } from '../components/achi
 import { calculateScore, submitScore, formatScore } from '../systems/leaderboards.js';
 import { getGlobalRank, submitOnlineScore, submitDailyScore } from '../systems/onlineLeaderboards.js';
 import { markDailyCompleted, getTodayDateString } from '../systems/dailyRuns.js';
+import { Analytics } from '../utils/analytics.js';
 import {
     UI_SIZES,
     UI_TEXT_SIZES,
@@ -80,6 +81,9 @@ export function setupGameOverScene(k) {
             bossesKilled: runStats.bossesKilled || 0,
             duration: duration
         });
+
+        // Track run end (analytics) - single choke point for all game-over transitions
+        Analytics.gameOver(score, runStats.floorsReached || 1, duration, Math.max(partyStats.length, 1));
 
         const character = dailyCharacter || getSelectedCharacter() || 'survivor';
 

@@ -52,6 +52,7 @@ import { getParty, getPartySize } from '../systems/partySystem.js';
 import { initMultiplayerGame, registerPlayer, registerEnemy, updateMultiplayer, isMultiplayerActive, cleanupMultiplayer, getPlayerCount, getRoomRNG, getFloorRNG, setCurrentFloor, setCurrentRoom, broadcastGameSeed, isHost, broadcastPauseState, sendPauseRequest, broadcastDeathEvent, broadcastRoomCompletion, broadcastGameOver, broadcastXPGain, broadcastCurrencyGain, broadcastPlayerDeath, broadcastRoomTransition, sendEnemyDeath, broadcastPowerupWeaponApplied, broadcastLevelUpQueued, broadcastHostQuit, getAndClearPendingXP, broadcastEmote, getFirstRoomTemplateKey, hasGameSeed, onGameSeedReceived, requestGameSeed, broadcastObstacles, broadcastHealEvent, broadcastRevivalEvent } from '../systems/multiplayerGame.js';
 import { onMessage, offMessage, getNetworkInfo, broadcast } from '../systems/networkSystem.js';
 import { initInputSystem, initTouchControls } from '../systems/inputSystem.js';
+import { Analytics } from '../utils/analytics.js';
 
 // Data imports
 import { BOSS_TYPES, getBossDefinition } from '../data/bosses.js';
@@ -318,6 +319,14 @@ export function setupGameScene(k) {
             gameState.rerollsRemaining = mulliganLevel;
             // Reset client message handler registration flag (allows re-registration on new game)
             gameSceneMessageHandlersRegistered = false;
+
+            // Track run start (analytics)
+            const analyticsCharacter = gameState.isDailyRun ? gameState.dailyCharacter : (getSelectedCharacter() || 'survivor');
+            const analyticsPartySize = getPartySize();
+            Analytics.gameStarted(analyticsCharacter, analyticsPartySize > 1);
+            if (analyticsPartySize > 1) {
+                Analytics.multiplayerStarted(analyticsPartySize, !!getParty().isHost);
+            }
 
             // Show tutorial movement hint for new players
             k.wait(1.0, () => showMovementHint(k));
@@ -3907,6 +3916,7 @@ export function setupGameScene(k) {
                     // Award boss-fight challenge achievements (noHitBoss, glassCannonWin, bossRush)
                     onBossDefeated(player.hp(), player.maxHealth);
                     const bossType = boss.type || 'boss';
+                    Analytics.bossDefeated(bossType, currentFloor);
                     runStats.killsByType[bossType] = (runStats.killsByType[bossType] || 0) + 1;
 
                     // Track kill for the player who last hit this boss
