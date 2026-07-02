@@ -120,18 +120,32 @@ export async function startMatchmaking(callbacks = {}) {
         const playerName = getPlayerName();
         const inviteCode = getInviteCode();
 
-        // Add ourselves to the queue
+        // Add ourselves to the queue. Keep a local handle to THIS invocation's
+        // entry so we can detect if a concurrent stopMatchmaking() swaps it out.
         const queueRef = ref(database, 'matchmaking/queue');
-        queueEntryRef = push(queueRef);
+        const entryRef = push(queueRef);
+        queueEntryRef = entryRef;
 
-        await set(queueEntryRef, {
+        await set(entryRef, {
             inviteCode: inviteCode,
             playerName: playerName,
             timestamp: Date.now() // Use client timestamp for consistent stale checking
         });
 
+        // The await above yields to the event loop. A concurrent stopMatchmaking()
+        // (rapid re-click, stacked menu click handlers, party join, match found) can
+        // null out queueEntryRef while we were writing. If that happened, bail out
+        // cleanly instead of calling onDisconnect(null), which throws
+        // "can't access property _repo, e is null" inside Firebase.
+        if (!isSearching || queueEntryRef !== entryRef) {
+            // We were cancelled mid-start. Make sure the entry we just wrote is gone
+            // (stopMatchmaking already queued a remove, but be defensive about orphans).
+            remove(entryRef).catch(() => {});
+            return false;
+        }
+
         // Set up auto-remove on disconnect
-        onDisconnect(queueEntryRef).remove();
+        onDisconnect(entryRef).remove();
 
         console.log('[Matchmaking] Added to queue:', inviteCode);
 
