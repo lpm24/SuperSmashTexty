@@ -17,26 +17,30 @@ jobs:
   itch:
     runs-on: ubuntu-latest
     env:
-      BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
+      # Boolean gate only. The actual key is scoped to the butler step below so
+      # npm postinstall scripts and build plugins never see it in their env.
+      HAS_BUTLER: ${{ secrets.BUTLER_API_KEY != '' }}
     steps:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - if: env.BUTLER_API_KEY == ''
+      - if: env.HAS_BUTLER != 'true'
         run: echo "::notice::BUTLER_API_KEY not set — itch publish skipped. Add the secret to enable."
       - uses: actions/setup-node@v5
-        if: env.BUTLER_API_KEY != ''
+        if: env.HAS_BUTLER == 'true'
         with:
           node-version-file: '.nvmrc'
           cache: npm
-      - if: env.BUTLER_API_KEY != ''
+      - if: env.HAS_BUTLER == 'true'
         run: npm ci
       - name: Build with relative base (itch serves from an iframe CDN path)
-        if: env.BUTLER_API_KEY != ''
+        if: env.HAS_BUTLER == 'true'
         run: npm run build -- --base=./
       - name: Push to itch.io (butler pinned + hash-verified)
-        if: env.BUTLER_API_KEY != ''
+        if: env.HAS_BUTLER == 'true'
         env:
+          # The only step that gets the credential.
+          BUTLER_API_KEY: ${{ secrets.BUTLER_API_KEY }}
           # Pinned + verified: butler runs with BUTLER_API_KEY in env, so an
           # unpinned LATEST download is a supply-chain injection point. To bump:
           # download the new zip, sha256sum it, update both values.
