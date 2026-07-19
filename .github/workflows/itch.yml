@@ -26,7 +26,7 @@ jobs:
           fetch-depth: 0
       - if: env.HAS_BUTLER != 'true'
         run: echo "::notice::BUTLER_API_KEY not set — itch publish skipped. Add the secret to enable."
-      - uses: actions/setup-node@v5
+      - uses: actions/setup-node@v7
         if: env.HAS_BUTLER == 'true'
         with:
           node-version-file: '.nvmrc'
