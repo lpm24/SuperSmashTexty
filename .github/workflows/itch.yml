@@ -27,17 +27,24 @@ jobs:
       - uses: actions/setup-node@v5
         if: env.BUTLER_API_KEY != ''
         with:
-          node-version: '22'
+          node-version-file: '.nvmrc'
           cache: npm
       - if: env.BUTLER_API_KEY != ''
         run: npm ci
       - name: Build with relative base (itch serves from an iframe CDN path)
         if: env.BUTLER_API_KEY != ''
         run: npm run build -- --base=./
-      - name: Push to itch.io
+      - name: Push to itch.io (butler pinned + hash-verified)
         if: env.BUTLER_API_KEY != ''
+        env:
+          # Pinned + verified: butler runs with BUTLER_API_KEY in env, so an
+          # unpinned LATEST download is a supply-chain injection point. To bump:
+          # download the new zip, sha256sum it, update both values.
+          BUTLER_VERSION: "15.21.0"
+          BUTLER_SHA256: "b640fceade5cafc7601b0ee57ba13c85913917eb5440375f7a605126f9ca2e1c"
         run: |
-          curl -sL -o butler.zip https://broth.itch.zone/butler/linux-amd64/LATEST/archive/default
+          curl -sL -o butler.zip "https://broth.itch.zone/butler/linux-amd64/${BUTLER_VERSION}/archive/default"
+          echo "${BUTLER_SHA256}  butler.zip" | sha256sum -c -
           unzip -q butler.zip
           chmod +x butler
           ./butler push dist krool/supersmashtexty:html5 --userversion "$(git rev-list --count HEAD)" --if-changed

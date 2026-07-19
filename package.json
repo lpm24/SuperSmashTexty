@@ -1,6 +1,6 @@
 {
   "name": "supersmashtexty",
-  "version": "0.1.71",
+  "version": "0.1.72",
   "description": "ASCII-style browser action roguelike inspired by Smash TV and Vampire Survivors",
   "type": "module",
   "engines": {
